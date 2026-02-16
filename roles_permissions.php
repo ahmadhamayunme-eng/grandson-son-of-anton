@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../layout.php';
+require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
 
 // Ensure permission keys exist
@@ -90,4 +90,4 @@ if($role_id>0){
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../layout_end.php'; ?>
+<?php require_once __DIR__ . '/layout_end.php'; ?>
