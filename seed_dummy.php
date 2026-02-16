@@ -1,4 +1,8 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 /**
  * AntonX Dummy Seeder (ONE-TIME)
  * - Upload to server, run once, then DELETE the file.
