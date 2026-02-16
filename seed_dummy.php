@@ -279,6 +279,31 @@ try {
     }
   }
 
+// =========================
+// 2.5) PROJECT TYPES (required for projects.type_id FK)
+// =========================
+$projectTypeIds = [];
+
+if (table_exists($db, 'project_types')) {
+  // load existing
+  $rows = fetch_all($db, "SELECT id, name FROM project_types");
+  foreach ($rows as $r) {
+    $projectTypeIds[$r['name']] = (int)$r['id'];
+  }
+
+  // ensure at least 1 exists
+  $need = ['General', 'SEO', 'Development', 'Design'];
+  foreach ($need as $nm) {
+    if (!isset($projectTypeIds[$nm])) {
+      $cols = ['name'];
+      $vals = [$nm];
+      add_workspace_if_needed($db, 'project_types', $cols, $vals, $workspaceId);
+      if (col_exists($db,'project_types','created_at')) { $cols[]='created_at'; $vals[]=seed_now(); }
+      $projectTypeIds[$nm] = insert_row($db, 'project_types', $cols, $vals);
+    }
+  }
+}
+  
   // =========================
   // 3) PROJECTS (often workspace FK too)
   // =========================
@@ -297,6 +322,18 @@ try {
 
         $cols = ['client_id','name'];
         $vals = [$cid, $pname];
+// type_id FK if required
+if (col_exists($db,'projects','type_id')) {
+  // pick a type deterministically
+  $typeNames = array_keys($projectTypeIds);
+  $pick = $typeNames ? $typeNames[($idx + $i) % count($typeNames)] : null;
+  $tid = $pick ? $projectTypeIds[$pick] : null;
+
+  if ($tid) {
+    $cols[] = 'type_id';
+    $vals[] = $tid;
+  }
+}
 
         add_workspace_if_needed($db, 'projects', $cols, $vals, $workspaceId);
         if (col_exists($db,'projects','status')) { $cols[]='status'; $vals[]='Active'; }
