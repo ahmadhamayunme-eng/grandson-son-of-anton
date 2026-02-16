@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../layout.php';
+require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
 
 $tot_tasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws")->fetchColumn();
@@ -24,4 +24,4 @@ $projects = (int)$pdo->query("SELECT COUNT(*) FROM projects WHERE workspace_id=$
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../layout_end.php'; ?>
+<?php require_once __DIR__ . '/layout_end.php'; ?>
