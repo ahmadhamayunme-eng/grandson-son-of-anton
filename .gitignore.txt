@@ -1,0 +1,7 @@
+config.php
+uploads/
+cache/
+tmp/
+.DS_Store
+.vscode/
+.idea/

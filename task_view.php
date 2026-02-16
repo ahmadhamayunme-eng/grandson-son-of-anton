@@ -1,0 +1,202 @@
+<?php
+require_once __DIR__ . '/layout.php';
+$pdo=db(); $ws=auth_workspace_id();
+$u=auth_user(); $role=$u['role_name'] ?? '';
+$can_cto=in_array($role,['CTO','Super Admin'],true);
+$can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
+
+$id=(int)($_GET['id'] ?? 0);
+$stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, ph.name AS phase_name
+  FROM tasks t
+  JOIN projects p ON p.id=t.project_id
+  JOIN clients c ON c.id=p.client_id
+  LEFT JOIN phases ph ON ph.id=t.phase_id
+  WHERE t.id=? AND t.workspace_id=?");
+$stmt->execute([$id,$ws]);
+$task=$stmt->fetch();
+if(!$task){ echo "<h3>Task not found</h3>"; require __DIR__ . '/layout_end.php'; exit; }
+
+$assignees=$pdo->prepare("SELECT u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=?");
+$assignees->execute([$id]);
+$assignee_names=array_map(fn($r)=>$r['name'],$assignees->fetchAll());
+$is_assignee=in_array($u['name'], $assignee_names, true);
+
+$locked= (bool)$task['locked_at'];
+
+$statuses=$pdo->query("SELECT name FROM task_statuses WHERE workspace_id=$ws ORDER BY sort_order ASC")->fetchAll();
+$statuses=array_map(fn($r)=>$r['name'],$statuses);
+if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client']; }
+
+if($_SERVER['REQUEST_METHOD']==='POST'){
+  require_post(); csrf_verify();
+
+  if(isset($_POST['update_task'])){
+    if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
+    $new_status=trim($_POST['status'] ?? $task['status']);
+    $new_note=trim($_POST['internal_note'] ?? '');
+    $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
+        ->execute([$new_status,$new_note?:null,now(),$id,$ws]);
+    flash_set('success','Task updated.');
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['lock_task'])){
+    if(!$can_manage){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $pdo->prepare("UPDATE tasks SET locked_at=?, locked_by=? WHERE id=? AND workspace_id=?")
+        ->execute([now(),$u['id'],$id,$ws]);
+    flash_set('success','Task locked.');
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['unlock_task'])){
+    if(!$can_manage){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $pdo->prepare("UPDATE tasks SET locked_at=NULL, locked_by=NULL WHERE id=? AND workspace_id=?")->execute([$id,$ws]);
+    flash_set('success','Task unlocked.');
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['add_comment'])){
+    $body=trim($_POST['comment'] ?? '');
+    if($body===''){ flash_set('error','Comment cannot be empty.'); redirect("task_view.php?id=$id"); }
+    $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,created_at) VALUES (?,?,?,?,?)")
+        ->execute([$ws,$id,$u['id'],$body,now()]);
+    flash_set('success','Comment added.');
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['cto_action'])){
+    if(!$can_cto){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $action=$_POST['cto_action'];
+    if($action==='approve'){
+      $pdo->prepare("UPDATE tasks SET status='Approved (Ready to Submit)', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
+      flash_set('success','Task approved.');
+    } elseif($action==='reject'){
+      $reason=trim($_POST['cto_reason'] ?? 'Needs changes.');
+      $pdo->prepare("UPDATE tasks SET status='In Progress', cto_feedback=?, updated_at=? WHERE id=? AND workspace_id=?")
+          ->execute([$reason,now(),$id,$ws]);
+      flash_set('success','Task sent back to In Progress.');
+    }
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['submit_to_client'])){
+    if(!$can_cto){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=? WHERE id=? AND workspace_id=?")
+        ->execute([now(),$u['id'],$id,$ws]);
+    flash_set('success','Task marked as Submitted to Client.');
+    redirect("task_view.php?id=$id");
+  }
+}
+
+$comments=$pdo->prepare("SELECT c.body,c.created_at,u.name AS author
+  FROM comments c JOIN users u ON u.id=c.author_user_id
+  WHERE c.task_id=? AND c.workspace_id=?
+  ORDER BY c.id DESC");
+$comments->execute([$id,$ws]);
+$comments=$comments->fetchAll();
+?>
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-1"><?=h($task['title'])?></h2>
+    <div class="text-muted small">
+      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h($task['phase_name'] ?? '—')?>
+    </div>
+    <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
+  </div>
+  <div class="d-flex gap-2">
+    <?php if($can_manage && !$locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn btn-outline-light" name="lock_task" value="1">Lock</button></form><?php endif; ?>
+    <?php if($can_manage && $locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn btn-outline-light" name="unlock_task" value="1">Unlock</button></form><?php endif; ?>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3">
+      <div class="text-muted small mb-1">Description</div>
+      <div><?=nl2br(h($task['description'] ?? '—'))?></div>
+    </div>
+
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="fw-semibold">Comments</div>
+        <div class="text-muted small"><?=count($comments)?> total</div>
+      </div>
+      <form method="post" class="mb-3">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
+        <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Add Comment</button></div>
+      </form>
+      <div class="d-flex flex-column gap-2">
+        <?php foreach($comments as $c): ?>
+          <div class="p-3 rounded" style="background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">
+            <div class="d-flex justify-content-between">
+              <div class="fw-semibold"><?=h($c['author'])?></div>
+              <div class="text-muted small"><?=h($c['created_at'])?></div>
+            </div>
+            <div class="mt-2"><?=nl2br(h($c['body']))?></div>
+          </div>
+        <?php endforeach; ?>
+        <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Task Details</div>
+      <div class="mb-2"><span class="text-muted">Status:</span> <span class="badge badge-soft"><?=h($task['status'])?></span></div>
+      <div class="mb-2"><span class="text-muted">Assignees:</span> <?=h($assignee_names ? implode(', ',$assignee_names) : '—')?></div>
+      <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
+      <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
+    </div>
+
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Update Status</div>
+      <?php if($locked && !$can_manage): ?>
+        <div class="text-muted">This task is locked.</div>
+      <?php else: ?>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <div class="mb-2">
+          <label class="form-label">Status</label>
+          <select class="form-select" name="status">
+            <?php foreach($statuses as $s): ?><option value="<?=h($s)?>" <?= $task['status']===$s ? 'selected' : '' ?>><?=h($s)?></option><?php endforeach; ?>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Internal Note</label>
+          <textarea class="form-control" name="internal_note" rows="3"><?=h($task['internal_note'] ?? '')?></textarea>
+        </div>
+        <button class="btn btn-yellow w-100" name="update_task" value="1">Save</button>
+      </form>
+      <?php endif; ?>
+    </div>
+
+    <?php if($can_cto): ?>
+      <div class="card p-3 mb-3">
+        <div class="fw-semibold mb-2">CTO Actions</div>
+        <div class="small-help mb-2">Use these when a task is marked <b>Completed (Needs CTO Review)</b>.</div>
+        <form method="post" class="mb-2">
+          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <button class="btn btn-outline-light w-100" name="cto_action" value="approve">Approve (Ready to Submit)</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <textarea class="form-control mb-2" name="cto_reason" rows="2" placeholder="Reason to send back..."></textarea>
+          <button class="btn btn-outline-light w-100" name="cto_action" value="reject">Send Back (In Progress)</button>
+        </form>
+      </div>
+
+      <div class="card p-3">
+        <div class="fw-semibold mb-2">Submit to Client</div>
+        <div class="small-help mb-2">Mark task as <b>Submitted to Client</b> after you push to production / deliver.</div>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <button class="btn btn-yellow w-100" name="submit_to_client" value="1">Mark Submitted</button>
+        </form>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
+
+<?php require_once __DIR__ . '/layout_end.php'; ?>
