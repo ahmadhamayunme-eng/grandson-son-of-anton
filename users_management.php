@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../layout.php';
+require_once __DIR__ . '/layout.php';
 auth_require_perm('users.manage');
 $pdo=db(); $ws=auth_workspace_id();
 
@@ -115,4 +115,4 @@ if($edit_id>0){
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../layout_end.php'; ?>
+<?php require_once __DIR__ . '/layout_end.php'; ?>
