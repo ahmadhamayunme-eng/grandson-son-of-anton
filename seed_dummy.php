@@ -127,14 +127,22 @@ function last_id($db) {
 }
 
 function table_exists($db, $table) {
-  $row = fetch_one($db, "SHOW TABLES LIKE ?", [$table]);
+  // escape LIKE special chars
+  $table = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $table);
+  $sql = "SHOW TABLES LIKE '$table'";
+  $row = fetch_one($db, $sql);
   return $row !== null;
 }
 
+
 function col_exists($db, $table, $col) {
-  $row = fetch_one($db, "SHOW COLUMNS FROM `$table` LIKE ?", [$col]);
+  $table = str_replace('`','', $table);
+  $col   = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $col);
+  $sql = "SHOW COLUMNS FROM `$table` LIKE '$col'";
+  $row = fetch_one($db, $sql);
   return $row !== null;
 }
+
 
 function seed_now() { return date('Y-m-d H:i:s'); }
 
