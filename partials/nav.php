@@ -21,7 +21,7 @@ function active($p, $path){ return $p===$path ? 'active' : ''; }
     <a class="nav-link <?=active('clients.php',$path)?>" href="clients.php">Clients</a>
     <a class="nav-link <?=active('projects.php',$path)?>" href="projects.php">Projects</a>
     <a class="nav-link <?=active('docs.php',$path)?>" href="docs.php">Docs</a>
-    <a class="nav-link <?=active('reports.php',$path)?>" href="reports.php">Reports</a>
+<a class="nav-link <?=active('ui_pages/reports_overview.php',$path)?>" href="ui_pages/reports_overview.php">Reports</a>
 
     <?php if ($role === 'CTO' || $role === 'Super Admin'): ?>
       <div class="mt-3 text-muted small">CTO</div>
