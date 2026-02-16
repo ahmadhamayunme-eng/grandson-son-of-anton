@@ -136,7 +136,7 @@ function col_exists($db, $table, $col) {
   return $row !== null;
 }
 
-function now() { return date('Y-m-d H:i:s'); }
+function seed_now() { return date('Y-m-d H:i:s'); }
 
 // =========================
 // TRANSACTION
