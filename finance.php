@@ -1,10 +1,37 @@
 <?php
 require_once __DIR__ . '/layout.php';
-if(!auth_can_finance()){ http_response_code(403); echo "Forbidden"; require __DIR__ . '/layout_end.php'; exit; }
+require_once __DIR__ . '/lib/finance.php';
+auth_require_perm('finance.view');
+$ws = auth_workspace_id();
+$tot = finance_totals($ws);
 ?>
 <h2 class="mb-3">Finance Dashboard</h2>
-<div class="card p-4">
-  <div class="fw-semibold mb-2">Coming next</div>
-  <div class="text-muted">This MVP includes the role gate only. Add invoices, payments, and reporting here.</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Payments</div><div class="h4 mb-0"><?=number_format($tot['payments'],2)?></div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Expenses</div><div class="h4 mb-0"><?=number_format($tot['expenses'],2)?></div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Salaries</div><div class="h4 mb-0"><?=number_format($tot['salaries'],2)?></div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Overhead</div><div class="h4 mb-0"><?=number_format($tot['overheads'],2)?></div></div></div>
 </div>
+
+<div class="card p-3 mb-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <div class="text-muted">Net Profit</div>
+      <div class="h3 mb-0"><?=number_format($tot['profit'],2)?></div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-light" href="ui_pages/payments_received.php">Payments</a>
+      <a class="btn btn-outline-light" href="ui_pages/project_expenses.php">Expenses</a>
+      <a class="btn btn-outline-light" href="ui_pages/salaries.php">Salaries</a>
+      <a class="btn btn-outline-light" href="ui_pages/overhead_cost.php">Overhead</a>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="fw-semibold mb-2">Recent activity</div>
+  <div class="text-muted">Use the module links above to add and review transactions.</div>
+</div>
+
 <?php require_once __DIR__ . '/layout_end.php'; ?>

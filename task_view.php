@@ -57,10 +57,26 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
   if(isset($_POST['add_comment'])){
     $body=trim($_POST['comment'] ?? '');
+    $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id']!== ? (int)$_POST['parent_comment_id'] : null;
     if($body===''){ flash_set('error','Comment cannot be empty.'); redirect("task_view.php?id=$id"); }
-    $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,created_at) VALUES (?,?,?,?,?)")
-        ->execute([$ws,$id,$u['id'],$body,now()]);
+    $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,parent_comment_id,created_at) VALUES (?,?,?,?,?,?)")
+        ->execute([$ws,$id,$u['id'],$body,$parent_id,now()]);
     flash_set('success','Comment added.');
+    redirect("task_view.php?id=$id");
+  }
+
+  if(isset($_POST['delete_attachment'])){
+    $att_id = (int)($_POST['attachment_id'] ?? 0);
+    if($att_id>0){
+      $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
+      $a->execute([$att_id,$ws,$id]);
+      $a = $a->fetch();
+      if($a){
+        @unlink(__DIR__."/uploads/task_attachments/".$a['stored_name']);
+        $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
+        flash_set('success','Attachment deleted.');
+      }
+    }
     redirect("task_view.php?id=$id");
   }
 
@@ -88,12 +104,33 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 }
 
-$comments=$pdo->prepare("SELECT c.body,c.created_at,u.name AS author
+$comments=$pdo->prepare("SELECT c.id,c.parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
   FROM comments c JOIN users u ON u.id=c.author_user_id
   WHERE c.task_id=? AND c.workspace_id=?
-  ORDER BY c.id DESC");
+  ORDER BY c.id ASC");
 $comments->execute([$id,$ws]);
 $comments=$comments->fetchAll();
+
+$attachments=$pdo->prepare("SELECT a.*, u.name AS uploader FROM task_attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.task_id=? AND a.workspace_id=? ORDER BY a.id DESC");
+$attachments->execute([$id,$ws]);
+$attachments=$attachments->fetchAll();
+
+// build comment tree
+$byParent=[];
+foreach($comments as $c){ $pid = $c['parent_comment_id'] ?? 0; $pid = $pid ? (int)$pid : 0; $byParent[$pid][]=$c; }
+function render_comment_tree($parentId,$byParent,$level=0){
+  if(!isset($byParent[$parentId])) return;
+  foreach($byParent[$parentId] as $c){
+    $pad = min(40, $level*18);
+    echo "<div class="p-3 rounded mb-2" style="margin-left:{$pad}px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">";
+    echo "<div class="d-flex justify-content-between"><div class="fw-semibold">".h($c['author'])."</div><div class="text-muted small">".h($c['created_at'])."</div></div>";
+    echo "<div class="mt-2">".nl2br(h($c['body']))."</div>";
+    echo "<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" onclick="setReply(".(int)$c['id'].", "".h(addslashes($c['author']))."")">Reply</button></div>";
+    echo "</div>";
+    render_comment_tree((int)$c['id'],$byParent,$level+1);
+  }
+}
+
 ?>
 <div class="d-flex justify-content-between align-items-start mb-3">
   <div>
@@ -121,21 +158,29 @@ $comments=$comments->fetchAll();
         <div class="fw-semibold">Comments</div>
         <div class="text-muted small"><?=count($comments)?> total</div>
       </div>
-      <form method="post" class="mb-3">
+      <form method="post" class="mb-3" id="commentForm">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted small" id="replyLabel"></div>
+          <button type="button" class="btn btn-sm btn-outline-light" onclick="clearReply()">Clear Reply</button>
+        </div>
         <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
-        <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Add Comment</button></div>
+        <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Post</button></div>
       </form>
-      <div class="d-flex flex-column gap-2">
-        <?php foreach($comments as $c): ?>
-          <div class="p-3 rounded" style="background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">
-            <div class="d-flex justify-content-between">
-              <div class="fw-semibold"><?=h($c['author'])?></div>
-              <div class="text-muted small"><?=h($c['created_at'])?></div>
-            </div>
-            <div class="mt-2"><?=nl2br(h($c['body']))?></div>
-          </div>
-        <?php endforeach; ?>
+      <script>
+        function setReply(id, author){
+          document.getElementById("parent_comment_id").value = id;
+          document.getElementById("replyLabel").textContent = "Replying to " + author + " (#"+id+")";
+          document.querySelector("textarea[name=comment]").focus();
+        }
+        function clearReply(){
+          document.getElementById("parent_comment_id").value = "";
+          document.getElementById("replyLabel").textContent = "";
+        }
+      </script>
+      <div class="d-flex flex-column">
+        <?php render_comment_tree(0, $byParent, 0); ?>
         <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
       </div>
     </div>
@@ -149,6 +194,32 @@ $comments=$comments->fetchAll();
       <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
       <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
     </div>
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Attachments</div>
+      <form method="post" action="upload_task_attachment.php" enctype="multipart/form-data" class="mb-3">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="task_id" value="<?= (int)$id ?>">
+        <input class="form-control" type="file" name="file" required>
+        <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
+      </form>
+      <div class="d-flex flex-column gap-2">
+        <?php foreach($attachments as $a): ?>
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <a class="link-light" href="download.php?id=<?= (int)$a['id'] ?>"><?= h($a['original_name']) ?></a>
+              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?></div>
+            </div>
+            <form method="post" onsubmit="return confirm('Delete attachment?');">
+              <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+              <input type="hidden" name="attachment_id" value="<?= (int)$a['id'] ?>">
+              <button class="btn btn-sm btn-outline-danger" name="delete_attachment" value="1">Delete</button>
+            </form>
+          </div>
+        <?php endforeach; ?>
+        <?php if(!$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
+      </div>
+    </div>
+
 
     <div class="card p-3 mb-3">
       <div class="fw-semibold mb-2">Update Status</div>

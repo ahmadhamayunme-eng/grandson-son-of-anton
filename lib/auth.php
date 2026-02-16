@@ -15,6 +15,45 @@ function auth_can_finance(): bool {
 }
 function auth_workspace_id(): int { return (int)(auth_user()['workspace_id'] ?? 0); }
 
+
+function auth_has_rbac_tables(): bool {
+  try {
+    $pdo = db();
+    $pdo->query("SELECT 1 FROM permissions LIMIT 1");
+    $pdo->query("SELECT 1 FROM role_permissions LIMIT 1");
+    return true;
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
+function auth_can(string $permKey): bool {
+  $u = auth_user();
+  if (!$u) return false;
+  if (($u['role_name'] ?? '') === 'Super Admin') return true;
+
+  if (!auth_has_rbac_tables()) {
+    if ($permKey === 'finance.view') return auth_can_finance();
+    return true;
+  }
+
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    SELECT 1
+    FROM role_permissions rp
+    JOIN permissions p ON p.id = rp.permission_id
+    WHERE rp.role_id = ? AND p.perm_key = ? AND rp.is_allowed = 1
+    LIMIT 1
+  ");
+  $stmt->execute([(int)$u['role_id'], $permKey]);
+  return (bool)$stmt->fetchColumn();
+}
+
+function auth_require_perm(string $permKey): void {
+  auth_require_login();
+  if (!auth_can($permKey)) { http_response_code(403); echo "Forbidden"; exit; }
+}
+
 function auth_login(string $email, string $password, bool $superOnly=false): bool {
   $pdo = db();
   $stmt = $pdo->prepare("SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.email=? AND u.is_active=1 LIMIT 1");
