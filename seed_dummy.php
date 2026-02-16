@@ -186,6 +186,40 @@ if (table_exists($db, 'workspaces')) {
   }
 }
 
+// =========================
+// 0.5) ROLES (required for users FK role_id)
+// =========================
+$roleIds = []; // role name => id
+
+if (table_exists($db, 'roles')) {
+  // Load existing roles
+  $existingRoles = fetch_all($db, "SELECT id, name FROM roles");
+  foreach ($existingRoles as $r) {
+    $roleIds[$r['name']] = (int)$r['id'];
+  }
+
+  // Ensure these roles exist
+  $need = ['Super Admin', 'CTO', 'Developer', 'Finance'];
+  foreach ($need as $rn) {
+    if (!isset($roleIds[$rn])) {
+      $cols = ['name'];
+      $vals = [$rn];
+
+      if (col_exists($db,'roles','created_at')) {
+        $cols[] = 'created_at';
+        $vals[] = now(); // or seed_now() if you renamed it
+      }
+
+      $colSql = implode('`,`', $cols);
+      $ph = implode(',', array_fill(0, count($cols), '?'));
+
+      q($db, "INSERT INTO roles (`$colSql`) VALUES ($ph)", $vals);
+      $roleIds[$rn] = last_id($db);
+    }
+  }
+}
+
+  
   // =========================
   // 1) USERS (if table exists)
   // =========================
@@ -223,6 +257,14 @@ if (table_exists($db, 'workspaces')) {
         if ($workspaceId && col_exists($db,'users','workspace_id')) {
   $cols[] = 'workspace_id';
   $vals[] = $workspaceId;
+}
+// If schema uses role_id FK, set it
+if (col_exists($db,'users','role_id')) {
+  $rid = $roleIds[$role] ?? null;
+  if ($rid) {
+    $cols[] = 'role_id';
+    $vals[] = $rid;
+  }
 }
 
         $colSql = implode('`,`', $cols);
