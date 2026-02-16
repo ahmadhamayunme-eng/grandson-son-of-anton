@@ -161,6 +161,30 @@ try {
       exit("Looks already seeded (clients > 5). Add &force=1 to run anyway.\n");
     }
   }
+  
+// =========================
+// 0) WORKSPACE (required for users FK)
+// =========================
+$workspaceId = null;
+
+if (table_exists($db, 'workspaces')) {
+  // Try to reuse first workspace if it exists
+  $ws = fetch_one($db, "SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
+  if ($ws) {
+    $workspaceId = (int)$ws['id'];
+  } else {
+    // Create one workspace
+    $cols = ['name'];
+    $vals = ['AntonX Workspace'];
+
+    if (col_exists($db,'workspaces','created_at')) { $cols[]='created_at'; $vals[]=seed_now(); }
+
+    $colSql = implode('`,`', $cols);
+    $ph = implode(',', array_fill(0, count($cols), '?'));
+    q($db, "INSERT INTO workspaces (`$colSql`) VALUES ($ph)", $vals);
+    $workspaceId = last_id($db);
+  }
+}
 
   // =========================
   // 1) USERS (if table exists)
@@ -195,6 +219,11 @@ try {
         if ($col_role) { $cols[] = $col_role; $vals[] = $role; }
         if ($col_active) { $cols[] = $col_active; $vals[] = 1; }
         if (col_exists($db,'users','created_at')) { $cols[]='created_at'; $vals[]=now(); }
+
+        if ($workspaceId && col_exists($db,'users','workspace_id')) {
+  $cols[] = 'workspace_id';
+  $vals[] = $workspaceId;
+}
 
         $colSql = implode('`,`', $cols);
         $ph = implode(',', array_fill(0, count($cols), '?'));
