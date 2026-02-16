@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../layout.php';
+require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/../lib/activity.php';
 auth_require_perm('finance.view');
 $pdo = db();
@@ -133,4 +133,4 @@ $rows = $rows->fetchAll();
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../layout_end.php'; ?>
+<?php require_once __DIR__ . '/layout_end.php'; ?>
