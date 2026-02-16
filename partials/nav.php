@@ -21,7 +21,7 @@ function active($p, $path){ return $p===$path ? 'active' : ''; }
     <a class="nav-link <?=active('clients.php',$path)?>" href="clients.php">Clients</a>
     <a class="nav-link <?=active('projects.php',$path)?>" href="projects.php">Projects</a>
     <a class="nav-link <?=active('docs.php',$path)?>" href="docs.php">Docs</a>
-<a class="nav-link <?=active('ui_pages/reports_overview.php',$path)?>" href="ui_pages/reports_overview.php">Reports</a>
+<a class="nav-link <?=active('reports_overview.php',$path)?>" href="reports_overview.php">Reports</a>
 
     <?php if ($role === 'CTO' || $role === 'Super Admin'): ?>
       <div class="mt-3 text-muted small">CTO</div>
@@ -45,7 +45,6 @@ function active($p, $path){ return $p===$path ? 'active' : ''; }
       <a class="nav-link <?=active('users_management.php',$path)?>" href="users_management.php">Users</a>
       <a class="nav-link <?=active('roles_permissions.php',$path)?>" href="roles_permissions.php">Roles & Permissions</a>
       <a class="nav-link <?=active('settings.php',$path)?>" href="settings.php">Settings</a>
-      <a class="nav-link" href="ui_pages/index.php">All UI Screens</a>
     <?php endif; ?>
 
     <div class="mt-3"></div>
