@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
@@ -12,5 +12,5 @@ require_once __DIR__ . '/../layout.php';
   </div>
 </div>
 <?php
-require_once __DIR__ . '/../layout_end.php';
+require_once __DIR__ . '/layout_end.php';
 ?>
