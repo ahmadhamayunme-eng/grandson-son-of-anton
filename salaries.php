@@ -10,9 +10,9 @@ $pdo = db();
 $ws = auth_workspace_id();
 $u = auth_user();
 
-$users = $pdo->prepare("SELECT id,name,email FROM users WHERE workspace_id=? AND is_active=1 ORDER BY name");
-$users->execute([$ws]);
-$users = $users->fetchAll();
+$rows = $pdo->prepare("SELECT * FROM finance_salaries WHERE workspace_id=? ORDER BY paid_on DESC, id DESC LIMIT 300");
+$rows->execute([$ws]);
+$rows = $rows->fetchAll();
 
 $action = $_POST['action'] ?? null;
 $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
