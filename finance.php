@@ -21,10 +21,10 @@ $tot = finance_totals($ws);
       <div class="h3 mb-0"><?=number_format($tot['profit'],2)?></div>
     </div>
     <div class="d-flex gap-2">
-      <a class="btn btn-outline-light" href="ui_pages/payments_received.php">Payments</a>
-      <a class="btn btn-outline-light" href="ui_pages/project_expenses.php">Expenses</a>
-      <a class="btn btn-outline-light" href="ui_pages/salaries.php">Salaries</a>
-      <a class="btn btn-outline-light" href="ui_pages/overhead_cost.php">Overhead</a>
+      <a class="btn btn-outline-light" href="payments_received.php">Payments</a>
+      <a class="btn btn-outline-light" href="project_expenses.php">Expenses</a>
+      <a class="btn btn-outline-light" href="salaries.php">Salaries</a>
+      <a class="btn btn-outline-light" href="overhead_cost.php">Overhead</a>
     </div>
   </div>
 </div>
