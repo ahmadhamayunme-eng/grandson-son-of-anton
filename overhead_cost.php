@@ -1,24 +1,6 @@
 <?php
-
-+// Temporary fatal-error debug helper: open this page with ?debug=1 to show PHP errors.
-+if (isset($_GET['debug']) && $_GET['debug'] === '1') {
-+  ini_set('display_errors', '1');
-+  ini_set('display_startup_errors', '1');
-+  error_reporting(E_ALL);
-+
-+  register_shutdown_function(static function (): void {
-+    $fatal = error_get_last();
-+    if ($fatal && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
-+      header('Content-Type: text/plain; charset=utf-8');
-+      echo "\n\n[FATAL] {$fatal['message']}\n";
-+      echo "File: {$fatal['file']}\n";
-+      echo "Line: {$fatal['line']}\n";
-+    }
-+  });
-+}
-+
  require_once __DIR__ . '/layout.php';
- require_once __DIR__ . '/../lib/activity.php';
+ require_once __DIR__ . '/lib/activity.php';
  auth_require_perm('finance.view');
  $pdo = db();
  $ws = auth_workspace_id();
