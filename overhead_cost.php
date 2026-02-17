@@ -1,4 +1,44 @@
 <?php
+// ====== DEBUG BLOCK (REMOVE AFTER FIX) ======
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
+// Write errors to a local log file too
+ini_set('log_errors', '1');
+ini_set('error_log', __DIR__ . '/_antonx_error.log');
+
+header('Content-Type: text/html; charset=utf-8');
+
+function dx($label, $value = null) {
+  echo "<pre style='background:#111;color:#0f0;padding:10px;border-radius:8px;white-space:pre-wrap'>";
+  echo htmlspecialchars($label) . "\n";
+  if (func_num_args() > 1) {
+    echo htmlspecialchars(print_r($value, true));
+  }
+  echo "</pre>";
+}
+
+set_error_handler(function($severity, $message, $file, $line) {
+  dx("PHP ERROR", compact('severity','message','file','line'));
+  return false; // allow normal handling too
+});
+
+set_exception_handler(function($e) {
+  dx("UNCAUGHT EXCEPTION " . get_class($e), [
+    'message' => $e->getMessage(),
+    'file'    => $e->getFile(),
+    'line'    => $e->getLine(),
+    'trace'   => $e->getTraceAsString(),
+  ]);
+  exit;
+});
+
+// Show which file is running
+dx("RUNNING FILE", __FILE__);
+
+// ====== END DEBUG BLOCK ======
+
  require_once __DIR__ . '/layout.php';
  require_once __DIR__ . '/lib/activity.php';
  auth_require_perm('finance.view');
