@@ -1,72 +1,7 @@
 <?php
-// ====== DEBUG BLOCK (REMOVE AFTER FIX) ======
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
-// Write errors to a local log file too
-ini_set('log_errors', '1');
-ini_set('error_log', __DIR__ . '/_antonx_error.log');
-
-header('Content-Type: text/html; charset=utf-8');
-
-function dx($label, $value = null) {
-  echo "<pre style='background:#111;color:#0f0;padding:10px;border-radius:8px;white-space:pre-wrap'>";
-  echo htmlspecialchars($label) . "\n";
-  if (func_num_args() > 1) {
-    echo htmlspecialchars(print_r($value, true));
-  }
-  echo "</pre>";
-}
-
-set_error_handler(function($severity, $message, $file, $line) {
-  dx("PHP ERROR", compact('severity','message','file','line'));
-  return false; // allow normal handling too
-});
-
-set_exception_handler(function($e) {
-  dx("UNCAUGHT EXCEPTION " . get_class($e), [
-    'message' => $e->getMessage(),
-    'file'    => $e->getFile(),
-    'line'    => $e->getLine(),
-    'trace'   => $e->getTraceAsString(),
-  ]);
-  exit;
-});
-
-// Show which file is running
-dx("RUNNING FILE", __FILE__);
-
-// ====== END DEBUG BLOCK ======
-
- require_once __DIR__ . '/layout.php';
- require_once __DIR__ . '/lib/activity.php';
- auth_require_perm('finance.view');
- $pdo = db();
- $ws = auth_workspace_id();
- $u = auth_user();
- 
- $action = $_POST['action'] ?? null;
- $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
- 
- if ($action === 'create') {
-   $overhead_month = preg_replace('/[^0-9\-]/','', $_POST['overhead_month'] ?? date('Y-m'));
-   $category = trim($_POST['category'] ?? 'General');
-   $amount = (float)($_POST['amount'] ?? 0);
-   $notes = trim($_POST['notes'] ?? '');
- 
-   $pdo->prepare("INSERT INTO finance_overheads (workspace_id,overhead_month,category,amount,notes,created_by,created_at)
-     VALUES (?,?,?,?,?,?,NOW())")
-     ->execute([$ws,$overhead_month,$category,$amount,$notes?:null,(int)$u['id']]);
-   activity_log('finance_overhead', (int)$pdo->lastInsertId(), 'create', 'Overhead added');
-   flash_set('success','Saved');
-   redirect(basename(__FILE__));
- }
- 
- if ($action === 'delete' && $id>0) {
-
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
+
 auth_require_perm('finance.view');
 $pdo = db();
 $ws = auth_workspace_id();
@@ -76,23 +11,24 @@ $action = $_POST['action'] ?? null;
 $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 
 if ($action === 'create') {
-  $overhead_month = preg_replace('/[^0-9\-]/','', $_POST['overhead_month'] ?? date('Y-m'));
+  $overhead_month = preg_replace('/[^0-9\-]/', '', $_POST['overhead_month'] ?? date('Y-m'));
   $category = trim($_POST['category'] ?? 'General');
   $amount = (float)($_POST['amount'] ?? 0);
   $notes = trim($_POST['notes'] ?? '');
 
   $pdo->prepare("INSERT INTO finance_overheads (workspace_id,overhead_month,category,amount,notes,created_by,created_at)
     VALUES (?,?,?,?,?,?,NOW())")
-    ->execute([$ws,$overhead_month,$category,$amount,$notes?:null,(int)$u['id']]);
+    ->execute([$ws, $overhead_month, $category, $amount, $notes ?: null, (int)$u['id']]);
+
   activity_log('finance_overhead', (int)$pdo->lastInsertId(), 'create', 'Overhead added');
-  flash_set('success','Saved');
+  flash_set('success', 'Saved');
   redirect(basename(__FILE__));
 }
 
-if ($action === 'delete' && $id>0) {
-  $pdo->prepare("DELETE FROM finance_overheads WHERE id=? AND workspace_id=?")->execute([$id,$ws]);
+if ($action === 'delete' && $id > 0) {
+  $pdo->prepare("DELETE FROM finance_overheads WHERE id=? AND workspace_id=?")->execute([$id, $ws]);
   activity_log('finance_overhead', $id, 'delete', 'Overhead deleted');
-  flash_set('success','Deleted');
+  flash_set('success', 'Deleted');
   redirect(basename(__FILE__));
 }
 
@@ -142,11 +78,11 @@ $rows = $rows->fetchAll();
         </tr>
       </thead>
       <tbody>
-      <?php foreach($rows as $r): ?>
+      <?php foreach ($rows as $r): ?>
         <tr>
           <td><?= h($r['overhead_month']) ?></td>
           <td><?= h($r['category']) ?></td>
-          <td><?= number_format((float)$r['amount'],2) ?></td>
+          <td><?= number_format((float)$r['amount'], 2) ?></td>
           <td><?= h($r['notes'] ?? '') ?></td>
           <td class="text-end">
             <form method="post" style="display:inline" onsubmit="return confirm('Delete this overhead record?');">
