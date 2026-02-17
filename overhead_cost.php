@@ -1,5 +1,48 @@
 <?php
 
++// Temporary fatal-error debug helper: open this page with ?debug=1 to show PHP errors.
++if (isset($_GET['debug']) && $_GET['debug'] === '1') {
++  ini_set('display_errors', '1');
++  ini_set('display_startup_errors', '1');
++  error_reporting(E_ALL);
++
++  register_shutdown_function(static function (): void {
++    $fatal = error_get_last();
++    if ($fatal && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
++      header('Content-Type: text/plain; charset=utf-8');
++      echo "\n\n[FATAL] {$fatal['message']}\n";
++      echo "File: {$fatal['file']}\n";
++      echo "Line: {$fatal['line']}\n";
++    }
++  });
++}
++
+ require_once __DIR__ . '/layout.php';
+ require_once __DIR__ . '/../lib/activity.php';
+ auth_require_perm('finance.view');
+ $pdo = db();
+ $ws = auth_workspace_id();
+ $u = auth_user();
+ 
+ $action = $_POST['action'] ?? null;
+ $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+ 
+ if ($action === 'create') {
+   $overhead_month = preg_replace('/[^0-9\-]/','', $_POST['overhead_month'] ?? date('Y-m'));
+   $category = trim($_POST['category'] ?? 'General');
+   $amount = (float)($_POST['amount'] ?? 0);
+   $notes = trim($_POST['notes'] ?? '');
+ 
+   $pdo->prepare("INSERT INTO finance_overheads (workspace_id,overhead_month,category,amount,notes,created_by,created_at)
+     VALUES (?,?,?,?,?,?,NOW())")
+     ->execute([$ws,$overhead_month,$category,$amount,$notes?:null,(int)$u['id']]);
+   activity_log('finance_overhead', (int)$pdo->lastInsertId(), 'create', 'Overhead added');
+   flash_set('success','Saved');
+   redirect(basename(__FILE__));
+ }
+ 
+ if ($action === 'delete' && $id>0) {
+
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
 auth_require_perm('finance.view');
