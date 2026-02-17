@@ -16,28 +16,46 @@ if ($action === 'create') {
   $amount = (float)($_POST['amount'] ?? 0);
   $notes = trim($_POST['notes'] ?? '');
 
-  $pdo->prepare("INSERT INTO finance_overheads (workspace_id,overhead_month,category,amount,notes,created_by,created_at)
-    VALUES (?,?,?,?,?,?,NOW())")
-    ->execute([$ws, $overhead_month, $category, $amount, $notes ?: null, (int)$u['id']]);
+  try {
+    $pdo->prepare("INSERT INTO finance_overheads (workspace_id,overhead_month,category,amount,notes,created_by,created_at)
+      VALUES (?,?,?,?,?,?,NOW())")
+      ->execute([$ws, $overhead_month, $category, $amount, $notes ?: null, (int)$u['id']]);
 
-  activity_log('finance_overhead', (int)$pdo->lastInsertId(), 'create', 'Overhead added');
-  flash_set('success', 'Saved');
+    activity_log('finance_overhead', (int)$pdo->lastInsertId(), 'create', 'Overhead added');
+    flash_set('success', 'Saved');
+  } catch (Throwable $e) {
+    flash_set('error', 'Unable to save overhead right now. Please check database setup for finance_overheads.');
+  }
   redirect(basename(__FILE__));
 }
 
 if ($action === 'delete' && $id > 0) {
-  $pdo->prepare("DELETE FROM finance_overheads WHERE id=? AND workspace_id=?")->execute([$id, $ws]);
-  activity_log('finance_overhead', $id, 'delete', 'Overhead deleted');
-  flash_set('success', 'Deleted');
+  try {
+    $pdo->prepare("DELETE FROM finance_overheads WHERE id=? AND workspace_id=?")->execute([$id, $ws]);
+    activity_log('finance_overhead', $id, 'delete', 'Overhead deleted');
+    flash_set('success', 'Deleted');
+  } catch (Throwable $e) {
+    flash_set('error', 'Unable to delete overhead right now. Please check database setup for finance_overheads.');
+  }
   redirect(basename(__FILE__));
 }
 
-$rows = $pdo->prepare("SELECT * FROM finance_overheads WHERE workspace_id=? ORDER BY overhead_month DESC, id DESC LIMIT 300");
-$rows->execute([$ws]);
-$rows = $rows->fetchAll();
+$rows = [];
+$loadError = null;
+try {
+  $rows = $pdo->prepare("SELECT * FROM finance_overheads WHERE workspace_id=? ORDER BY overhead_month DESC, id DESC LIMIT 300");
+  $rows->execute([$ws]);
+  $rows = $rows->fetchAll();
+} catch (Throwable $e) {
+  $loadError = 'Overhead table is unavailable. Please run/update schema.sql to create finance_overheads.';
+}
 ?>
 
 <h2 class="mb-3">Overhead Costs</h2>
+
+<?php if ($loadError): ?>
+  <div class="alert alert-danger"><?= h($loadError) ?></div>
+<?php endif; ?>
 
 <div class="card p-3 mb-4">
   <form method="post" class="row g-2">
@@ -93,6 +111,11 @@ $rows = $rows->fetchAll();
           </td>
         </tr>
       <?php endforeach; ?>
+      <?php if (!$rows): ?>
+        <tr>
+          <td colspan="5" class="text-muted">No overhead records yet.</td>
+        </tr>
+      <?php endif; ?>
       </tbody>
     </table>
   </div>
