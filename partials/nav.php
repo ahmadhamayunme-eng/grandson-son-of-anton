@@ -37,7 +37,6 @@ function active($p, $path){ return $p===$path ? 'active' : ''; }
       <a class="nav-link <?=active('project_expenses.php',$path)?>" href="project_expenses.php">Project Expenses</a>
       <a class="nav-link <?=active('salaries.php',$path)?>" href="salaries.php">Salaries</a>
       <a class="nav-link <?=active('overhead_cost.php',$path)?>" href="overhead_cost.php">Overhead</a>
-      <a class="nav-link <?=active('billing_records.php',$path)?>" href="billing_records.php">Billing Records</a>
     <?php endif; ?>
 
     <?php if (in_array($role, ['CEO','CTO','Super Admin'], true)): ?>
