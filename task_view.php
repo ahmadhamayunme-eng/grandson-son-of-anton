@@ -177,8 +177,11 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
     echo '<div class="p-3 rounded mb-2" style="margin-left:'.$pad.'px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">';
     echo '<div class="d-flex justify-content-between"><div class="fw-semibold">'.h($c['author']).'</div><div class="text-muted small">'.h($c['created_at']).'</div></div>';
     echo '<div class="mt-2">'.nl2br(h($c['body'])).'</div>';
-    if($allowReply){ echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.(int)$c['id'].', this.dataset.author)">Reply</button></div>'; }
+    if($allowReply){
+      echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.(int)$c['id'].', this.dataset.author)">Reply</button></div>';
+    }
     echo '</div>';
+    // Keep reply capability consistent through nested levels (used during conflict resolution).
     render_comment_tree((int)$c['id'],$byParent,$level+1,$allowReply);
   }
 }
