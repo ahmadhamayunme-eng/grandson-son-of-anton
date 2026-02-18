@@ -2,7 +2,6 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-echo "START\n";
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
 auth_require_perm('finance.view');
@@ -55,7 +54,10 @@ $rows->execute([$ws]);
 $rows = $rows->fetchAll();
 ?>
 
-<h2 class="mb-3">Payments Received</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Payments Received</h2>
+  <a class="btn btn-outline-info btn-sm" href="unreceived_payments.php">View Unreceived Payments</a>
+</div>
 
 <div class="card p-3 mb-4">
   <form method="post" class="row g-2">

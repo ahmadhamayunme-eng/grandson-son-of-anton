@@ -309,6 +309,29 @@ CREATE TABLE IF NOT EXISTS finance_payments (
   CONSTRAINT fk_fp_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS finance_receivables (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  workspace_id INT NOT NULL,
+  client_id INT NULL,
+  project_id INT NULL,
+  expected_amount DECIMAL(12,2) NOT NULL,
+  received_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  due_date DATE NOT NULL,
+  status ENUM('pending','partial','received','cancelled') NOT NULL DEFAULT 'pending',
+  description VARCHAR(190) NULL,
+  reference VARCHAR(120) NULL,
+  notes TEXT NULL,
+  created_by INT NOT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_fr_ws (workspace_id),
+  INDEX idx_fr_due (due_date),
+  INDEX idx_fr_status (status),
+  CONSTRAINT fk_fr_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  CONSTRAINT fk_fr_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_fr_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+  CONSTRAINT fk_fr_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS finance_expenses (
   id INT AUTO_INCREMENT PRIMARY KEY,
   workspace_id INT NOT NULL,

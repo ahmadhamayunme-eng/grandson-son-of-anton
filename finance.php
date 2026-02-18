@@ -22,6 +22,7 @@ $tot = finance_totals($ws);
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="payments_received.php">Payments</a>
+      <a class="btn btn-outline-light" href="unreceived_payments.php">Unreceived</a>
       <a class="btn btn-outline-light" href="project_expenses.php">Expenses</a>
       <a class="btn btn-outline-light" href="salaries.php">Salaries</a>
       <a class="btn btn-outline-light" href="overhead_cost.php">Overhead</a>
