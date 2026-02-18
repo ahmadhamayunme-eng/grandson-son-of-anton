@@ -183,6 +183,9 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
     echo '</div>';
     // Keep reply capability consistent through nested levels (used during conflict resolution).
     render_comment_tree((int)$c['id'],$byParent,$level+1,$allowReply);
+    echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.(int)$c['id'].', this.dataset.author)">Reply</button></div>';
+    echo '</div>';
+    render_comment_tree((int)$c['id'],$byParent,$level+1);
   }
 }
 
