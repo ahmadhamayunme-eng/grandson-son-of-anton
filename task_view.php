@@ -57,7 +57,9 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
   if(isset($_POST['add_comment'])){
     $body=trim($_POST['comment'] ?? '');
-    $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id']!== ? (int)$_POST['parent_comment_id'] : null;
+    $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id'] !== ''
+      ? (int)$_POST['parent_comment_id']
+      : null;
     if($body===''){ flash_set('error','Comment cannot be empty.'); redirect("task_view.php?id=$id"); }
     $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,parent_comment_id,created_at) VALUES (?,?,?,?,?,?)")
         ->execute([$ws,$id,$u['id'],$body,$parent_id,now()]);
@@ -122,11 +124,11 @@ function render_comment_tree($parentId,$byParent,$level=0){
   if(!isset($byParent[$parentId])) return;
   foreach($byParent[$parentId] as $c){
     $pad = min(40, $level*18);
-    echo "<div class="p-3 rounded mb-2" style="margin-left:{$pad}px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">";
-    echo "<div class="d-flex justify-content-between"><div class="fw-semibold">".h($c['author'])."</div><div class="text-muted small">".h($c['created_at'])."</div></div>";
-    echo "<div class="mt-2">".nl2br(h($c['body']))."</div>";
-    echo "<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" onclick="setReply(".(int)$c['id'].", "".h(addslashes($c['author']))."")">Reply</button></div>";
-    echo "</div>";
+    echo '<div class="p-3 rounded mb-2" style="margin-left:'.$pad.'px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">';
+    echo '<div class="d-flex justify-content-between"><div class="fw-semibold">'.h($c['author']).'</div><div class="text-muted small">'.h($c['created_at']).'</div></div>';
+    echo '<div class="mt-2">'.nl2br(h($c['body'])).'</div>';
+    echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.(int)$c['id'].', this.dataset.author)">Reply</button></div>';
+    echo '</div>';
     render_comment_tree((int)$c['id'],$byParent,$level+1);
   }
 }
