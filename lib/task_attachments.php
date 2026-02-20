@@ -23,7 +23,6 @@ function list_columns(PDO $pdo, string $table): array {
 
 function ensure_task_attachments_table(PDO $pdo): bool {
   // 1) Try preferred schema (with FKs).
-function ensure_task_attachments_table(PDO $pdo): bool {
   try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,17 +72,17 @@ function ensure_task_attachments_table(PDO $pdo): bool {
 
   foreach ($missing as $col) {
     try {
-      $sql = match ($col) {
-        'workspace_id' => "ALTER TABLE task_attachments ADD COLUMN workspace_id INT NOT NULL DEFAULT 0",
-        'task_id' => "ALTER TABLE task_attachments ADD COLUMN task_id INT NOT NULL DEFAULT 0",
-        'uploaded_by' => "ALTER TABLE task_attachments ADD COLUMN uploaded_by INT NOT NULL DEFAULT 0",
-        'original_name' => "ALTER TABLE task_attachments ADD COLUMN original_name VARCHAR(255) NOT NULL DEFAULT ''",
-        'stored_name' => "ALTER TABLE task_attachments ADD COLUMN stored_name VARCHAR(255) NOT NULL DEFAULT ''",
-        'mime_type' => "ALTER TABLE task_attachments ADD COLUMN mime_type VARCHAR(120) NULL",
-        'size_bytes' => "ALTER TABLE task_attachments ADD COLUMN size_bytes BIGINT NULL",
-        'created_at' => "ALTER TABLE task_attachments ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        default => null,
-      };
+      $sql = null;
+      switch ($col) {
+        case 'workspace_id': $sql = "ALTER TABLE task_attachments ADD COLUMN workspace_id INT NOT NULL DEFAULT 0"; break;
+        case 'task_id': $sql = "ALTER TABLE task_attachments ADD COLUMN task_id INT NOT NULL DEFAULT 0"; break;
+        case 'uploaded_by': $sql = "ALTER TABLE task_attachments ADD COLUMN uploaded_by INT NOT NULL DEFAULT 0"; break;
+        case 'original_name': $sql = "ALTER TABLE task_attachments ADD COLUMN original_name VARCHAR(255) NOT NULL DEFAULT ''"; break;
+        case 'stored_name': $sql = "ALTER TABLE task_attachments ADD COLUMN stored_name VARCHAR(255) NOT NULL DEFAULT ''"; break;
+        case 'mime_type': $sql = "ALTER TABLE task_attachments ADD COLUMN mime_type VARCHAR(120) NULL"; break;
+        case 'size_bytes': $sql = "ALTER TABLE task_attachments ADD COLUMN size_bytes BIGINT NULL"; break;
+        case 'created_at': $sql = "ALTER TABLE task_attachments ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"; break;
+      }
       if ($sql) $pdo->exec($sql);
     } catch (Throwable $e) {
       // Ignore; we validate minimum columns below.
@@ -100,12 +99,12 @@ function ini_bytes(string $val): int {
   if ($val === '') return 0;
   $unit = strtolower(substr($val, -1));
   $num = (float)$val;
-  return match ($unit) {
-    'g' => (int)($num * 1024 * 1024 * 1024),
-    'm' => (int)($num * 1024 * 1024),
-    'k' => (int)($num * 1024),
-    default => (int)$num,
-  };
+  switch ($unit) {
+    case 'g': return (int)($num * 1024 * 1024 * 1024);
+    case 'm': return (int)($num * 1024 * 1024);
+    case 'k': return (int)($num * 1024);
+    default: return (int)$num;
+  }
 }
 
 function effective_upload_limit_bytes(): int {
