@@ -21,6 +21,16 @@ function list_columns(PDO $pdo, string $table): array {
   }
 }
 
+
+function can_use_task_attachments_by_query(PDO $pdo): bool {
+  try {
+    $pdo->query("SELECT id,workspace_id,task_id,uploaded_by,original_name,stored_name,created_at FROM task_attachments LIMIT 1");
+    return true;
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
 function ensure_task_attachments_table(PDO $pdo): bool {
   $required = ['id','workspace_id','task_id','uploaded_by','original_name','stored_name','created_at'];
 
@@ -28,6 +38,8 @@ function ensure_task_attachments_table(PDO $pdo): bool {
   if (table_exists_quick($pdo, 'task_attachments')) {
     $existingCols = list_columns($pdo, 'task_attachments');
     if (count(array_diff($required, $existingCols)) === 0) return true;
+    // Some shared hosts restrict SHOW COLUMNS but still allow normal SELECT/INSERT usage.
+    if (!$existingCols && can_use_task_attachments_by_query($pdo)) return true;
   }
 
   // 1) Try preferred schema (with FKs) only when needed.
@@ -99,7 +111,8 @@ function ensure_task_attachments_table(PDO $pdo): bool {
   }
 
   $cols = list_columns($pdo, 'task_attachments');
-  return count(array_diff($required, $cols)) === 0;
+  if ($cols) return count(array_diff($required, $cols)) === 0;
+  return can_use_task_attachments_by_query($pdo);
 }
 
 function ini_bytes(string $val): int {
