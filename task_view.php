@@ -22,6 +22,7 @@ function column_exists(PDO $pdo, string $table, string $column): bool {
 
 $has_comment_parent = column_exists($pdo, 'comments', 'parent_comment_id');
 $has_attachments_table = ensure_task_attachments_table($pdo);
+$attachments_query_ok = false;
 $effective_upload_limit = effective_upload_limit_bytes();
 $can_upload_500mb = ($effective_upload_limit === 0) || ($effective_upload_limit >= 500 * 1024 * 1024);
 
@@ -133,13 +134,17 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     }
     $att_id = (int)($_POST['attachment_id'] ?? 0);
     if($att_id>0){
-      $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
-      $a->execute([$att_id,$ws,$id]);
-      $a = $a->fetch();
-      if($a){
-        @unlink(__DIR__."/uploads/task_attachments/".$a['stored_name']);
-        $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
-        flash_set('success','Attachment deleted.');
+      try {
+        $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
+        $a->execute([$att_id,$ws,$id]);
+        $a = $a->fetch();
+        if($a){
+          @unlink(__DIR__."/uploads/task_attachments/".$a['stored_name']);
+          $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
+          flash_set('success','Attachment deleted.');
+        }
+      } catch (Throwable $e) {
+        flash_set('error','Could not delete attachment on this server.');
       }
     }
     redirect("task_view.php?id=$id");
@@ -184,10 +189,13 @@ $comments->execute([$id,$ws]);
 $comments=$comments->fetchAll();
 
 $attachments=[];
-if($has_attachments_table){
+try {
   $attachments=$pdo->prepare("SELECT a.*, u.name AS uploader FROM task_attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.task_id=? AND a.workspace_id=? ORDER BY a.id DESC");
   $attachments->execute([$id,$ws]);
   $attachments=$attachments->fetchAll();
+  $attachments_query_ok = true;
+} catch (Throwable $e) {
+  $attachments=[];
 }
 
 // build comment tree
@@ -285,14 +293,12 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
         <input class="form-control" type="file" name="file" required>
         <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
       </form>
-      <?php else: ?>
-      <div class="text-muted mb-3">Attachments are currently unavailable on this server. Please run the DB migration or grant CREATE/ALTER TABLE permission.</div>
+      <div class="small-help mb-3">Supports all file types. Target upload size: 1 GB per file (including 500+ MB), subject to server PHP limits.</div>
+      <?php if(!$can_upload_500mb): ?>
+        <div class="alert alert-warning py-2">Current server upload limit is <?= h(human_bytes($effective_upload_limit)) ?>. Set <code>upload_max_filesize</code> and <code>post_max_size</code> to at least <b>600M</b> (recommended 1G).</div>
       <?php endif; ?>
-      <?php if($has_attachments_table): ?>
-        <div class="small-help mb-3">Supports all file types. Target upload size: 1 GB per file (including 500+ MB), subject to server PHP limits.</div>
-        <?php if(!$can_upload_500mb): ?>
-          <div class="alert alert-warning py-2">Current server upload limit is <?= h(human_bytes($effective_upload_limit)) ?>. Set <code>upload_max_filesize</code> and <code>post_max_size</code> to at least <b>600M</b> (recommended 1G).</div>
-        <?php endif; ?>
+      <?php if(!$attachments_query_ok): ?>
+        <div class="alert alert-warning py-2">Attachment list could not be loaded from DB on this server, but you can still try uploading.</div>
       <?php endif; ?>
       <div class="d-flex flex-column gap-2">
         <?php foreach($attachments as $a): ?>

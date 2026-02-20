@@ -85,9 +85,13 @@ if (!move_uploaded_file($f['tmp_name'], $dest)) {
   redirect('task_view.php?id='.$task_id);
 }
 
-$pdo->prepare("INSERT INTO task_attachments (workspace_id,task_id,uploaded_by,original_name,stored_name,mime_type,size_bytes,created_at)
-  VALUES (?,?,?,?,?,?,?,NOW())")
-  ->execute([$ws,$task_id,(int)$u['id'],$orig,$stored,$mime,$size]);
-
-flash_set('success','File uploaded');
+try {
+  $pdo->prepare("INSERT INTO task_attachments (workspace_id,task_id,uploaded_by,original_name,stored_name,mime_type,size_bytes,created_at)
+    VALUES (?,?,?,?,?,?,?,NOW())")
+    ->execute([$ws,$task_id,(int)$u['id'],$orig,$stored,$mime,$size]);
+  flash_set('success','File uploaded');
+} catch (Throwable $e) {
+  @unlink($dest);
+  flash_set('error','Upload saved file but DB insert failed. Please ensure task_attachments table is accessible to app DB user.');
+}
 redirect('task_view.php?id='.$task_id);
