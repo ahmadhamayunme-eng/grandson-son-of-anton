@@ -286,7 +286,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
         <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
       </form>
       <?php else: ?>
-      <div class="text-muted mb-3">Attachments table could not be prepared automatically. Please check DB permissions/migrations.</div>
+      <div class="text-muted mb-3">Attachments are currently unavailable on this server. Please run the DB migration or grant CREATE/ALTER TABLE permission.</div>
       <?php endif; ?>
       <?php if($has_attachments_table): ?>
         <div class="small-help mb-3">Supports all file types. Target upload size: 1 GB per file (including 500+ MB), subject to server PHP limits.</div>
@@ -308,7 +308,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
             </form>
           </div>
         <?php endforeach; ?>
-        <?php if(!$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
+        <?php if($has_attachments_table && !$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
       </div>
     </div>
 
