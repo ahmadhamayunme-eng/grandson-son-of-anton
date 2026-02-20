@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/task_attachments.php';
 $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=$u['role_name'] ?? '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
@@ -20,7 +21,9 @@ function column_exists(PDO $pdo, string $table, string $column): bool {
 }
 
 $has_comment_parent = column_exists($pdo, 'comments', 'parent_comment_id');
-$has_attachments_table = table_exists($pdo, 'task_attachments');
+$has_attachments_table = ensure_task_attachments_table($pdo);
+$effective_upload_limit = effective_upload_limit_bytes();
+$can_upload_500mb = ($effective_upload_limit === 0) || ($effective_upload_limit >= 500 * 1024 * 1024);
 
 $id=(int)($_GET['id'] ?? 0);
 try {
@@ -203,9 +206,6 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
     echo '</div>';
     // Keep reply capability consistent through nested levels (used during conflict resolution).
     render_comment_tree((int)$c['id'],$byParent,$level+1,$allowReply);
-    echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.(int)$c['id'].', this.dataset.author)">Reply</button></div>';
-    echo '</div>';
-    render_comment_tree((int)$c['id'],$byParent,$level+1);
   }
 }
 
@@ -286,14 +286,20 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
         <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
       </form>
       <?php else: ?>
-      <div class="text-muted mb-3">Attachments are unavailable until the latest DB migration is applied.</div>
+      <div class="text-muted mb-3">Attachments table could not be prepared automatically. Please check DB permissions/migrations.</div>
+      <?php endif; ?>
+      <?php if($has_attachments_table): ?>
+        <div class="small-help mb-3">Supports all file types. Target upload size: 1 GB per file (including 500+ MB), subject to server PHP limits.</div>
+        <?php if(!$can_upload_500mb): ?>
+          <div class="alert alert-warning py-2">Current server upload limit is <?= h(human_bytes($effective_upload_limit)) ?>. Set <code>upload_max_filesize</code> and <code>post_max_size</code> to at least <b>600M</b> (recommended 1G).</div>
+        <?php endif; ?>
       <?php endif; ?>
       <div class="d-flex flex-column gap-2">
         <?php foreach($attachments as $a): ?>
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <a class="link-light" href="download.php?id=<?= (int)$a['id'] ?>"><?= h($a['original_name']) ?></a>
-              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?></div>
+              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?> • <?= h(human_bytes((int)($a['size_bytes'] ?? 0))) ?></div>
             </div>
             <form method="post" onsubmit="return confirm('Delete attachment?');">
               <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
