@@ -213,7 +213,7 @@ include __DIR__ . '/partials/header.php';
     </form>
 
     <div class="login-sep"></div>
-    <div class="login-signup">If you are something else? <a href="super_login.php">Login Here</a></div>
+    <div class="login-signup">Don't have an account? <a href="super_login.php">Sign up</a></div>
   </div>
 </div>
 <?php include __DIR__ . '/partials/footer.php'; ?>
