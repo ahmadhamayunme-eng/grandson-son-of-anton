@@ -22,7 +22,15 @@ function list_columns(PDO $pdo, string $table): array {
 }
 
 function ensure_task_attachments_table(PDO $pdo): bool {
-  // 1) Try preferred schema (with FKs).
+  $required = ['id','workspace_id','task_id','uploaded_by','original_name','stored_name','created_at'];
+
+  // 0) If table already exists and has required columns, do not require CREATE/ALTER privileges.
+  if (table_exists_quick($pdo, 'task_attachments')) {
+    $existingCols = list_columns($pdo, 'task_attachments');
+    if (count(array_diff($required, $existingCols)) === 0) return true;
+  }
+
+  // 1) Try preferred schema (with FKs) only when needed.
   try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,7 +65,8 @@ function ensure_task_attachments_table(PDO $pdo): bool {
         INDEX idx_ta_task (task_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e2) {
-      return false;
+      // If CREATE is denied but table already exists, continue with validation path.
+      if (!table_exists_quick($pdo, 'task_attachments')) return false;
     }
   }
 
@@ -90,7 +99,6 @@ function ensure_task_attachments_table(PDO $pdo): bool {
   }
 
   $cols = list_columns($pdo, 'task_attachments');
-  $required = ['id','workspace_id','task_id','uploaded_by','original_name','stored_name','created_at'];
   return count(array_diff($required, $cols)) === 0;
 }
 
