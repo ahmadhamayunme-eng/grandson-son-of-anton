@@ -43,9 +43,17 @@ try {
 }
 if(!$task){ echo "<h3>Task not found</h3>"; require __DIR__ . '/layout_end.php'; exit; }
 
-$assignees=$pdo->prepare("SELECT u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=?");
+$assignable_users=$pdo->query("SELECT u.id,u.name,r.name AS role_name
+  FROM users u JOIN roles r ON r.id=u.role_id
+  WHERE u.workspace_id=$ws AND u.is_active=1 AND r.name IN ('Developer','SEO')
+  ORDER BY u.name ASC")->fetchAll();
+$assignable_user_ids=array_map('intval',array_column($assignable_users,'id'));
+
+$assignees=$pdo->prepare("SELECT u.id,u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=? ORDER BY u.name ASC");
 $assignees->execute([$id]);
-$assignee_names=array_map(fn($r)=>$r['name'],$assignees->fetchAll());
+$assignees=$assignees->fetchAll();
+$assignee_ids=array_map('intval',array_column($assignees,'id'));
+$assignee_names=array_map(fn($r)=>$r['name'],$assignees);
 $is_assignee=in_array($u['name'], $assignee_names, true);
 
 $locked= (bool)$task['locked_at'];
@@ -60,6 +68,18 @@ if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs CTO
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   require_post(); csrf_verify();
+
+  if(isset($_POST['assign_task'])){
+    if(!$can_manage){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $selected=array_map('intval', $_POST['assignees'] ?? []);
+    $selected=array_values(array_unique(array_intersect($selected,$assignable_user_ids)));
+    $pdo->prepare("DELETE FROM task_assignees WHERE task_id=?")->execute([$id]);
+    foreach($selected as $uid){
+      $pdo->prepare("INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)")->execute([$id,$uid]);
+    }
+    flash_set('success','Task assignees updated.');
+    redirect("task_view.php?id=$id");
+  }
 
   if(isset($_POST['update_task'])){
     if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
@@ -286,6 +306,29 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
       </div>
     </div>
 
+
+    <?php if($can_manage): ?>
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Assign Task</div>
+      <?php if(!$assignable_users): ?>
+        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
+      <?php else: ?>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <div class="mb-2">
+          <label class="form-label">Assignees (Developer / SEO)</label>
+          <select class="form-select" name="assignees[]" multiple>
+            <?php foreach($assignable_users as $au): ?>
+              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
+            <?php endforeach; ?>
+          </select>
+          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
+        </div>
+        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
+      </form>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
 
     <div class="card p-3 mb-3">
       <div class="fw-semibold mb-2">Update Status</div>
