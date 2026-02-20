@@ -1,13 +1,21 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 $pdo = db();
 $ws = auth_workspace_id();
 
 $clients = (int)$pdo->query("SELECT COUNT(*) c FROM clients WHERE workspace_id=$ws")->fetch()['c'];
 $projects = (int)$pdo->query("SELECT COUNT(*) c FROM projects WHERE workspace_id=$ws")->fetch()['c'];
 $tasks = (int)$pdo->query("SELECT COUNT(*) c FROM tasks WHERE workspace_id=$ws AND status IN ('To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)')")->fetch()['c'];
-$pendingInvoices = max(0, (int)round($projects * 0.45));
-$monthlyRevenue = ($projects * 4250) + ($tasks * 180);
+
+$finance = finance_totals($ws);
+$monthlyPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(CURDATE(), '%Y-%m')");
+$monthlyPaymentsSt->execute([$ws]);
+$monthlyRevenue = (float)$monthlyPaymentsSt->fetchColumn();
+
+$pendingInvoicesSt = $pdo->prepare("SELECT COALESCE(SUM(expected_amount - received_amount),0) FROM finance_receivables WHERE workspace_id=? AND status IN ('pending','partial')");
+$pendingInvoicesSt->execute([$ws]);
+$pendingInvoices = (float)$pendingInvoicesSt->fetchColumn();
 
 $taskSt = $pdo->prepare('SELECT t.id, t.title, t.status, p.name AS project_name
   FROM tasks t
@@ -28,53 +36,74 @@ $projectSt = $pdo->prepare('SELECT p.id, p.name, c.name AS client_name, ps.name 
 $projectSt->execute([$ws]);
 $recentProjects = $projectSt->fetchAll();
 
+$days = [];
+$taskSeries = [];
+$clientSeries = [];
+$taskSeriesSt = $pdo->prepare("SELECT DATE(updated_at) d, COUNT(*) c FROM tasks WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)");
+$taskSeriesSt->execute([$ws]);
+$taskMap = [];
+foreach ($taskSeriesSt->fetchAll() as $row) $taskMap[$row['d']] = (int)$row['c'];
+$clientSeriesSt = $pdo->prepare("SELECT DATE(updated_at) d, COUNT(*) c FROM clients WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)");
+$clientSeriesSt->execute([$ws]);
+$clientMap = [];
+foreach ($clientSeriesSt->fetchAll() as $row) $clientMap[$row['d']] = (int)$row['c'];
+
+for ($i = 6; $i >= 0; $i--) {
+  $d = date('Y-m-d', strtotime("-$i day"));
+  $days[] = date('M j', strtotime($d));
+  $taskSeries[] = $taskMap[$d] ?? 0;
+  $clientSeries[] = $clientMap[$d] ?? 0;
+}
+
 function status_chip(string $status): string {
   $s = strtolower($status);
-  if (str_contains($s, 'progress') || str_contains($s, 'active')) return 'chip-yellow';
-  if (str_contains($s, 'approved') || str_contains($s, 'complete')) return 'chip-green';
-  if (str_contains($s, 'hold') || str_contains($s, 'pending')) return 'chip-red';
+  if (str_contains($s, 'progress') || str_contains($s, 'active') || $s === 'to do') return 'chip-yellow';
+  if (str_contains($s, 'approved') || str_contains($s, 'complete') || $s === 'done') return 'chip-green';
+  if (str_contains($s, 'hold') || str_contains($s, 'pending') || str_contains($s, 'blocked')) return 'chip-red';
   return 'chip-purple';
 }
+function make_points(array $values, int $width = 560, int $height = 190): string {
+  $count = max(count($values), 2);
+  $max = max(max($values), 1);
+  $step = $width / ($count - 1);
+  $pts = [];
+  foreach ($values as $i => $v) {
+    $x = (int)round($i * $step);
+    $y = (int)round($height - (($v / $max) * ($height - 24)));
+    $pts[] = $x . ',' . $y;
+  }
+  return implode(' ', $pts);
+}
+$taskPoints = make_points($taskSeries);
+$clientPoints = make_points($clientSeries);
+$taskMax = max($taskSeries);
+$clientMax = max($clientSeries);
+$monthKey = date('Y-m');
+$monthPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=?");
+$monthPaymentsSt->execute([$ws, $monthKey]);
+$currentMonthPayments = (float)$monthPaymentsSt->fetchColumn();
+$prevMonthPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')");
+$prevMonthPaymentsSt->execute([$ws]);
+$previousMonthPayments = (float)$prevMonthPaymentsSt->fetchColumn();
+$changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMonthPayments) / $previousMonthPayments) * 100 : 0;
 ?>
 <style>
-  .dashboard-shell {
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 18px;
-    background: linear-gradient(130deg, rgba(14,16,24,.93), rgba(9,11,16,.95));
-    box-shadow: 0 28px 70px rgba(0,0,0,.42);
-    padding: 22px;
-  }
+  .dashboard-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,16,24,.93), rgba(9,11,16,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
   .dashboard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .dashboard-title { margin: 0; font-size: 2rem; font-weight: 600; }
   .top-icons { display: flex; align-items: center; gap: 12px; color: rgba(236,236,240,.76); }
   .top-dot { width: 24px; height: 24px; border-radius: 50%; background: #7f6dff; display: inline-block; }
-  .kpi-card {
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 12px;
-    background: linear-gradient(110deg, rgba(23,25,36,.92), rgba(14,16,24,.9));
-    padding: 14px 16px;
-    min-height: 98px;
-  }
+  .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,25,36,.92), rgba(14,16,24,.9)); padding: 14px 16px; min-height: 98px; }
   .kpi-label { color: rgba(236,236,240,.72); font-size: .9rem; margin-bottom: 4px; }
   .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
   .kpi-icon { color: #f6d469; margin-right: 8px; }
   .kpi-red .kpi-icon { color: #f3797e; }
   .kpi-green .kpi-icon { color: #55cb90; }
-  .kpi-change { font-size: .95rem; margin-left: 6px; color: #55cb90; }
-  .panel {
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 12px;
-    background: linear-gradient(120deg, rgba(24,26,37,.88), rgba(16,18,27,.88));
-  }
-  .panel-head {
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,.07);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 1.6rem;
-    font-weight: 600;
-  }
+  .kpi-change { font-size: .95rem; margin-left: 6px; }
+  .pos { color: #55cb90; }
+  .neg { color: #f3797e; }
+  .panel { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(120deg, rgba(24,26,37,.88), rgba(16,18,27,.88)); }
+  .panel-head { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.07); display: flex; justify-content: space-between; align-items: center; font-size: 1.6rem; font-weight: 600; }
   .task-row, .project-row { display: flex; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
   .task-row:last-child, .project-row:last-child { border-bottom: 0; }
   .task-title, .project-title { color: #f0f0f3; text-decoration: none; font-weight: 500; font-size: 1.15rem; }
@@ -85,7 +114,8 @@ function status_chip(string $status): string {
   .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
   .chip-purple { background: rgba(139,107,255,.16); border-color: rgba(139,107,255,.32); color: #b9a2ff; }
   .chart-wrap { padding: 8px 14px 14px; }
-  .chart-legend { display: flex; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,240,.72); font-size: .9rem; }
+  .chart-legend { display: flex; justify-content: space-between; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,240,.72); font-size: .9rem; }
+  .chart-legend-left { display: flex; gap: 16px; }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; }
   .legend-yellow { background: #f6d469; }
   .legend-purple { background: #8b6bff; }
@@ -104,8 +134,8 @@ function status_chip(string $status): string {
   <div class="row g-3 mb-3">
     <div class="col-lg-3 col-sm-6"><div class="kpi-card"><div class="kpi-label"><span class="kpi-icon">▣</span>Active Tasks</div><div class="kpi-value"><?=h($tasks)?></div></div></div>
     <div class="col-lg-3 col-sm-6"><div class="kpi-card"><div class="kpi-label"><span class="kpi-icon">◫</span>Active Projects</div><div class="kpi-value"><?=h($projects)?></div></div></div>
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-green"><div class="kpi-label"><span class="kpi-icon">↗</span>Monthly Revenue</div><div class="kpi-value">$<?=number_format($monthlyRevenue)?><span class="kpi-change">+8.2%</span></div></div></div>
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-red"><div class="kpi-label"><span class="kpi-icon">✉</span>Pending Invoices</div><div class="kpi-value">$<?=number_format($pendingInvoices * 1250)?><span class="kpi-change" style="color:#f3797e">-21%</span></div></div></div>
+    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-green"><div class="kpi-label"><span class="kpi-icon">↗</span>Monthly Revenue</div><div class="kpi-value">$<?=number_format($monthlyRevenue, 2)?><span class="kpi-change <?= $changePct >= 0 ? 'pos' : 'neg' ?>"><?=($changePct >= 0 ? '+' : '') . number_format($changePct, 1)?>%</span></div></div></div>
+    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-red"><div class="kpi-label"><span class="kpi-icon">✉</span>Pending Invoices</div><div class="kpi-value">$<?=number_format($pendingInvoices, 2)?></div></div></div>
   </div>
 
   <div class="row g-3 mb-3">
@@ -134,13 +164,16 @@ function status_chip(string $status): string {
             <line x1="0" y1="145" x2="560" y2="145" stroke="rgba(255,255,255,.08)" />
             <line x1="0" y1="100" x2="560" y2="100" stroke="rgba(255,255,255,.08)" />
             <line x1="0" y1="55" x2="560" y2="55" stroke="rgba(255,255,255,.08)" />
-            <polyline fill="none" stroke="#f6d469" stroke-width="4" points="0,120 70,40 140,105 205,110 270,160 340,90 410,130 475,95 520,70 560,40" />
-            <polyline fill="none" stroke="#8b6bff" stroke-width="4" points="0,170 60,150 130,150 195,185 265,160 335,145 405,170 470,120 525,130 560,108" />
+            <polyline fill="none" stroke="#f6d469" stroke-width="4" points="<?=h($taskPoints)?>" />
+            <polyline fill="none" stroke="#8b6bff" stroke-width="4" points="<?=h($clientPoints)?>" />
           </svg>
         </div>
         <div class="chart-legend">
-          <span><span class="legend-dot legend-yellow"></span>Active Tasks</span>
-          <span><span class="legend-dot legend-purple"></span>Client Activity</span>
+          <div class="chart-legend-left">
+            <span><span class="legend-dot legend-yellow"></span>Active Tasks</span>
+            <span><span class="legend-dot legend-purple"></span>Client Activity</span>
+          </div>
+          <div class="text-muted">Last 7 days</div>
         </div>
       </section>
     </div>
@@ -169,17 +202,17 @@ function status_chip(string $status): string {
         <div class="finance-box">
           <div class="finance-line">
             <div class="finance-label">Current Balance</div>
-            <div class="finance-value">$<?=number_format($monthlyRevenue)?></div>
+            <div class="finance-value">$<?=number_format($finance['profit'], 2)?></div>
           </div>
           <div class="finance-line">
             <div class="finance-label">Payments Received</div>
-            <div class="finance-value">$<?=number_format((int)round($monthlyRevenue * 1.49))?></div>
+            <div class="finance-value">$<?=number_format($finance['payments'], 2)?></div>
           </div>
           <div class="finance-line">
             <div class="finance-label">Unreceived Payments</div>
-            <div class="finance-value">$<?=number_format((int)round($monthlyRevenue * 0.21))?></div>
+            <div class="finance-value">$<?=number_format($pendingInvoices, 2)?></div>
           </div>
-          <div class="pt-3 text-muted">Clients in workspace: <?=h($clients)?></div>
+          <div class="pt-3 text-muted">Last 7d: Tasks <?=h((string)$taskMax)?> · Clients <?=h((string)$clientMax)?></div>
         </div>
       </section>
     </div>
