@@ -5,7 +5,7 @@ function table_exists_quick($pdo, $table) {
     $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
     $stmt->execute([$table]);
     return (bool)$stmt->fetchColumn();
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     return false;
   }
 }
@@ -16,7 +16,7 @@ function list_columns($pdo, $table) {
     $out = [];
     foreach ($rows as $r) $out[] = (string)($r['Field'] ?? '');
     return array_values(array_filter($out));
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     return [];
   }
 }
@@ -26,7 +26,7 @@ function can_use_task_attachments_by_query($pdo) {
   try {
     $pdo->query("SELECT id,workspace_id,task_id,uploaded_by,original_name,stored_name,created_at FROM task_attachments LIMIT 1");
     return true;
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     return false;
   }
 }
@@ -60,7 +60,7 @@ function ensure_task_attachments_table($pdo) {
       CONSTRAINT fk_ta_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
       CONSTRAINT fk_ta_user FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     // 2) Fallback schema (no FKs) for restrictive DB environments.
     try {
       $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
@@ -76,7 +76,7 @@ function ensure_task_attachments_table($pdo) {
         INDEX idx_ta_ws (workspace_id),
         INDEX idx_ta_task (task_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    } catch (Throwable $e2) {
+    } catch (Exception $e2) {
       // If CREATE is denied but table already exists, continue with validation path.
       if (!table_exists_quick($pdo, 'task_attachments')) return false;
     }
@@ -105,7 +105,7 @@ function ensure_task_attachments_table($pdo) {
         case 'created_at': $sql = "ALTER TABLE task_attachments ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"; break;
       }
       if ($sql) $pdo->exec($sql);
-    } catch (Throwable $e) {
+    } catch (Exception $e) {
       // Ignore; we validate minimum columns below.
     }
   }

@@ -8,14 +8,14 @@ $can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
 
 function table_exists($pdo, $table) {
   try { $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1"); return true; }
-  catch (Throwable $e) { return false; }
+  catch (Exception $e) { return false; }
 }
 function column_exists($pdo, $table, $column) {
   try {
     $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
     $stmt->execute([$column]);
     return (bool)$stmt->fetch();
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     return false;
   }
 }
@@ -36,7 +36,7 @@ try {
     WHERE t.id=? AND t.workspace_id=?");
   $stmt->execute([$id,$ws]);
   $task=$stmt->fetch();
-} catch (Throwable $e) {
+} catch (Exception $e) {
   $stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, NULL AS phase_name
     FROM tasks t
     JOIN projects p ON p.id=t.project_id
@@ -47,15 +47,25 @@ try {
 }
 if(!$task){ echo "<h3>Task not found</h3>"; require __DIR__ . '/layout_end.php'; exit; }
 
-$assignable_users=$pdo->query("SELECT u.id,u.name,r.name AS role_name
-  FROM users u JOIN roles r ON r.id=u.role_id
-  WHERE u.workspace_id=$ws AND u.is_active=1 AND r.name IN ('Developer','SEO')
-  ORDER BY u.name ASC")->fetchAll();
+$assignable_users=[];
+try {
+  $assignable_users=$pdo->query("SELECT u.id,u.name,r.name AS role_name
+    FROM users u JOIN roles r ON r.id=u.role_id
+    WHERE u.workspace_id=$ws AND u.is_active=1 AND r.name IN ('Developer','SEO')
+    ORDER BY u.name ASC")->fetchAll();
+} catch (Exception $e) {
+  $assignable_users=[];
+}
 $assignable_user_ids=array_map('intval',array_column($assignable_users,'id'));
 
-$assignees=$pdo->prepare("SELECT u.id,u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=? ORDER BY u.name ASC");
-$assignees->execute([$id]);
-$assignees=$assignees->fetchAll();
+$assignees=[];
+try {
+  $assigneesStmt=$pdo->prepare("SELECT u.id,u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=? ORDER BY u.name ASC");
+  $assigneesStmt->execute([$id]);
+  $assignees=$assigneesStmt->fetchAll();
+} catch (Exception $e) {
+  $assignees=[];
+}
 $assignee_ids=array_map('intval',array_column($assignees,'id'));
 $assignee_names=array_map(function($r){ return $r['name']; },$assignees);
 $is_assignee=in_array($u['name'], $assignee_names, true);
@@ -65,7 +75,7 @@ $locked= (bool)$task['locked_at'];
 try {
   $statuses=$pdo->query("SELECT name FROM task_statuses WHERE workspace_id=$ws ORDER BY sort_order ASC")->fetchAll();
   $statuses=array_map(function($r){ return $r['name']; },$statuses);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   $statuses=[];
 }
 if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client']; }
@@ -143,7 +153,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
           $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
           flash_set('success','Attachment deleted.');
         }
-      } catch (Throwable $e) {
+      } catch (Exception $e) {
         flash_set('error','Could not delete attachment on this server.');
       }
     }
@@ -174,19 +184,24 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 }
 
-if($has_comment_parent){
-  $comments=$pdo->prepare("SELECT c.id,c.parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
-    FROM comments c JOIN users u ON u.id=c.author_user_id
-    WHERE c.task_id=? AND c.workspace_id=?
-    ORDER BY c.id ASC");
-} else {
-  $comments=$pdo->prepare("SELECT c.id,NULL AS parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
-    FROM comments c JOIN users u ON u.id=c.author_user_id
-    WHERE c.task_id=? AND c.workspace_id=?
-    ORDER BY c.id ASC");
+$comments=[];
+try {
+  if($has_comment_parent){
+    $commentsStmt=$pdo->prepare("SELECT c.id,c.parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
+      FROM comments c JOIN users u ON u.id=c.author_user_id
+      WHERE c.task_id=? AND c.workspace_id=?
+      ORDER BY c.id ASC");
+  } else {
+    $commentsStmt=$pdo->prepare("SELECT c.id,NULL AS parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
+      FROM comments c JOIN users u ON u.id=c.author_user_id
+      WHERE c.task_id=? AND c.workspace_id=?
+      ORDER BY c.id ASC");
+  }
+  $commentsStmt->execute([$id,$ws]);
+  $comments=$commentsStmt->fetchAll();
+} catch (Exception $e) {
+  $comments=[];
 }
-$comments->execute([$id,$ws]);
-$comments=$comments->fetchAll();
 
 $attachments=[];
 try {
@@ -194,7 +209,7 @@ try {
   $attachments->execute([$id,$ws]);
   $attachments=$attachments->fetchAll();
   $attachments_query_ok = true;
-} catch (Throwable $e) {
+} catch (Exception $e) {
   $attachments=[];
 }
 

@@ -90,7 +90,7 @@ try {
     VALUES (?,?,?,?,?,?,?,NOW())")
     ->execute([$ws,$task_id,(int)$u['id'],$orig,$stored,$mime,$size]);
   flash_set('success','File uploaded');
-} catch (Throwable $e) {
+} catch (Exception $e) {
   @unlink($dest);
   flash_set('error','Upload saved file but DB insert failed. Please ensure task_attachments table is accessible to app DB user.');
 }
