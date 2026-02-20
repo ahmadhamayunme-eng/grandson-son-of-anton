@@ -23,6 +23,7 @@ function list_columns(PDO $pdo, string $table): array {
 
 function ensure_task_attachments_table(PDO $pdo): bool {
   // 1) Try preferred schema (with FKs).
+function ensure_task_attachments_table(PDO $pdo): bool {
   try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
       id INT AUTO_INCREMENT PRIMARY KEY,
