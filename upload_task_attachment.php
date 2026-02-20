@@ -12,7 +12,7 @@ const APP_ATTACHMENT_MAX_BYTES = 1024 * 1024 * 1024; // 1GB
 $pdo = db();
 $ws = auth_workspace_id();
 $u = auth_user();
-$task_id = (int)($_POST['task_id'] ?? 0);
+$task_id = isset($_POST['task_id']) ? (int)$_POST['task_id'] : 0;
 if ($task_id<=0) { flash_set('error','Invalid task'); redirect('dashboard.php'); }
 
 if (!ensure_task_attachments_table($pdo)) {
@@ -31,7 +31,7 @@ if (!isset($_FILES['file'])) {
 }
 
 $f = $_FILES['file'];
-if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+if ((isset($f['error']) ? $f['error'] : UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
   $err = (int)$f['error'];
   $effective = effective_upload_limit_bytes();
   if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
@@ -47,9 +47,9 @@ if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
   redirect('task_view.php?id='.$task_id);
 }
 
-$orig = trim((string)($f['name'] ?? ''));
+$orig = trim((string)(isset($f['name']) ? $f['name'] : ''));
 $orig = $orig !== '' ? basename($orig) : 'attachment.bin';
-$size = (int)($f['size'] ?? 0);
+$size = (int)(isset($f['size']) ? $f['size'] : 0);
 
 $mime = null;
 if (function_exists('finfo_open')) {

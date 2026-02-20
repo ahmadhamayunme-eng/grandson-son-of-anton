@@ -14,7 +14,7 @@ function list_columns($pdo, $table) {
   try {
     $rows = $pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll();
     $out = [];
-    foreach ($rows as $r) $out[] = (string)($r['Field'] ?? '');
+    foreach ($rows as $r) $out[] = (string)(isset($r['Field']) ? $r['Field'] : '');
     return array_values(array_filter($out));
   } catch (Exception $e) {
     return [];

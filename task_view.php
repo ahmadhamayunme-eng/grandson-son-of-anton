@@ -2,7 +2,7 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/task_attachments.php';
 $pdo=db(); $ws=auth_workspace_id();
-$u=auth_user(); $role=$u['role_name'] ?? '';
+$u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
 $can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
 
@@ -26,7 +26,7 @@ $attachments_query_ok = false;
 $effective_upload_limit = effective_upload_limit_bytes();
 $can_upload_500mb = ($effective_upload_limit === 0) || ($effective_upload_limit >= 500 * 1024 * 1024);
 
-$id=(int)($_GET['id'] ?? 0);
+$id=isset($_GET['id']) ? (int)$_GET['id'] : 0;
 try {
   $stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, ph.name AS phase_name
     FROM tasks t
@@ -85,7 +85,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
   if(isset($_POST['assign_task'])){
     if(!$can_manage){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
-    $selected=array_map('intval', $_POST['assignees'] ?? []);
+    $selected=array_map('intval', isset($_POST['assignees']) ? $_POST['assignees'] : []);
     $selected=array_values(array_unique(array_intersect($selected,$assignable_user_ids)));
     $pdo->prepare("DELETE FROM task_assignees WHERE task_id=?")->execute([$id]);
     foreach($selected as $uid){
@@ -97,8 +97,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
   if(isset($_POST['update_task'])){
     if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
-    $new_status=trim($_POST['status'] ?? $task['status']);
-    $new_note=trim($_POST['internal_note'] ?? '');
+    $new_status=trim(isset($_POST['status']) ? $_POST['status'] : $task['status']);
+    $new_note=trim(isset($_POST['internal_note']) ? $_POST['internal_note'] : '');
     $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
         ->execute([$new_status,$new_note?:null,now(),$id,$ws]);
     flash_set('success','Task updated.');
@@ -121,7 +121,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 
   if(isset($_POST['add_comment'])){
-    $body=trim($_POST['comment'] ?? '');
+    $body=trim(isset($_POST['comment']) ? $_POST['comment'] : '');
     $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id'] !== ''
       ? (int)$_POST['parent_comment_id']
       : null;
@@ -138,11 +138,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 
   if(isset($_POST['delete_attachment'])){
-    if(!$has_attachments_table){
-      flash_set('error','Attachments are not available on this database yet.');
-      redirect("task_view.php?id=$id");
-    }
-    $att_id = (int)($_POST['attachment_id'] ?? 0);
+    $att_id = isset($_POST['attachment_id']) ? (int)$_POST['attachment_id'] : 0;
     if($att_id>0){
       try {
         $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
@@ -167,7 +163,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $pdo->prepare("UPDATE tasks SET status='Approved (Ready to Submit)', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
       flash_set('success','Task approved.');
     } elseif($action==='reject'){
-      $reason=trim($_POST['cto_reason'] ?? 'Needs changes.');
+      $reason=trim(isset($_POST['cto_reason']) ? $_POST['cto_reason'] : 'Needs changes.');
       $pdo->prepare("UPDATE tasks SET status='In Progress', cto_feedback=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$reason,now(),$id,$ws]);
       flash_set('success','Task sent back to In Progress.');
@@ -215,7 +211,7 @@ try {
 
 // build comment tree
 $byParent=[];
-foreach($comments as $c){ $pid = $c['parent_comment_id'] ?? 0; $pid = $pid ? (int)$pid : 0; $byParent[$pid][]=$c; }
+foreach($comments as $c){ $pid = isset($c['parent_comment_id']) ? $c['parent_comment_id'] : 0; $pid = $pid ? (int)$pid : 0; $byParent[$pid][]=$c; }
 function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
   if(!isset($byParent[$parentId])) return;
   foreach($byParent[$parentId] as $c){
@@ -237,7 +233,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
   <div>
     <h2 class="mb-1"><?=h($task['title'])?></h2>
     <div class="text-muted small">
-      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h($task['phase_name'] ?? '—')?>
+      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h(isset($task['phase_name']) ? $task['phase_name'] : '—')?>
     </div>
     <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
   </div>
@@ -251,7 +247,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
   <div class="col-lg-7">
     <div class="card p-3 mb-3">
       <div class="text-muted small mb-1">Description</div>
-      <div><?=nl2br(h($task['description'] ?? '—'))?></div>
+      <div><?=nl2br(h(isset($task['description']) ? $task['description'] : '—'))?></div>
     </div>
 
     <div class="card p-3">
@@ -320,7 +316,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <a class="link-light" href="download.php?id=<?= (int)$a['id'] ?>"><?= h($a['original_name']) ?></a>
-              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?> • <?= h(human_bytes((int)($a['size_bytes'] ?? 0))) ?></div>
+              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?> • <?= h(human_bytes((int)(isset($a['size_bytes']) ? $a['size_bytes'] : 0))) ?></div>
             </div>
             <form method="post" onsubmit="return confirm('Delete attachment?');">
               <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
@@ -372,7 +368,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true){
         </div>
         <div class="mb-2">
           <label class="form-label">Internal Note</label>
-          <textarea class="form-control" name="internal_note" rows="3"><?=h($task['internal_note'] ?? '')?></textarea>
+          <textarea class="form-control" name="internal_note" rows="3"><?=h(isset($task['internal_note']) ? $task['internal_note'] : '')?></textarea>
         </div>
         <button class="btn btn-yellow w-100" name="update_task" value="1">Save</button>
       </form>
