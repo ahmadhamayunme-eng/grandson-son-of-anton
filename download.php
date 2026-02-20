@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/db.php';
+require_once __DIR__ . '/lib/task_attachments.php';
 auth_require_login();
 $pdo = db();
 $ws = auth_workspace_id();

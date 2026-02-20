@@ -15,6 +15,11 @@ $u = auth_user();
 $task_id = isset($_POST['task_id']) ? (int)$_POST['task_id'] : 0;
 if ($task_id<=0) { flash_set('error','Invalid task'); redirect('dashboard.php'); }
 
+if (!ensure_task_attachments_table($pdo)) {
+  flash_set('error','Attachments table is unavailable. Please run DB migrations or grant CREATE TABLE permission.');
+  redirect('task_view.php?id='.$task_id);
+}
+
 // Verify task belongs to workspace
 $ok = $pdo->prepare("SELECT 1 FROM tasks WHERE id=? AND workspace_id=?");
 $ok->execute([$task_id,$ws]);
