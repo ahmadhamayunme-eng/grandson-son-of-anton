@@ -6,11 +6,7 @@ $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
 $can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
 
-function table_exists($pdo, $table) {
-  try { $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1"); return true; }
-  catch (Exception $e) { return false; }
-}
-function column_exists($pdo, $table, $column) {
+function tv_column_exists($pdo, $table, $column) {
   try {
     $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
     $stmt->execute([$column]);
@@ -20,7 +16,18 @@ function column_exists($pdo, $table, $column) {
   }
 }
 
-$has_comment_parent = column_exists($pdo, 'comments', 'parent_comment_id');
+
+function tv_pluck($rows, $key) {
+  $out = array();
+  foreach ((array)$rows as $row) {
+    if (is_array($row) && isset($row[$key])) {
+      $out[] = $row[$key];
+    }
+  }
+  return $out;
+}
+
+$has_comment_parent = tv_column_exists($pdo, 'comments', 'parent_comment_id');
 $has_attachments_table = ensure_task_attachments_table($pdo);
 $attachments_query_ok = false;
 $effective_upload_limit = effective_upload_limit_bytes();
@@ -56,7 +63,7 @@ try {
 } catch (Exception $e) {
   $assignable_users=[];
 }
-$assignable_user_ids=array_map('intval',array_column($assignable_users,'id'));
+$assignable_user_ids=array_map('intval', tv_pluck($assignable_users,'id'));
 
 $assignees=[];
 try {
@@ -66,7 +73,7 @@ try {
 } catch (Exception $e) {
   $assignees=[];
 }
-$assignee_ids=array_map('intval',array_column($assignees,'id'));
+$assignee_ids=array_map('intval', tv_pluck($assignees,'id'));
 $assignee_names=array_map(function($r){ return $r['name']; },$assignees);
 $is_assignee=in_array($u['name'], $assignee_names, true);
 
