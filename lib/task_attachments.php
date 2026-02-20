@@ -1,6 +1,6 @@
 <?php
 
-function table_exists_quick(PDO $pdo, string $table): bool {
+function table_exists_quick($pdo, $table) {
   try {
     $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
     $stmt->execute([$table]);
@@ -10,7 +10,7 @@ function table_exists_quick(PDO $pdo, string $table): bool {
   }
 }
 
-function list_columns(PDO $pdo, string $table): array {
+function list_columns($pdo, $table) {
   try {
     $rows = $pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll();
     $out = [];
@@ -22,7 +22,7 @@ function list_columns(PDO $pdo, string $table): array {
 }
 
 
-function can_use_task_attachments_by_query(PDO $pdo): bool {
+function can_use_task_attachments_by_query($pdo) {
   try {
     $pdo->query("SELECT id,workspace_id,task_id,uploaded_by,original_name,stored_name,created_at FROM task_attachments LIMIT 1");
     return true;
@@ -31,7 +31,7 @@ function can_use_task_attachments_by_query(PDO $pdo): bool {
   }
 }
 
-function ensure_task_attachments_table(PDO $pdo): bool {
+function ensure_task_attachments_table($pdo) {
   $required = ['id','workspace_id','task_id','uploaded_by','original_name','stored_name','created_at'];
 
   // 0) If table already exists and has required columns, do not require CREATE/ALTER privileges.
@@ -115,7 +115,7 @@ function ensure_task_attachments_table(PDO $pdo): bool {
   return can_use_task_attachments_by_query($pdo);
 }
 
-function ini_bytes(string $val): int {
+function ini_bytes($val) {
   $val = trim($val);
   if ($val === '') return 0;
   $unit = strtolower(substr($val, -1));
@@ -128,7 +128,7 @@ function ini_bytes(string $val): int {
   }
 }
 
-function effective_upload_limit_bytes(): int {
+function effective_upload_limit_bytes() {
   $u = ini_bytes((string)ini_get('upload_max_filesize'));
   $p = ini_bytes((string)ini_get('post_max_size'));
   if ($u <= 0 && $p <= 0) return 0;
@@ -137,7 +137,7 @@ function effective_upload_limit_bytes(): int {
   return min($u, $p);
 }
 
-function human_bytes(int $bytes): string {
+function human_bytes($bytes) {
   if ($bytes >= 1024 * 1024 * 1024) return round($bytes / (1024 * 1024 * 1024), 2) . ' GB';
   if ($bytes >= 1024 * 1024) return round($bytes / (1024 * 1024), 2) . ' MB';
   if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';

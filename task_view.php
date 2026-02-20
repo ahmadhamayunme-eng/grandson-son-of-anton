@@ -6,11 +6,11 @@ $u=auth_user(); $role=$u['role_name'] ?? '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
 $can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
 
-function table_exists(PDO $pdo, string $table): bool {
+function table_exists($pdo, $table) {
   try { $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1"); return true; }
   catch (Throwable $e) { return false; }
 }
-function column_exists(PDO $pdo, string $table, string $column): bool {
+function column_exists($pdo, $table, $column) {
   try {
     $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
     $stmt->execute([$column]);
@@ -57,14 +57,14 @@ $assignees=$pdo->prepare("SELECT u.id,u.name FROM task_assignees ta JOIN users u
 $assignees->execute([$id]);
 $assignees=$assignees->fetchAll();
 $assignee_ids=array_map('intval',array_column($assignees,'id'));
-$assignee_names=array_map(fn($r)=>$r['name'],$assignees);
+$assignee_names=array_map(function($r){ return $r['name']; },$assignees);
 $is_assignee=in_array($u['name'], $assignee_names, true);
 
 $locked= (bool)$task['locked_at'];
 
 try {
   $statuses=$pdo->query("SELECT name FROM task_statuses WHERE workspace_id=$ws ORDER BY sort_order ASC")->fetchAll();
-  $statuses=array_map(fn($r)=>$r['name'],$statuses);
+  $statuses=array_map(function($r){ return $r['name']; },$statuses);
 } catch (Throwable $e) {
   $statuses=[];
 }
