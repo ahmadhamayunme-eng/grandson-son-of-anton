@@ -4,49 +4,60 @@ require_once __DIR__ . '/lib/finance.php';
 $pdo = db();
 $ws = auth_workspace_id();
 
+function safe_scalar(PDO $pdo, string $sql, array $params = [], float $default = 0.0): float {
+  try {
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    return (float)$st->fetchColumn();
+  } catch (Throwable $e) {
+    return $default;
+  }
+}
+
+function safe_rows(PDO $pdo, string $sql, array $params = []): array {
+  try {
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    return $st->fetchAll();
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+
 $clients = (int)$pdo->query("SELECT COUNT(*) c FROM clients WHERE workspace_id=$ws")->fetch()['c'];
 $projects = (int)$pdo->query("SELECT COUNT(*) c FROM projects WHERE workspace_id=$ws")->fetch()['c'];
 $tasks = (int)$pdo->query("SELECT COUNT(*) c FROM tasks WHERE workspace_id=$ws AND status IN ('To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)')")->fetch()['c'];
 
 $finance = finance_totals($ws);
-$monthlyPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(CURDATE(), '%Y-%m')");
-$monthlyPaymentsSt->execute([$ws]);
-$monthlyRevenue = (float)$monthlyPaymentsSt->fetchColumn();
+$monthlyRevenue = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(CURDATE(), '%Y-%m')", [$ws]);
+$pendingInvoices = safe_scalar($pdo, "SELECT COALESCE(SUM(expected_amount - received_amount),0) FROM finance_receivables WHERE workspace_id=? AND status IN ('pending','partial')", [$ws]);
 
-$pendingInvoicesSt = $pdo->prepare("SELECT COALESCE(SUM(expected_amount - received_amount),0) FROM finance_receivables WHERE workspace_id=? AND status IN ('pending','partial')");
-$pendingInvoicesSt->execute([$ws]);
-$pendingInvoices = (float)$pendingInvoicesSt->fetchColumn();
-
-$taskSt = $pdo->prepare('SELECT t.id, t.title, t.status, p.name AS project_name
+$myTasks = safe_rows($pdo, 'SELECT t.id, t.title, t.status, p.name AS project_name
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
   WHERE t.workspace_id=?
   ORDER BY t.updated_at DESC, t.id DESC
-  LIMIT 4');
-$taskSt->execute([$ws]);
-$myTasks = $taskSt->fetchAll();
+  LIMIT 4', [$ws]);
 
-$projectSt = $pdo->prepare('SELECT p.id, p.name, c.name AS client_name, ps.name AS status_name
+$recentProjects = safe_rows($pdo, 'SELECT p.id, p.name, c.name AS client_name, ps.name AS status_name
   FROM projects p
   JOIN clients c ON c.id=p.client_id
   JOIN project_statuses ps ON ps.id=p.status_id
   WHERE p.workspace_id=?
   ORDER BY p.updated_at DESC, p.id DESC
-  LIMIT 4');
-$projectSt->execute([$ws]);
-$recentProjects = $projectSt->fetchAll();
+  LIMIT 4', [$ws]);
 
 $days = [];
 $taskSeries = [];
 $clientSeries = [];
-$taskSeriesSt = $pdo->prepare("SELECT DATE(updated_at) d, COUNT(*) c FROM tasks WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)");
-$taskSeriesSt->execute([$ws]);
 $taskMap = [];
-foreach ($taskSeriesSt->fetchAll() as $row) $taskMap[$row['d']] = (int)$row['c'];
-$clientSeriesSt = $pdo->prepare("SELECT DATE(updated_at) d, COUNT(*) c FROM clients WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)");
-$clientSeriesSt->execute([$ws]);
+foreach (safe_rows($pdo, "SELECT DATE(updated_at) d, COUNT(*) c FROM tasks WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)", [$ws]) as $row) {
+  $taskMap[$row['d']] = (int)$row['c'];
+}
 $clientMap = [];
-foreach ($clientSeriesSt->fetchAll() as $row) $clientMap[$row['d']] = (int)$row['c'];
+foreach (safe_rows($pdo, "SELECT DATE(updated_at) d, COUNT(*) c FROM clients WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)", [$ws]) as $row) {
+  $clientMap[$row['d']] = (int)$row['c'];
+}
 
 for ($i = 6; $i >= 0; $i--) {
   $d = date('Y-m-d', strtotime("-$i day"));
@@ -57,9 +68,9 @@ for ($i = 6; $i >= 0; $i--) {
 
 function status_chip(string $status): string {
   $s = strtolower($status);
-  if (str_contains($s, 'progress') || str_contains($s, 'active') || $s === 'to do') return 'chip-yellow';
-  if (str_contains($s, 'approved') || str_contains($s, 'complete') || $s === 'done') return 'chip-green';
-  if (str_contains($s, 'hold') || str_contains($s, 'pending') || str_contains($s, 'blocked')) return 'chip-red';
+  if (strpos($s, 'progress') !== false || strpos($s, 'active') !== false || $s === 'to do') return 'chip-yellow';
+  if (strpos($s, 'approved') !== false || strpos($s, 'complete') !== false || $s === 'done') return 'chip-green';
+  if (strpos($s, 'hold') !== false || strpos($s, 'pending') !== false || strpos($s, 'blocked') !== false) return 'chip-red';
   return 'chip-purple';
 }
 function make_points(array $values, int $width = 560, int $height = 190): string {
@@ -79,12 +90,8 @@ $clientPoints = make_points($clientSeries);
 $taskMax = max($taskSeries);
 $clientMax = max($clientSeries);
 $monthKey = date('Y-m');
-$monthPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=?");
-$monthPaymentsSt->execute([$ws, $monthKey]);
-$currentMonthPayments = (float)$monthPaymentsSt->fetchColumn();
-$prevMonthPaymentsSt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')");
-$prevMonthPaymentsSt->execute([$ws]);
-$previousMonthPayments = (float)$prevMonthPaymentsSt->fetchColumn();
+$currentMonthPayments = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=?", [$ws, $monthKey]);
+$previousMonthPayments = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')", [$ws]);
 $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMonthPayments) / $previousMonthPayments) * 100 : 0;
 ?>
 <style>
