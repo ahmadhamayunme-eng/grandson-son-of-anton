@@ -28,9 +28,9 @@ include __DIR__ . '/partials/header.php';
 
   .login-card {
     width: 100%;
-    max-width: 648px;
-    border-radius: 18px;
-    padding: 44px 52px 34px;
+    max-width: 520px;
+    border-radius: 14px;
+    padding: 30px 34px 24px;
     background: linear-gradient(105deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015) 35%, rgba(255,255,255,0.04));
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 28px 100px rgba(0, 0, 0, 0.68);
@@ -43,43 +43,43 @@ include __DIR__ . '/partials/header.php';
     justify-content: center;
     gap: 10px;
     color: #f2f2f2;
-    font-size: 53px;
+    font-size: 28px;
     font-weight: 500;
     line-height: 1;
-    margin-bottom: 52px;
+    margin-bottom: 28px;
   }
 
   .login-brand svg {
-    width: 44px;
-    height: 44px;
+    width: 30px;
+    height: 30px;
   }
 
   .login-form-group {
-    margin-bottom: 22px;
+    margin-bottom: 14px;
   }
 
   .login-label {
     display: block;
     color: #f2f2f2;
-    font-size: 40px;
+    font-size: 19px;
     font-weight: 500;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .input-shell {
     display: flex;
     align-items: center;
-    gap: 14px;
-    min-height: 76px;
-    border-radius: 10px;
-    padding: 0 20px;
+    gap: 10px;
+    min-height: 54px;
+    border-radius: 8px;
+    padding: 0 14px;
     border: 1px solid rgba(255, 255, 255, 0.06);
     background: linear-gradient(90deg, rgba(255,255,255,0.09), rgba(255,255,255,0.05));
   }
 
   .input-shell svg {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     flex: 0 0 auto;
     color: #b8b8b8;
   }
@@ -90,7 +90,7 @@ include __DIR__ . '/partials/header.php';
     width: 100%;
     background: transparent;
     color: #f3f3f3;
-    font-size: 38px;
+    font-size: 18px;
     font-weight: 400;
     line-height: 1;
   }
@@ -100,35 +100,35 @@ include __DIR__ . '/partials/header.php';
   .login-links {
     display: flex;
     justify-content: flex-end;
-    margin: 6px 0 24px;
+    margin: 2px 0 16px;
   }
 
   .login-links a {
     color: #b7b7b7;
     text-decoration: none;
-    font-size: 37px;
+    font-size: 18px;
   }
 
   .login-submit {
     width: 100%;
-    min-height: 76px;
-    border-radius: 10px;
+    min-height: 54px;
+    border-radius: 8px;
     border: 0;
     background: linear-gradient(180deg, #f4d85e, #ebc53e);
     color: #121212;
-    font-size: 48px;
+    font-size: 18px;
     font-weight: 600;
-    margin-bottom: 28px;
+    margin-bottom: 14px;
   }
 
   .login-sep {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin: 0 0 26px;
+    margin: 0 0 16px;
   }
 
   .login-signup {
     text-align: center;
-    font-size: 38px;
+    font-size: 18px;
     color: #bdbdbd;
   }
 
@@ -139,32 +139,32 @@ include __DIR__ . '/partials/header.php';
   }
 
   .login-alert {
-    margin-bottom: 18px;
-    border-radius: 10px;
+    margin-bottom: 14px;
+    border-radius: 8px;
   }
 
   @media (max-width: 900px) {
-    .login-card { max-width: 560px; }
-    .login-brand { font-size: 40px; margin-bottom: 40px; }
-    .login-brand svg { width: 34px; height: 34px; }
-    .login-label { font-size: 31px; }
-    .input-shell { min-height: 64px; }
-    .login-input { font-size: 30px; }
-    .login-links a { font-size: 29px; }
-    .login-submit { min-height: 66px; font-size: 38px; }
-    .login-signup { font-size: 29px; }
+    .login-card { max-width: 500px; }
+    .login-brand { font-size: 26px; margin-bottom: 24px; }
+    .login-brand svg { width: 28px; height: 28px; }
+    .login-label { font-size: 18px; }
+    .input-shell { min-height: 50px; }
+    .login-input { font-size: 14px; }
+    .login-links a { font-size: 17px; }
+    .login-submit { min-height: 50px; font-size: 18px; }
+    .login-signup { font-size: 18px; }
   }
 
   @media (max-width: 640px) {
-    .login-card { padding: 32px 22px 24px; border-radius: 14px; }
-    .login-brand { font-size: 32px; margin-bottom: 30px; }
-    .login-label { font-size: 24px; margin-bottom: 10px; }
-    .input-shell { min-height: 54px; padding: 0 14px; }
-    .input-shell svg { width: 22px; height: 22px; }
-    .login-input { font-size: 22px; }
-    .login-links a { font-size: 22px; }
-    .login-submit { min-height: 56px; font-size: 31px; margin-bottom: 20px; }
-    .login-signup { font-size: 21px; }
+    .login-card { padding: 24px 16px 18px; border-radius: 12px; }
+    .login-brand { font-size: 22px; margin-bottom: 18px; }
+    .login-label { font-size: 16px; margin-bottom: 6px; }
+    .input-shell { min-height: 46px; padding: 0 12px; }
+    .input-shell svg { width: 18px; height: 18px; }
+    .login-input { font-size: 13px; }
+    .login-links a { font-size: 16px; }
+    .login-submit { min-height: 46px; font-size: 16px; margin-bottom: 14px; }
+    .login-signup { font-size: 16px; }
   }
 </style>
 
