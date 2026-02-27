@@ -88,8 +88,12 @@ try {
     $sortSql = 'ps.name ASC, p.id DESC';
   }
 
-  $where = ' WHERE p.workspace_id = :ws AND (p.name LIKE :q OR c.name LIKE :q) ';
-  $params = [':ws' => $ws, ':q' => '%' . $q . '%'];
+  $where = ' WHERE p.workspace_id = :ws AND (p.name LIKE :q_project OR c.name LIKE :q_client) ';
+  $params = [
+    ':ws' => $ws,
+    ':q_project' => '%' . $q . '%',
+    ':q_client' => '%' . $q . '%',
+  ];
   if ($statusFilter > 0) {
     $where .= ' AND p.status_id = :status_id ';
     $params[':status_id'] = $statusFilter;
