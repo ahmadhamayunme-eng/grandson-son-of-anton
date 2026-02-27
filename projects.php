@@ -76,18 +76,33 @@ SELECT
   p.updated_at,
   c.name AS client_name,
   ps.name AS status_name,
-  COUNT(DISTINCT ta.user_id) AS assignee_count,
-  GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS assignee_names,
-  MAX(COALESCE(t.updated_at, d.updated_at, p.updated_at, p.created_at)) AS last_activity
+  (
+    SELECT COUNT(DISTINCT ta.user_id)
+    FROM tasks t
+    LEFT JOIN task_assignees ta ON ta.task_id = t.id
+    WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id
+  ) AS assignee_count,
+  (
+    SELECT GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ')
+    FROM tasks t
+    LEFT JOIN task_assignees ta ON ta.task_id = t.id
+    LEFT JOIN users u ON u.id = ta.user_id
+    WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id
+  ) AS assignee_names,
+  (
+    SELECT MAX(x.activity_at)
+    FROM (
+      SELECT p.updated_at AS activity_at
+      UNION ALL
+      SELECT t.updated_at AS activity_at FROM tasks t WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id
+      UNION ALL
+      SELECT d.updated_at AS activity_at FROM docs d WHERE d.workspace_id = p.workspace_id AND d.project_id = p.id
+    ) x
+  ) AS last_activity
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 JOIN project_statuses ps ON ps.id = p.status_id
-LEFT JOIN tasks t ON t.project_id = p.id AND t.workspace_id = p.workspace_id
-LEFT JOIN task_assignees ta ON ta.task_id = t.id
-LEFT JOIN users u ON u.id = ta.user_id
-LEFT JOIN docs d ON d.project_id = p.id AND d.workspace_id = p.workspace_id
 {$where}
-GROUP BY p.id, p.name, p.created_at, p.updated_at, c.name, ps.name
 ORDER BY {$sortSql}
 LIMIT :limit OFFSET :offset
 SQL;
