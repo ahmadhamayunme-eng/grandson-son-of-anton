@@ -386,7 +386,10 @@ function initials_from_names(string $names): string {
 <div class="modal fade" id="addProject" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content card p-3">
-      <div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Add Project</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
       <form method="post">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <input type="hidden" name="create_project" value="1">
