@@ -130,15 +130,10 @@ SELECT
     LEFT JOIN users u ON u.id = ta.user_id
     WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id
   ) AS assignee_names,
-  (
-    SELECT MAX(x.activity_at)
-    FROM (
-      SELECT p.updated_at AS activity_at
-      UNION ALL
-      SELECT t.updated_at AS activity_at FROM tasks t WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id
-      UNION ALL
-      SELECT d.updated_at AS activity_at FROM docs d WHERE d.workspace_id = p.workspace_id AND d.project_id = p.id
-    ) x
+  GREATEST(
+    COALESCE(p.updated_at, '1000-01-01 00:00:00'),
+    COALESCE((SELECT MAX(t.updated_at) FROM tasks t WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id), '1000-01-01 00:00:00'),
+    COALESCE((SELECT MAX(d.updated_at) FROM docs d WHERE d.workspace_id = p.workspace_id AND d.project_id = p.id), '1000-01-01 00:00:00')
   ) AS last_activity
 FROM projects p
 JOIN clients c ON c.id = p.client_id
