@@ -30,28 +30,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $q = trim($_GET['q'] ?? '');
-$tab = ($_GET['tab'] ?? 'all') === 'mine' ? 'mine' : 'all';
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 $offset = ($page - 1) * $perPage;
 $like = '%' . $q . '%';
 
-$mineSql = '';
 $params = [':ws' => $ws, ':like' => $like];
-if ($tab === 'mine') {
-  $mineSql = " AND EXISTS (
-      SELECT 1
-      FROM projects p2
-      JOIN tasks t2 ON t2.project_id = p2.id
-      LEFT JOIN task_assignees ta2 ON ta2.task_id = t2.id
-      WHERE p2.workspace_id = c.workspace_id
-        AND p2.client_id = c.id
-        AND (ta2.user_id = :uid OR t2.created_by = :uid)
-  )";
-  $params[':uid'] = $userId;
-}
 
-$countSql = "SELECT COUNT(*) FROM clients c WHERE c.workspace_id = :ws AND c.name LIKE :like {$mineSql}";
+$countSql = 'SELECT COUNT(*) FROM clients c WHERE c.workspace_id = :ws AND c.name LIKE :like';
 $countSt = $pdo->prepare($countSql);
 $countSt->execute($params);
 $totalRows = (int)$countSt->fetchColumn();
@@ -75,7 +61,7 @@ FROM clients c
 LEFT JOIN projects p ON p.client_id = c.id AND p.workspace_id = c.workspace_id
 LEFT JOIN project_statuses ps ON ps.id = p.status_id
 LEFT JOIN project_types pt ON pt.id = p.type_id
-WHERE c.workspace_id = :ws AND c.name LIKE :like {$mineSql}
+WHERE c.workspace_id = :ws AND c.name LIKE :like
 GROUP BY c.id, c.name, c.notes, c.updated_at
 ORDER BY last_active DESC, c.id DESC
 LIMIT :limit OFFSET :offset
@@ -90,14 +76,6 @@ $listSt->execute();
 $clients = $listSt->fetchAll();
 
 $allCount = (int)$pdo->query("SELECT COUNT(*) FROM clients WHERE workspace_id={$ws}")->fetchColumn();
-$mineCountSt = $pdo->prepare("SELECT COUNT(DISTINCT c.id)
-  FROM clients c
-  JOIN projects p ON p.client_id = c.id AND p.workspace_id = c.workspace_id
-  JOIN tasks t ON t.project_id = p.id
-  LEFT JOIN task_assignees ta ON ta.task_id = t.id
-  WHERE c.workspace_id = ? AND (ta.user_id = ? OR t.created_by = ?)");
-$mineCountSt->execute([$ws, $userId, $userId]);
-$mineCount = (int)$mineCountSt->fetchColumn();
 
 function client_last_active_label(?string $date): string {
   if (!$date) return '—';
@@ -203,7 +181,6 @@ function client_status_class(string $status): string {
     <div class="clients-search-wrap">
       <span class="clients-search-icon">⌕</span>
       <input class="clients-search" name="q" value="<?=h($q)?>" placeholder="Search clients..." autocomplete="off">
-      <input type="hidden" name="tab" value="<?=h($tab)?>">
     </div>
     <?php if ($can_manage): ?>
       <button type="button" class="clients-new-btn" data-bs-toggle="modal" data-bs-target="#addClient">＋ New Client</button>
@@ -212,13 +189,12 @@ function client_status_class(string $status): string {
 
   <section class="clients-card">
     <nav class="clients-tabs">
-      <a class="clients-tab <?=$tab === 'all' ? 'active' : ''?>" href="clients.php?tab=all&amp;q=<?=urlencode($q)?>">All Clients</a>
-      <a class="clients-tab <?=$tab === 'mine' ? 'active' : ''?>" href="clients.php?tab=mine&amp;q=<?=urlencode($q)?>">My Clients</a>
+      <a class="clients-tab active" href="clients.php<?= $q !== '' ? '?q=' . urlencode($q) : '' ?>">All Clients</a>
     </nav>
 
     <div class="clients-meta-row">
       <div>
-        Showing <?=count($clients)?> of <?=$tab === 'all' ? $allCount : $mineCount?>
+        Showing <?=count($clients)?> of <?=$allCount?>
         <?php if ($q !== ''): ?>for “<?=h($q)?>”<?php endif; ?>
       </div>
       <div>Page <?=$page?> of <?=$totalPages?></div>
@@ -265,8 +241,8 @@ function client_status_class(string $status): string {
 
     <footer class="clients-footer">
       <div>
-        <?php if ($page > 1): ?><a href="clients.php?tab=<?=h($tab)?>&amp;q=<?=urlencode($q)?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-        <?php if ($page < $totalPages): ?><a href="clients.php?tab=<?=h($tab)?>&amp;q=<?=urlencode($q)?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+        <?php if ($page > 1): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+        <?php if ($page < $totalPages): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
       </div>
       <div>Page <?=$page?> of <?=$totalPages?></div>
     </footer>
