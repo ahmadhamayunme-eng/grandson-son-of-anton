@@ -5,32 +5,15 @@ $pdo = db();
 $ws = auth_workspace_id();
 $role = auth_user()['role_name'] ?? '';
 $canManage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$isSuperAdmin = $role === 'Super Admin';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
-  require_post();
-  csrf_verify();
-  if (!$canManage) {
-    flash_set('error', 'No permission.');
-    redirect('projects.php');
-  }
-
-  $name = trim($_POST['name'] ?? '');
-  $clientId = (int)($_POST['client_id'] ?? 0);
-  $typeId = (int)($_POST['type_id'] ?? 0);
-  $statusId = (int)($_POST['status_id'] ?? 0);
-  $dueDate = trim((string)($_POST['due_date'] ?? ''));
-
-  if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
-    flash_set('error', 'Project name, client, type and status are required.');
-    redirect('projects.php');
-  }
-
-  $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, null, now(), now()]);
-
-  flash_set('success', 'Project created.');
-  redirect('projects.php');
-}
+$projects = [];
+$statusOptions = [];
+$clients = [];
+$types = [];
+$totalRows = 0;
+$totalPages = 1;
+$loadError = null;
 
 $q = trim((string)($_GET['q'] ?? ''));
 $statusFilter = (int)($_GET['status_id'] ?? 0);
@@ -39,36 +22,90 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 $offset = ($page - 1) * $perPage;
 
-$allowedSorts = ['activity', 'name', 'status'];
-if (!in_array($sort, $allowedSorts, true)) {
-  $sort = 'activity';
+function project_badge_class(string $status): string {
+  $value = strtolower($status);
+  if (strpos($value, 'complete') !== false || strpos($value, 'done') !== false || strpos($value, 'closed') !== false) return 'is-complete';
+  if (strpos($value, 'hold') !== false || strpos($value, 'pause') !== false) return 'is-paused';
+  return 'is-progress';
 }
 
-$sortSql = 'last_activity DESC, p.id DESC';
-if ($sort === 'name') {
-  $sortSql = 'p.name ASC, p.id DESC';
-} elseif ($sort === 'status') {
-  $sortSql = 'ps.name ASC, p.id DESC';
+function project_last_activity_label(?string $date): string {
+  if (!$date) return '—';
+  $ts = strtotime($date);
+  if (!$ts) return '—';
+  $delta = time() - $ts;
+  if ($delta < 86400) return 'Today';
+  if ($delta < 172800) return 'Yesterday';
+  if ($delta < 1209600) return (int)floor($delta / 86400) . ' days ago';
+  return date('M d', $ts);
 }
 
-$where = ' WHERE p.workspace_id = :ws AND (p.name LIKE :q OR c.name LIKE :q) ';
-$params = [':ws' => $ws, ':q' => '%' . $q . '%'];
-if ($statusFilter > 0) {
-  $where .= ' AND p.status_id = :status_id ';
-  $params[':status_id'] = $statusFilter;
+function project_initials(string $name): string {
+  $trimmed = trim($name);
+  if ($trimmed === '') return 'NA';
+  $parts = preg_split('/\s+/', $trimmed);
+  $left = strtoupper(substr($parts[0] ?? '', 0, 1));
+  $right = strtoupper(substr($parts[1] ?? '', 0, 1));
+  return trim($left . $right) ?: 'NA';
 }
 
-$countSql = 'SELECT COUNT(*) FROM projects p JOIN clients c ON c.id = p.client_id ' . $where;
-$countStmt = $pdo->prepare($countSql);
-$countStmt->execute($params);
-$totalRows = (int)$countStmt->fetchColumn();
-$totalPages = max(1, (int)ceil($totalRows / $perPage));
-if ($page > $totalPages) {
-  $page = $totalPages;
-  $offset = ($page - 1) * $perPage;
-}
+try {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
+    require_post();
+    csrf_verify();
+    if (!$canManage) {
+      flash_set('error', 'No permission.');
+      redirect('projects.php');
+    }
 
-$listSql = <<<SQL
+    $name = trim($_POST['name'] ?? '');
+    $clientId = (int)($_POST['client_id'] ?? 0);
+    $typeId = (int)($_POST['type_id'] ?? 0);
+    $statusId = (int)($_POST['status_id'] ?? 0);
+    $dueDate = trim((string)($_POST['due_date'] ?? ''));
+
+    if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
+      flash_set('error', 'Project name, client, type and status are required.');
+      redirect('projects.php');
+    }
+
+    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, null, now(), now()]);
+
+    flash_set('success', 'Project created.');
+    redirect('projects.php');
+  }
+
+  $allowedSorts = ['activity', 'name', 'status'];
+  if (!in_array($sort, $allowedSorts, true)) {
+    $sort = 'activity';
+  }
+
+  $sortSql = 'last_activity DESC, p.id DESC';
+  if ($sort === 'name') {
+    $sortSql = 'p.name ASC, p.id DESC';
+  } elseif ($sort === 'status') {
+    $sortSql = 'ps.name ASC, p.id DESC';
+  }
+
+  $where = ' WHERE p.workspace_id = :ws AND (p.name LIKE :q OR c.name LIKE :q) ';
+  $params = [':ws' => $ws, ':q' => '%' . $q . '%'];
+  if ($statusFilter > 0) {
+    $where .= ' AND p.status_id = :status_id ';
+    $params[':status_id'] = $statusFilter;
+  }
+
+  $countSql = 'SELECT COUNT(*) FROM projects p JOIN clients c ON c.id = p.client_id ' . $where;
+  $countStmt = $pdo->prepare($countSql);
+  $countStmt->execute($params);
+  $totalRows = (int)$countStmt->fetchColumn();
+  $totalPages = max(1, (int)ceil($totalRows / $perPage));
+  if ($page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
+  }
+
+  $listSql = <<<SQL
 SELECT
   p.id,
   p.name,
@@ -107,52 +144,31 @@ ORDER BY {$sortSql}
 LIMIT :limit OFFSET :offset
 SQL;
 
-$listStmt = $pdo->prepare($listSql);
-foreach ($params as $key => $value) {
-  $listStmt->bindValue($key, $value, $key === ':ws' || $key === ':status_id' ? PDO::PARAM_INT : PDO::PARAM_STR);
-}
-$listStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-$listStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-$listStmt->execute();
-$projects = $listStmt->fetchAll();
+  $listStmt = $pdo->prepare($listSql);
+  foreach ($params as $key => $value) {
+    $listStmt->bindValue($key, $value, $key === ':ws' || $key === ':status_id' ? PDO::PARAM_INT : PDO::PARAM_STR);
+  }
+  $listStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+  $listStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+  $listStmt->execute();
+  $projects = $listStmt->fetchAll();
 
-$statusOptionsStmt = $pdo->prepare('SELECT id, name FROM project_statuses WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC');
-$statusOptionsStmt->execute([$ws]);
-$statusOptions = $statusOptionsStmt->fetchAll();
+  $statusOptionsStmt = $pdo->prepare('SELECT id, name FROM project_statuses WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC');
+  $statusOptionsStmt->execute([$ws]);
+  $statusOptions = $statusOptionsStmt->fetchAll();
 
-$clientsStmt = $pdo->prepare('SELECT id, name FROM clients WHERE workspace_id = ? ORDER BY name ASC');
-$clientsStmt->execute([$ws]);
-$clients = $clientsStmt->fetchAll();
+  $clientsStmt = $pdo->prepare('SELECT id, name FROM clients WHERE workspace_id = ? ORDER BY name ASC');
+  $clientsStmt->execute([$ws]);
+  $clients = $clientsStmt->fetchAll();
 
-$typesStmt = $pdo->prepare('SELECT id, name FROM project_types WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC');
-$typesStmt->execute([$ws]);
-$types = $typesStmt->fetchAll();
-
-function project_badge_class(string $status): string {
-  $value = strtolower($status);
-  if (strpos($value, 'complete') !== false || strpos($value, 'done') !== false || strpos($value, 'closed') !== false) return 'is-complete';
-  if (strpos($value, 'hold') !== false || strpos($value, 'pause') !== false) return 'is-paused';
-  return 'is-progress';
-}
-
-function project_last_activity_label(?string $date): string {
-  if (!$date) return '—';
-  $ts = strtotime($date);
-  if (!$ts) return '—';
-  $delta = time() - $ts;
-  if ($delta < 86400) return 'Today';
-  if ($delta < 172800) return 'Yesterday';
-  if ($delta < 1209600) return (int)floor($delta / 86400) . ' days ago';
-  return date('M d', $ts);
-}
-
-function project_initials(string $name): string {
-  $trimmed = trim($name);
-  if ($trimmed === '') return 'NA';
-  $parts = preg_split('/\s+/', $trimmed);
-  $left = strtoupper(substr($parts[0] ?? '', 0, 1));
-  $right = strtoupper(substr($parts[1] ?? '', 0, 1));
-  return trim($left . $right) ?: 'NA';
+  $typesStmt = $pdo->prepare('SELECT id, name FROM project_types WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC');
+  $typesStmt->execute([$ws]);
+  $types = $typesStmt->fetchAll();
+} catch (Throwable $e) {
+  $loadError = 'Projects page failed to load data. Please refresh or contact admin.';
+  if ($isSuperAdmin) {
+    $loadError .= ' Debug: ' . $e->getMessage();
+  }
 }
 ?>
 
@@ -171,8 +187,8 @@ function project_initials(string $name): string {
   .projects-table { width: 100%; border-collapse: collapse; }
   .projects-table th, .projects-table td { border-top: 1px solid rgba(255,255,255,.07); padding: 12px 14px; vertical-align: middle; }
   .projects-table th { font-size: .86rem; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,.64); font-weight: 600; }
-  .name-link { color: #f2f3f9; font-size: 2rem; font-weight: 500; text-decoration: none; line-height: 1.1; }
-  .sub-client { color: rgba(255,255,255,.56); margin-top: 2px; font-size: 1.35rem; }
+  .name-link { color: #f2f3f9; font-size: 1.05rem; font-weight: 600; text-decoration: none; line-height: 1.1; }
+  .sub-client { color: rgba(255,255,255,.56); margin-top: 2px; font-size: .92rem; }
   .badge-status { display: inline-flex; align-items: center; border-radius: 8px; padding: 2px 10px; font-size: .83rem; font-weight: 600; }
   .badge-status.is-progress { color: #f1d26f; background: rgba(164,133,46,.22); border: 1px solid rgba(225,184,67,.4); }
   .badge-status.is-complete { color: #d0d4df; background: rgba(91,96,111,.28); border: 1px solid rgba(149,156,173,.36); }
@@ -193,6 +209,10 @@ function project_initials(string $name): string {
     <h1 class="projects-title">Projects</h1>
     <?php if ($canManage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#newProject">＋ New Project</button><?php endif; ?>
   </header>
+
+  <?php if ($loadError): ?>
+    <div class="alert alert-danger"><?=h($loadError)?></div>
+  <?php endif; ?>
 
   <form class="projects-toolbar" method="get">
     <div class="tool-search-wrap">
