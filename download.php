@@ -5,7 +5,7 @@ auth_require_login();
 $pdo = db();
 $ws = auth_workspace_id();
 
-$id = (int)($_GET['id'] ?? 0);
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $stmt = $pdo->prepare("SELECT * FROM task_attachments WHERE id=? AND workspace_id=?");
 $stmt->execute([$id,$ws]);
 $a = $stmt->fetch();

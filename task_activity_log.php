@@ -7,14 +7,11 @@ $tasks = $pdo->prepare("SELECT id,title FROM tasks WHERE workspace_id=? ORDER BY
 $tasks->execute([$ws]);
 $tasks = $tasks->fetchAll();
 
-$comments=[]; $atts=[];
+$comments=[];
 if ($task_id>0) {
   $c=$pdo->prepare("SELECT c.created_at,u.name AS author,c.body FROM comments c JOIN users u ON u.id=c.author_user_id WHERE c.workspace_id=? AND c.task_id=? ORDER BY c.id DESC");
   $c->execute([$ws,$task_id]);
   $comments=$c->fetchAll();
-  $a=$pdo->prepare("SELECT a.created_at,u.name AS uploader,a.original_name FROM task_attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.workspace_id=? AND a.task_id=? ORDER BY a.id DESC");
-  $a->execute([$ws,$task_id]);
-  $atts=$a->fetchAll();
 }
 ?>
 <h2 class="mb-3">Task Activity Log</h2>
@@ -50,16 +47,6 @@ if ($task_id>0) {
       <?php if(!$comments): ?><div class="text-muted">No comments.</div><?php endif; ?>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card p-3">
-      <div class="fw-semibold mb-2">Attachments</div>
-      <?php foreach($atts as $a): ?>
-        <div class="d-flex justify-content-between mb-2">
-          <div><?= h($a['original_name']) ?><div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?></div></div>
-        </div>
-      <?php endforeach; ?>
-      <?php if(!$atts): ?><div class="text-muted">No attachments.</div><?php endif; ?>
-    </div>
   </div>
 </div>
 <?php endif; ?>

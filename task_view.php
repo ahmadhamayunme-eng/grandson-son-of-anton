@@ -1,39 +1,106 @@
 <?php
 require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
-$u=auth_user(); $role=$u['role_name'] ?? '';
+$u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
 $can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
 
-$id=(int)($_GET['id'] ?? 0);
-$stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, ph.name AS phase_name
-  FROM tasks t
-  JOIN projects p ON p.id=t.project_id
-  JOIN clients c ON c.id=p.client_id
-  LEFT JOIN phases ph ON ph.id=t.phase_id
-  WHERE t.id=? AND t.workspace_id=?");
-$stmt->execute([$id,$ws]);
-$task=$stmt->fetch();
+function tv_column_exists($pdo, $table, $column) {
+  try {
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
+    $stmt->execute([$column]);
+    return (bool)$stmt->fetch();
+  } catch (Exception $e) {
+    return false;
+  }
+}
+
+
+function tv_pluck($rows, $key) {
+  $out = array();
+  foreach ((array)$rows as $row) {
+    if (is_array($row) && isset($row[$key])) {
+      $out[] = $row[$key];
+    }
+  }
+  return $out;
+}
+
+$has_comment_parent = tv_column_exists($pdo, 'comments', 'parent_comment_id');
+
+$id=isset($_GET['id']) ? (int)$_GET['id'] : 0;
+try {
+  $stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, ph.name AS phase_name
+    FROM tasks t
+    JOIN projects p ON p.id=t.project_id
+    JOIN clients c ON c.id=p.client_id
+    LEFT JOIN phases ph ON ph.id=t.phase_id
+    WHERE t.id=? AND t.workspace_id=?");
+  $stmt->execute([$id,$ws]);
+  $task=$stmt->fetch();
+} catch (Exception $e) {
+  $stmt=$pdo->prepare("SELECT t.*, p.name AS project_name, c.name AS client_name, NULL AS phase_name
+    FROM tasks t
+    JOIN projects p ON p.id=t.project_id
+    JOIN clients c ON c.id=p.client_id
+    WHERE t.id=? AND t.workspace_id=?");
+  $stmt->execute([$id,$ws]);
+  $task=$stmt->fetch();
+}
 if(!$task){ echo "<h3>Task not found</h3>"; require __DIR__ . '/layout_end.php'; exit; }
 
-$assignees=$pdo->prepare("SELECT u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=?");
-$assignees->execute([$id]);
-$assignee_names=array_map(fn($r)=>$r['name'],$assignees->fetchAll());
+$assignable_users=[];
+try {
+  $assignable_users=$pdo->query("SELECT u.id,u.name,r.name AS role_name
+    FROM users u JOIN roles r ON r.id=u.role_id
+    WHERE u.workspace_id=$ws AND u.is_active=1 AND r.name IN ('Developer','SEO')
+    ORDER BY u.name ASC")->fetchAll();
+} catch (Exception $e) {
+  $assignable_users=[];
+}
+$assignable_user_ids=array_map('intval', tv_pluck($assignable_users,'id'));
+
+$assignees=[];
+try {
+  $assigneesStmt=$pdo->prepare("SELECT u.id,u.name FROM task_assignees ta JOIN users u ON u.id=ta.user_id WHERE ta.task_id=? ORDER BY u.name ASC");
+  $assigneesStmt->execute([$id]);
+  $assignees=$assigneesStmt->fetchAll();
+} catch (Exception $e) {
+  $assignees=[];
+}
+$assignee_ids=array_map('intval', tv_pluck($assignees,'id'));
+$assignee_names=array_map(function($r){ return $r['name']; },$assignees);
 $is_assignee=in_array($u['name'], $assignee_names, true);
 
 $locked= (bool)$task['locked_at'];
 
-$statuses=$pdo->query("SELECT name FROM task_statuses WHERE workspace_id=$ws ORDER BY sort_order ASC")->fetchAll();
-$statuses=array_map(fn($r)=>$r['name'],$statuses);
+try {
+  $statuses=$pdo->query("SELECT name FROM task_statuses WHERE workspace_id=$ws ORDER BY sort_order ASC")->fetchAll();
+  $statuses=array_map(function($r){ return $r['name']; },$statuses);
+} catch (Exception $e) {
+  $statuses=[];
+}
 if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client']; }
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   require_post(); csrf_verify();
 
+  if(isset($_POST['assign_task'])){
+    if(!$can_manage){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $selected=array_map('intval', isset($_POST['assignees']) ? $_POST['assignees'] : []);
+    $selected=array_values(array_unique(array_intersect($selected,$assignable_user_ids)));
+    $pdo->prepare("DELETE FROM task_assignees WHERE task_id=?")->execute([$id]);
+    foreach($selected as $uid){
+      $pdo->prepare("INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)")->execute([$id,$uid]);
+    }
+    flash_set('success','Task assignees updated.');
+    redirect("task_view.php?id=$id");
+  }
+
   if(isset($_POST['update_task'])){
     if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
-    $new_status=trim($_POST['status'] ?? $task['status']);
-    $new_note=trim($_POST['internal_note'] ?? '');
+    $new_status=trim(isset($_POST['status']) ? $_POST['status'] : $task['status']);
+    $new_note=trim(isset($_POST['internal_note']) ? $_POST['internal_note'] : '');
     $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
         ->execute([$new_status,$new_note?:null,now(),$id,$ws]);
     flash_set('success','Task updated.');
@@ -56,27 +123,19 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 
   if(isset($_POST['add_comment'])){
-    $body=trim($_POST['comment'] ?? '');
-    $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id']!== ? (int)$_POST['parent_comment_id'] : null;
+    $body=trim(isset($_POST['comment']) ? $_POST['comment'] : '');
+    $parent_id = isset($_POST['parent_comment_id']) && $_POST['parent_comment_id'] !== ''
+      ? (int)$_POST['parent_comment_id']
+      : null;
     if($body===''){ flash_set('error','Comment cannot be empty.'); redirect("task_view.php?id=$id"); }
-    $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,parent_comment_id,created_at) VALUES (?,?,?,?,?,?)")
-        ->execute([$ws,$id,$u['id'],$body,$parent_id,now()]);
-    flash_set('success','Comment added.');
-    redirect("task_view.php?id=$id");
-  }
-
-  if(isset($_POST['delete_attachment'])){
-    $att_id = (int)($_POST['attachment_id'] ?? 0);
-    if($att_id>0){
-      $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
-      $a->execute([$att_id,$ws,$id]);
-      $a = $a->fetch();
-      if($a){
-        @unlink(__DIR__."/uploads/task_attachments/".$a['stored_name']);
-        $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
-        flash_set('success','Attachment deleted.');
-      }
+    if($has_comment_parent){
+      $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,parent_comment_id,created_at) VALUES (?,?,?,?,?,?)")
+          ->execute([$ws,$id,$u['id'],$body,$parent_id,now()]);
+    } else {
+      $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,created_at) VALUES (?,?,?,?,?)")
+          ->execute([$ws,$id,$u['id'],$body,now()]);
     }
+    flash_set('success','Comment added.');
     redirect("task_view.php?id=$id");
   }
 
@@ -87,7 +146,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $pdo->prepare("UPDATE tasks SET status='Approved (Ready to Submit)', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
       flash_set('success','Task approved.');
     } elseif($action==='reject'){
-      $reason=trim($_POST['cto_reason'] ?? 'Needs changes.');
+      $reason=trim(isset($_POST['cto_reason']) ? $_POST['cto_reason'] : 'Needs changes.');
       $pdo->prepare("UPDATE tasks SET status='In Progress', cto_feedback=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$reason,now(),$id,$ws]);
       flash_set('success','Task sent back to In Progress.');
@@ -104,30 +163,44 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 }
 
-$comments=$pdo->prepare("SELECT c.id,c.parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
-  FROM comments c JOIN users u ON u.id=c.author_user_id
-  WHERE c.task_id=? AND c.workspace_id=?
-  ORDER BY c.id ASC");
-$comments->execute([$id,$ws]);
-$comments=$comments->fetchAll();
-
-$attachments=$pdo->prepare("SELECT a.*, u.name AS uploader FROM task_attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.task_id=? AND a.workspace_id=? ORDER BY a.id DESC");
-$attachments->execute([$id,$ws]);
-$attachments=$attachments->fetchAll();
+$comments=[];
+try {
+  if($has_comment_parent){
+    $commentsStmt=$pdo->prepare("SELECT c.id,c.parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
+      FROM comments c JOIN users u ON u.id=c.author_user_id
+      WHERE c.task_id=? AND c.workspace_id=?
+      ORDER BY c.id ASC");
+  } else {
+    $commentsStmt=$pdo->prepare("SELECT c.id,NULL AS parent_comment_id,c.body,c.created_at,u.name AS author,u.id AS author_id
+      FROM comments c JOIN users u ON u.id=c.author_user_id
+      WHERE c.task_id=? AND c.workspace_id=?
+      ORDER BY c.id ASC");
+  }
+  $commentsStmt->execute([$id,$ws]);
+  $comments=$commentsStmt->fetchAll();
+} catch (Exception $e) {
+  $comments=[];
+}
 
 // build comment tree
 $byParent=[];
-foreach($comments as $c){ $pid = $c['parent_comment_id'] ?? 0; $pid = $pid ? (int)$pid : 0; $byParent[$pid][]=$c; }
-function render_comment_tree($parentId,$byParent,$level=0){
+foreach($comments as $c){ $pid = isset($c['parent_comment_id']) ? $c['parent_comment_id'] : 0; $pid = $pid ? (int)$pid : 0; $byParent[$pid][]=$c; }
+function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$visited=array()){
+  if($level > 30) return;
   if(!isset($byParent[$parentId])) return;
   foreach($byParent[$parentId] as $c){
+    $cid = (int)$c['id'];
+    if(isset($visited[$cid])) continue;
+    $visited[$cid] = 1;
     $pad = min(40, $level*18);
-    echo "<div class="p-3 rounded mb-2" style="margin-left:{$pad}px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">";
-    echo "<div class="d-flex justify-content-between"><div class="fw-semibold">".h($c['author'])."</div><div class="text-muted small">".h($c['created_at'])."</div></div>";
-    echo "<div class="mt-2">".nl2br(h($c['body']))."</div>";
-    echo "<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" onclick="setReply(".(int)$c['id'].", "".h(addslashes($c['author']))."")">Reply</button></div>";
-    echo "</div>";
-    render_comment_tree((int)$c['id'],$byParent,$level+1);
+    echo '<div class="p-3 rounded mb-2" style="margin-left:'.$pad.'px;background:#0f0f0f;border:1px solid rgba(255,255,255,.08);">';
+    echo '<div class="d-flex justify-content-between"><div class="fw-semibold">'.h($c['author']).'</div><div class="text-muted small">'.h($c['created_at']).'</div></div>';
+    echo '<div class="mt-2">'.nl2br(h($c['body'])).'</div>';
+    if($allowReply){
+      echo '<div class="mt-2"><button class="btn btn-sm btn-outline-light" type="button" data-author="'.h((string)$c['author']).'" onclick="setReply('.$cid.', this.dataset.author)">Reply</button></div>';
+    }
+    echo '</div>';
+    render_comment_tree($cid,$byParent,$level+1,$allowReply,$visited);
   }
 }
 
@@ -136,7 +209,7 @@ function render_comment_tree($parentId,$byParent,$level=0){
   <div>
     <h2 class="mb-1"><?=h($task['title'])?></h2>
     <div class="text-muted small">
-      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h($task['phase_name'] ?? '—')?>
+      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h(isset($task['phase_name']) ? $task['phase_name'] : '—')?>
     </div>
     <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
   </div>
@@ -150,7 +223,7 @@ function render_comment_tree($parentId,$byParent,$level=0){
   <div class="col-lg-7">
     <div class="card p-3 mb-3">
       <div class="text-muted small mb-1">Description</div>
-      <div><?=nl2br(h($task['description'] ?? '—'))?></div>
+      <div><?=nl2br(h(isset($task['description']) ? $task['description'] : '—'))?></div>
     </div>
 
     <div class="card p-3">
@@ -161,10 +234,14 @@ function render_comment_tree($parentId,$byParent,$level=0){
       <form method="post" class="mb-3" id="commentForm">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
+        <?php if($has_comment_parent): ?>
         <div class="d-flex justify-content-between align-items-center mb-1">
           <div class="text-muted small" id="replyLabel"></div>
           <button type="button" class="btn btn-sm btn-outline-light" onclick="clearReply()">Clear Reply</button>
         </div>
+        <?php else: ?>
+        <div class="text-muted small mb-1">Threaded replies are unavailable until the latest DB migration is applied.</div>
+        <?php endif; ?>
         <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
         <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Post</button></div>
       </form>
@@ -180,7 +257,7 @@ function render_comment_tree($parentId,$byParent,$level=0){
         }
       </script>
       <div class="d-flex flex-column">
-        <?php render_comment_tree(0, $byParent, 0); ?>
+        <?php render_comment_tree(0, $byParent, 0, $has_comment_parent); ?>
         <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
       </div>
     </div>
@@ -194,32 +271,28 @@ function render_comment_tree($parentId,$byParent,$level=0){
       <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
       <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
     </div>
+    <?php if($can_manage): ?>
     <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Attachments</div>
-      <form method="post" action="upload_task_attachment.php" enctype="multipart/form-data" class="mb-3">
+      <div class="fw-semibold mb-2">Assign Task</div>
+      <?php if(!$assignable_users): ?>
+        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
+      <?php else: ?>
+      <form method="post">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="task_id" value="<?= (int)$id ?>">
-        <input class="form-control" type="file" name="file" required>
-        <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
+        <div class="mb-2">
+          <label class="form-label">Assignees (Developer / SEO)</label>
+          <select class="form-select" name="assignees[]" multiple>
+            <?php foreach($assignable_users as $au): ?>
+              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
+            <?php endforeach; ?>
+          </select>
+          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
+        </div>
+        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
       </form>
-      <div class="d-flex flex-column gap-2">
-        <?php foreach($attachments as $a): ?>
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <a class="link-light" href="download.php?id=<?= (int)$a['id'] ?>"><?= h($a['original_name']) ?></a>
-              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?></div>
-            </div>
-            <form method="post" onsubmit="return confirm('Delete attachment?');">
-              <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-              <input type="hidden" name="attachment_id" value="<?= (int)$a['id'] ?>">
-              <button class="btn btn-sm btn-outline-danger" name="delete_attachment" value="1">Delete</button>
-            </form>
-          </div>
-        <?php endforeach; ?>
-        <?php if(!$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
-      </div>
+      <?php endif; ?>
     </div>
-
+    <?php endif; ?>
 
     <div class="card p-3 mb-3">
       <div class="fw-semibold mb-2">Update Status</div>
@@ -236,7 +309,7 @@ function render_comment_tree($parentId,$byParent,$level=0){
         </div>
         <div class="mb-2">
           <label class="form-label">Internal Note</label>
-          <textarea class="form-control" name="internal_note" rows="3"><?=h($task['internal_note'] ?? '')?></textarea>
+          <textarea class="form-control" name="internal_note" rows="3"><?=h(isset($task['internal_note']) ? $task['internal_note'] : '')?></textarea>
         </div>
         <button class="btn btn-yellow w-100" name="update_task" value="1">Save</button>
       </form>
