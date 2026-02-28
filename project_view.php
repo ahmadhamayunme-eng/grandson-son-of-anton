@@ -233,7 +233,10 @@ try {
   .pill{display:inline-flex;padding:2px 9px;border-radius:8px;font-size:.82rem;font-weight:600;border:1px solid rgba(255,255,255,.18)}
   .is-blocked{background:rgba(161,131,47,.24);color:#f0d071}.is-progress{background:rgba(101,78,157,.26);color:#c9b4ff}.is-done{background:rgba(62,141,98,.24);color:#82d79f}.is-todo{background:rgba(68,97,137,.24);color:#8eb7f2}
   .phase-wrap{display:grid;gap:12px}.phase{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(26,27,38,.7),rgba(18,19,27,.62));overflow:hidden}
-  .phase h4{margin:0}.pv-table{width:100%;border-collapse:collapse}.pv-table th,.pv-table td{padding:9px 12px;border-top:1px solid rgba(255,255,255,.07)}.pv-table th{color:rgba(255,255,255,.65);font-size:.82rem;text-transform:uppercase}
+  .phase h4{margin:0}.pv-table{width:100%;border-collapse:collapse;table-layout:fixed}.pv-table th,.pv-table td{padding:9px 12px;border-top:1px solid rgba(255,255,255,.07);vertical-align:middle}.pv-table th{color:rgba(255,255,255,.65);font-size:.82rem;text-transform:uppercase}
+  .pv-table .col-task{width:38%}.pv-table .col-status{width:17%}.pv-table .col-assignees{width:24%}.pv-table .col-due{width:9%;text-align:center}.pv-table .col-actions{width:12%;text-align:center}
+  .task-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;word-break:break-word}
+  .task-cell,.assignee-cell{text-align:left}.status-cell,.due-cell,.action-cell{text-align:center}
   .docs-toolbar{display:grid;grid-template-columns:1fr auto auto;gap:10px;margin-bottom:12px}.docs-search{padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03);color:#eee}.docs-section{display:grid;gap:10px}.doc-item{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid rgba(255,255,255,.07)}
   .activity .row-item{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:flex-start;padding:11px 14px;border-top:1px solid rgba(255,255,255,.07)}.ico{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1)}
   @media (max-width:1100px){.pv-grid{grid-template-columns:1fr}.docs-toolbar{grid-template-columns:1fr}}
@@ -273,7 +276,38 @@ try {
       </div>
     </div>
   <?php elseif($tab==='tasks'): ?>
-    <section class="phase-wrap"><?php foreach($phases as $ph): ?><article class="phase"><div class="card-h"><h4><?=h($ph['name'])?></h4><?php if($can_manage): ?><button class="btn btn-sm btn-yellow" data-bs-toggle="modal" data-bs-target="#addTask">+ Add Task</button><?php endif; ?></div><table class="pv-table"><thead><tr><th>Task</th><th>Status</th><th>Assignees</th><th>Due</th><th>Actions</th></tr></thead><tbody><?php foreach(($by_phase[$ph['id']] ?? []) as $t): ?><tr><td><?=h($t['title'])?></td><td><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span></td><td><?=h($t['assignee_names'] ?: '—')?></td><td><?=h($t['due_date'] ? format_date($t['due_date']) : '—')?></td><td><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=$t['id']?>">Open</a></td></tr><?php endforeach; ?><?php if(!($by_phase[$ph['id']] ?? [])): ?><tr><td colspan="5" class="text-muted">No tasks in this phase.</td></tr><?php endif; ?></tbody></table></article><?php endforeach; ?><?php if(!$phases): ?><div class="glass p-4 text-muted">No phases yet. Add a phase to start tasks.</div><?php endif; ?></section>
+    <section class="phase-wrap">
+      <?php foreach($phases as $ph): ?>
+        <article class="phase">
+          <div class="card-h">
+            <h4><?=h($ph['name'])?></h4>
+            <?php if($can_manage): ?><button class="btn btn-sm btn-yellow" data-bs-toggle="modal" data-bs-target="#addTask">+ Add Task</button><?php endif; ?>
+          </div>
+
+          <table class="pv-table">
+            <colgroup>
+              <col class="col-task"><col class="col-status"><col class="col-assignees"><col class="col-due"><col class="col-actions">
+            </colgroup>
+            <thead>
+              <tr><th class="task-cell">Task</th><th class="status-cell">Status</th><th class="assignee-cell">Assignees</th><th class="due-cell">Due</th><th class="action-cell">Actions</th></tr>
+            </thead>
+            <tbody>
+              <?php foreach(($by_phase[$ph['id']] ?? []) as $t): ?>
+                <tr>
+                  <td class="task-cell"><div class="task-title"><?=h($t['title'])?></div></td>
+                  <td class="status-cell"><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span></td>
+                  <td class="assignee-cell"><div class="task-title"><?=h($t['assignee_names'] ?: '—')?></div></td>
+                  <td class="due-cell"><?=h($t['due_date'] ? format_date($t['due_date']) : '—')?></td>
+                  <td class="action-cell"><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=$t['id']?>">Open</a></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if(!($by_phase[$ph['id']] ?? [])): ?><tr><td colspan="5" class="text-muted">No tasks in this phase.</td></tr><?php endif; ?>
+            </tbody>
+          </table>
+        </article>
+      <?php endforeach; ?>
+      <?php if(!$phases): ?><div class="glass p-4 text-muted">No phases yet. Add a phase to start tasks.</div><?php endif; ?>
+    </section>
   <?php elseif($tab==='docs'): ?>
     <section><form class="docs-toolbar" method="get"><input type="hidden" name="id" value="<?=$id?>"><input type="hidden" name="tab" value="docs"><input class="docs-search" name="dq" value="<?=h($docsQ)?>" placeholder="Search documents..."><?php if($can_manage): ?><button type="button" class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addDoc">+ New Doc</button><?php endif; ?><a class="btn btn-outline-light" href="docs.php?project_id=<?=$id?>">Upload</a></form><div class="glass docs-section"><div class="card-h"><h3>Project Documents</h3><span><?=count($docs)?> files</span></div><?php foreach($docs as $d): ?><div class="doc-item"><div><div><?=h($d['title'])?></div><div class="sub">Updated <?=h(format_date($d['updated_at']))?> by <?=h($d['author_name'] ?: 'Unknown')?></div></div><span class="text-muted"><?=strlen((string)($d['content'] ?? ''))?> chars</span><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=$d['id']?>">Open</a></div><?php endforeach; ?><?php if(!$docs): ?><div class="p-4 text-muted">No documents found.</div><?php endif; ?></div></section>
   <?php else: ?>
