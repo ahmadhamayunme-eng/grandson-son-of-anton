@@ -327,6 +327,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
         <a class="task-tab active" href="task_view.php?id=<?= (int)$id ?>">Docs</a>
         <a class="task-tab" href="task_activity_log.php?id=<?= (int)$id ?>">Activity</a>
       </div>
+      <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
     </div>
     <div class="task-actions">
       <?php if($can_manage && !$locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn task-btn-outline" name="lock_task" value="1">Lock</button></form><?php endif; ?>
@@ -477,6 +478,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
           <?php endif; ?>
         </div>
       </div>
+      <?php endif; ?>
 
       <?php if($can_cto): ?>
       <div class="task-card mb-3">
