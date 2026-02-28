@@ -2,7 +2,22 @@
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/helpers.php';
 require_once __DIR__ . '/lib/db.php';
-require_once __DIR__ . '/lib/task_attachments.php';
+$taskAttachmentsLib = __DIR__ . '/lib/task_attachments.php';
+if (file_exists($taskAttachmentsLib)) {
+  require_once $taskAttachmentsLib;
+}
+if (!function_exists('effective_upload_limit_bytes')) {
+  function effective_upload_limit_bytes() { return 0; }
+}
+if (!function_exists('human_bytes')) {
+  function human_bytes($bytes) {
+    $bytes = (int)$bytes;
+    if ($bytes >= 1024 * 1024 * 1024) return round($bytes / (1024 * 1024 * 1024), 2) . ' GB';
+    if ($bytes >= 1024 * 1024) return round($bytes / (1024 * 1024), 2) . ' MB';
+    if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';
+    return $bytes . ' B';
+  }
+}
 auth_require_login();
 require_post();
 csrf_verify();

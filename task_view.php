@@ -1,6 +1,24 @@
 <?php
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/lib/task_attachments.php';
+$taskAttachmentsLib = __DIR__ . '/lib/task_attachments.php';
+if (file_exists($taskAttachmentsLib)) {
+  require_once $taskAttachmentsLib;
+}
+if (!function_exists('ensure_task_attachments_table')) {
+  function ensure_task_attachments_table($pdo) { return false; }
+}
+if (!function_exists('effective_upload_limit_bytes')) {
+  function effective_upload_limit_bytes() { return 0; }
+}
+if (!function_exists('human_bytes')) {
+  function human_bytes($bytes) {
+    $bytes = (int)$bytes;
+    if ($bytes >= 1024 * 1024 * 1024) return round($bytes / (1024 * 1024 * 1024), 2) . ' GB';
+    if ($bytes >= 1024 * 1024) return round($bytes / (1024 * 1024), 2) . ' MB';
+    if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';
+    return $bytes . ' B';
+  }
+}
 $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
