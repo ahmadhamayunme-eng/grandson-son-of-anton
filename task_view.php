@@ -1,5 +1,24 @@
 <?php
 require_once __DIR__ . '/layout.php';
+$taskAttachmentsLib = __DIR__ . '/lib/task_attachments.php';
+if (file_exists($taskAttachmentsLib)) {
+  require_once $taskAttachmentsLib;
+}
+if (!function_exists('ensure_task_attachments_table')) {
+  function ensure_task_attachments_table($pdo) { return false; }
+}
+if (!function_exists('effective_upload_limit_bytes')) {
+  function effective_upload_limit_bytes() { return 0; }
+}
+if (!function_exists('human_bytes')) {
+  function human_bytes($bytes) {
+    $bytes = (int)$bytes;
+    if ($bytes >= 1024 * 1024 * 1024) return round($bytes / (1024 * 1024 * 1024), 2) . ' GB';
+    if ($bytes >= 1024 * 1024) return round($bytes / (1024 * 1024), 2) . ' MB';
+    if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';
+    return $bytes . ' B';
+  }
+}
 $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
@@ -271,6 +290,29 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
       <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
       <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
     </div>
+    <?php if($can_manage): ?>
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Assign Task</div>
+      <?php if(!$assignable_users): ?>
+        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
+      <?php else: ?>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <div class="mb-2">
+          <label class="form-label">Assignees (Developer / SEO)</label>
+          <select class="form-select" name="assignees[]" multiple>
+            <?php foreach($assignable_users as $au): ?>
+              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
+            <?php endforeach; ?>
+          </select>
+          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
+        </div>
+        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
+      </form>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <?php if($can_manage): ?>
     <div class="card p-3 mb-3">
       <div class="fw-semibold mb-2">Assign Task</div>
