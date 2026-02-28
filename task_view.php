@@ -1,24 +1,5 @@
 <?php
 require_once __DIR__ . '/layout.php';
-$taskAttachmentsLib = __DIR__ . '/lib/task_attachments.php';
-if (file_exists($taskAttachmentsLib)) {
-  require_once $taskAttachmentsLib;
-}
-if (!function_exists('ensure_task_attachments_table')) {
-  function ensure_task_attachments_table($pdo) { return false; }
-}
-if (!function_exists('effective_upload_limit_bytes')) {
-  function effective_upload_limit_bytes() { return 0; }
-}
-if (!function_exists('human_bytes')) {
-  function human_bytes($bytes) {
-    $bytes = (int)$bytes;
-    if ($bytes >= 1024 * 1024 * 1024) return round($bytes / (1024 * 1024 * 1024), 2) . ' GB';
-    if ($bytes >= 1024 * 1024) return round($bytes / (1024 * 1024), 2) . ' MB';
-    if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';
-    return $bytes . ' B';
-  }
-}
 $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_cto=in_array($role,['CTO','Super Admin'],true);
@@ -356,87 +337,24 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
             <?php if(!$assignees): ?><span class="text-muted small">No assignees</span><?php endif; ?>
           </div>
         </div>
-        <div class="body">
-          <div class="task-section-title mb-2">Task Details</div>
-          <div class="task-description"><?=nl2br(h(isset($task['description']) ? $task['description'] : 'No description yet.'))?></div>
-        </div>
-      </div>
-
-      <div class="task-card mb-3">
-        <div class="head"><div class="fw-semibold">Attach Files</div><div class="text-muted small">Upload limit: <?=h(human_bytes(effective_upload_limit_bytes()))?></div></div>
-        <div class="body">
-          <?php if($attachments): ?>
-            <?php foreach($attachments as $att): ?>
-              <div class="file-row">
-                <div>
-                  <div><?=h($att['original_name'])?></div>
-                  <div class="text-muted small"><?=h(isset($att['size_bytes']) && $att['size_bytes']!==null ? human_bytes((int)$att['size_bytes']) : 'Unknown size')?> • <?=h($att['created_at'])?></div>
-                </div>
-                <a class="btn btn-sm task-btn-outline" href="download.php?id=<?= (int)$att['id'] ?>">Download</a>
-              </div>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <div class="text-muted small mb-2">No files attached yet.</div>
-          <?php endif; ?>
-          <?php if($attachments_ready): ?>
-          <form method="post" action="upload_task_attachment.php" enctype="multipart/form-data" class="mt-2 d-flex gap-2 align-items-center">
-            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <input type="hidden" name="task_id" value="<?= (int)$id ?>">
-            <input class="form-control" type="file" name="file" required>
-            <button class="btn btn-yellow" type="submit">Upload</button>
-          </form>
-          <?php else: ?>
-            <div class="text-muted small">Attachment table unavailable in this environment.</div>
-          <?php endif; ?>
-        </div>
-      </div>
-
-      <div class="task-card">
-        <div class="head"><div class="fw-semibold">Comments</div><div class="text-muted small"><?=count($comments)?> total</div></div>
-        <div class="body">
-          <form method="post" class="mb-3 task-comment-form" id="commentForm">
-            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
-            <?php if($has_comment_parent): ?>
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <div class="text-muted small" id="replyLabel"></div>
-                <button type="button" class="btn btn-sm task-btn-outline" onclick="clearReply()">Clear Reply</button>
-              </div>
-            <?php else: ?>
-              <div class="text-muted small mb-1">Threaded replies are unavailable until the latest DB migration is applied.</div>
-            <?php endif; ?>
-            <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
-            <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Add Comment</button></div>
-          </form>
-          <script>
-            function setReply(id, author){
-              document.getElementById("parent_comment_id").value = id;
-              document.getElementById("replyLabel").textContent = "Replying to " + author + " (#"+id+")";
-              document.querySelector("textarea[name=comment]").focus();
-            }
-            function clearReply(){
-              document.getElementById("parent_comment_id").value = "";
-              document.getElementById("replyLabel").textContent = "";
-            }
-          </script>
-          <div class="d-flex flex-column">
-            <?php render_comment_tree(0, $byParent, 0, $has_comment_parent); ?>
-            <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
-          </div>
-        </div>
-      </div>
+        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
+      </form>
+      <?php endif; ?>
     </div>
+    <?php endif; ?>
 
-    <div class="task-panel">
-      <div class="task-card mb-3">
-        <div class="head"><div class="fw-semibold">Task Info</div></div>
-        <div class="body">
-          <div class="task-info-row"><span class="label">Section</span><span class="value"><?=h($section_name)?></span></div>
-          <div class="task-info-row"><span class="label">Priority</span><span class="value"><?=h($priority['label'])?></span></div>
-          <div class="task-info-row"><span class="label">Status</span><span class="value"><span class="badge badge-soft"><?=h($task['status'])?></span></span></div>
-          <div class="task-info-row"><span class="label">Assignees</span><span class="value"><?=h($assignee_names ? implode(', ',$assignee_names) : '—')?></span></div>
-          <div class="task-info-row"><span class="label">Due</span><span class="value"><?=h($due_display)?></span></div>
-          <div class="task-info-row"><span class="label">Client</span><span class="value"><?=h($task['client_name'])?></span></div>
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-2">Update Status</div>
+      <?php if($locked && !$can_manage): ?>
+        <div class="text-muted">This task is locked.</div>
+      <?php else: ?>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <div class="mb-2">
+          <label class="form-label">Status</label>
+          <select class="form-select" name="status">
+            <?php foreach($statuses as $s): ?><option value="<?=h($s)?>" <?= $task['status']===$s ? 'selected' : '' ?>><?=h($s)?></option><?php endforeach; ?>
+          </select>
         </div>
       </div>
 
