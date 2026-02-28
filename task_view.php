@@ -204,14 +204,19 @@ try {
 $attachments=[];
 $attachments_ready=false;
 try {
-  $attachments_ready=ensure_task_attachments_table($pdo);
+  $probe=$pdo->query("SELECT id FROM task_attachments LIMIT 1");
+  $attachments_ready=($probe instanceof PDOStatement);
   if($attachments_ready){
     $attStmt=$pdo->prepare("SELECT id,original_name,size_bytes,created_at FROM task_attachments WHERE workspace_id=? AND task_id=? ORDER BY id DESC LIMIT 8");
-    $attStmt->execute([$ws,$id]);
-    $attachments=$attStmt->fetchAll();
+    if($attStmt instanceof PDOStatement){
+      $attStmt->execute([$ws,$id]);
+      $rows=$attStmt->fetchAll();
+      $attachments=is_array($rows) ? $rows : [];
+    }
   }
 } catch (Exception $e) {
   $attachments=[];
+  $attachments_ready=false;
 }
 
 function tv_initials($name){
@@ -327,7 +332,6 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
         <a class="task-tab active" href="task_view.php?id=<?= (int)$id ?>">Docs</a>
         <a class="task-tab" href="task_activity_log.php?id=<?= (int)$id ?>">Activity</a>
       </div>
-      <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
     </div>
     <div class="task-actions">
       <?php if($can_manage && !$locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn task-btn-outline" name="lock_task" value="1">Lock</button></form><?php endif; ?>
@@ -478,7 +482,6 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
           <?php endif; ?>
         </div>
       </div>
-      <?php endif; ?>
 
       <?php if($can_cto): ?>
       <div class="task-card mb-3">
