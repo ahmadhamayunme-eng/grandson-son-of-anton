@@ -46,10 +46,6 @@ function tv_pluck($rows, $key) {
 }
 
 $has_comment_parent = tv_column_exists($pdo, 'comments', 'parent_comment_id');
-$has_attachments_table = ensure_task_attachments_table($pdo);
-$attachments_query_ok = false;
-$effective_upload_limit = effective_upload_limit_bytes();
-$can_upload_500mb = ($effective_upload_limit === 0) || ($effective_upload_limit >= 500 * 1024 * 1024);
 
 $id=isset($_GET['id']) ? (int)$_GET['id'] : 0;
 try {
@@ -162,25 +158,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     redirect("task_view.php?id=$id");
   }
 
-  if(isset($_POST['delete_attachment'])){
-    $att_id = isset($_POST['attachment_id']) ? (int)$_POST['attachment_id'] : 0;
-    if($att_id>0){
-      try {
-        $a = $pdo->prepare("SELECT stored_name FROM task_attachments WHERE id=? AND workspace_id=? AND task_id=?");
-        $a->execute([$att_id,$ws,$id]);
-        $a = $a->fetch();
-        if($a){
-          @unlink(__DIR__."/uploads/task_attachments/".$a['stored_name']);
-          $pdo->prepare("DELETE FROM task_attachments WHERE id=? AND workspace_id=?")->execute([$att_id,$ws]);
-          flash_set('success','Attachment deleted.');
-        }
-      } catch (Exception $e) {
-        flash_set('error','Could not delete attachment on this server.');
-      }
-    }
-    redirect("task_view.php?id=$id");
-  }
-
   if(isset($_POST['cto_action'])){
     if(!$can_cto){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
     $action=$_POST['cto_action'];
@@ -222,16 +199,6 @@ try {
   $comments=$commentsStmt->fetchAll();
 } catch (Exception $e) {
   $comments=[];
-}
-
-$attachments=[];
-try {
-  $attachments=$pdo->prepare("SELECT a.*, u.name AS uploader FROM task_attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.task_id=? AND a.workspace_id=? ORDER BY a.id DESC");
-  $attachments->execute([$id,$ws]);
-  $attachments=$attachments->fetchAll();
-  $attachments_query_ok = true;
-} catch (Exception $e) {
-  $attachments=[];
 }
 
 // build comment tree
@@ -323,40 +290,28 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
       <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
       <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
     </div>
+    <?php if($can_manage): ?>
     <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Attachments</div>
-      <?php if($has_attachments_table): ?>
-      <form method="post" action="upload_task_attachment.php" enctype="multipart/form-data" class="mb-3">
+      <div class="fw-semibold mb-2">Assign Task</div>
+      <?php if(!$assignable_users): ?>
+        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
+      <?php else: ?>
+      <form method="post">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="task_id" value="<?= (int)$id ?>">
-        <input class="form-control" type="file" name="file" required>
-        <div class="d-flex justify-content-end mt-2"><button class="btn btn-outline-light">Upload</button></div>
+        <div class="mb-2">
+          <label class="form-label">Assignees (Developer / SEO)</label>
+          <select class="form-select" name="assignees[]" multiple>
+            <?php foreach($assignable_users as $au): ?>
+              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
+            <?php endforeach; ?>
+          </select>
+          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
+        </div>
+        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
       </form>
-      <div class="small-help mb-3">Supports all file types. Target upload size: 1 GB per file (including 500+ MB), subject to server PHP limits.</div>
-      <?php if(!$can_upload_500mb): ?>
-        <div class="alert alert-warning py-2">Current server upload limit is <?= h(human_bytes($effective_upload_limit)) ?>. Set <code>upload_max_filesize</code> and <code>post_max_size</code> to at least <b>600M</b> (recommended 1G).</div>
       <?php endif; ?>
-      <?php if(!$attachments_query_ok): ?>
-        <div class="alert alert-warning py-2">Attachment list could not be loaded from DB on this server, but you can still try uploading.</div>
-      <?php endif; ?>
-      <div class="d-flex flex-column gap-2">
-        <?php foreach($attachments as $a): ?>
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <a class="link-light" href="download.php?id=<?= (int)$a['id'] ?>"><?= h($a['original_name']) ?></a>
-              <div class="text-muted small">by <?= h($a['uploader']) ?> • <?= h($a['created_at']) ?> • <?= h(human_bytes((int)(isset($a['size_bytes']) ? $a['size_bytes'] : 0))) ?></div>
-            </div>
-            <form method="post" onsubmit="return confirm('Delete attachment?');">
-              <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-              <input type="hidden" name="attachment_id" value="<?= (int)$a['id'] ?>">
-              <button class="btn btn-sm btn-outline-danger" name="delete_attachment" value="1">Delete</button>
-            </form>
-          </div>
-        <?php endforeach; ?>
-        <?php if($has_attachments_table && !$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
-      </div>
     </div>
-
+    <?php endif; ?>
 
     <?php if($can_manage): ?>
     <div class="card p-3 mb-3">
