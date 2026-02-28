@@ -224,165 +224,173 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
 }
 
 ?>
-<div class="d-flex justify-content-between align-items-start mb-3">
-  <div>
-    <h2 class="mb-1"><?=h($task['title'])?></h2>
-    <div class="text-muted small">
-      Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Phase: <?=h(isset($task['phase_name']) ? $task['phase_name'] : '—')?>
-    </div>
-    <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
-  </div>
-  <div class="d-flex gap-2">
-    <?php if($can_manage && !$locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn btn-outline-light" name="lock_task" value="1">Lock</button></form><?php endif; ?>
-    <?php if($can_manage && $locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn btn-outline-light" name="unlock_task" value="1">Unlock</button></form><?php endif; ?>
-  </div>
-</div>
+<style>
+  .task-view-shell{border:1px solid rgba(255,255,255,.12);border-radius:18px;background:linear-gradient(160deg,rgba(12,14,24,.95),rgba(12,11,28,.88));box-shadow:0 24px 40px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.05);padding:1.25rem}
+  .task-headline{font-size:2.1rem;font-weight:500;letter-spacing:.02em}
+  .task-subline{color:rgba(236,236,240,.78)}
+  .task-subline b{color:#fff;font-weight:500}
+  .task-chip{display:inline-flex;align-items:center;gap:.4rem;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:10px;padding:.4rem .75rem;font-size:.88rem}
+  .task-block{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:linear-gradient(170deg,rgba(27,29,47,.68),rgba(16,18,32,.82))}
+  .task-block-title{font-size:1.1rem;font-weight:600;letter-spacing:.02em}
+  .task-note-box{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03)}
+  .task-right-card{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:linear-gradient(170deg,rgba(17,17,34,.9),rgba(11,13,27,.95))}
+  .task-info-row{display:flex;justify-content:space-between;gap:.85rem;padding:.35rem 0;border-bottom:1px dashed rgba(255,255,255,.08)}
+  .task-info-row:last-child{border-bottom:0}
+  .task-info-row .label{color:rgba(236,236,240,.64)}
+  .task-info-row .value{font-weight:500;text-align:right}
+  .task-comment-form textarea,.task-panel .form-control,.task-panel .form-select{background:rgba(6,8,16,.78);border-color:rgba(255,255,255,.18)}
+  .task-btn-outline{border:1px solid rgba(255,255,255,.22);color:#f4f4fb;background:rgba(255,255,255,.02)}
+  .task-btn-outline:hover{background:rgba(255,255,255,.1);color:#fff}
+</style>
 
-<div class="row g-3">
-  <div class="col-lg-7">
-    <div class="card p-3 mb-3">
-      <div class="text-muted small mb-1">Description</div>
-      <div><?=nl2br(h(isset($task['description']) ? $task['description'] : '—'))?></div>
-    </div>
-
-    <div class="card p-3">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="fw-semibold">Comments</div>
-        <div class="text-muted small"><?=count($comments)?> total</div>
+<div class="task-view-shell">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="task-headline mb-1"><?=h($task['title'])?></h2>
+      <div class="task-subline small">
+        Client: <b><?=h($task['client_name'])?></b> • Project: <b><?=h($task['project_name'])?></b> • Section: <?=h(isset($task['phase_name']) ? $task['phase_name'] : 'Development')?>
       </div>
-      <form method="post" class="mb-3" id="commentForm">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
-        <?php if($has_comment_parent): ?>
-        <div class="d-flex justify-content-between align-items-center mb-1">
-          <div class="text-muted small" id="replyLabel"></div>
-          <button type="button" class="btn btn-sm btn-outline-light" onclick="clearReply()">Clear Reply</button>
+      <?php if($task['cto_feedback']): ?><div class="alert alert-warning mt-3 mb-0"><b>CTO Feedback:</b> <?=h($task['cto_feedback'])?></div><?php endif; ?>
+    </div>
+    <div class="d-flex gap-2">
+      <?php if($can_manage && !$locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn task-btn-outline" name="lock_task" value="1">Lock</button></form><?php endif; ?>
+      <?php if($can_manage && $locked): ?><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><button class="btn task-btn-outline" name="unlock_task" value="1">Unlock</button></form><?php endif; ?>
+      <button class="btn btn-yellow" type="button">Save</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="task-block p-3 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <span class="task-chip"># <?=h(isset($task['phase_name']) ? $task['phase_name'] : 'Development')?></span>
+          <span class="task-chip">Priority: High</span>
+          <span class="task-chip">Status: <?=h($task['status'])?></span>
         </div>
+        <div class="task-block-title mb-2">Task Details</div>
+        <div class="task-note-box p-3"><?=nl2br(h(isset($task['description']) ? $task['description'] : '—'))?></div>
+      </div>
+
+      <div class="task-block p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="task-block-title">Comments</div>
+          <div class="text-muted small"><?=count($comments)?> total</div>
+        </div>
+        <form method="post" class="mb-3 task-comment-form" id="commentForm">
+          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
+          <?php if($has_comment_parent): ?>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="text-muted small" id="replyLabel"></div>
+            <button type="button" class="btn btn-sm task-btn-outline" onclick="clearReply()">Clear Reply</button>
+          </div>
+          <?php else: ?>
+          <div class="text-muted small mb-1">Threaded replies are unavailable until the latest DB migration is applied.</div>
+          <?php endif; ?>
+          <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
+          <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Post</button></div>
+        </form>
+        <script>
+          function setReply(id, author){
+            document.getElementById("parent_comment_id").value = id;
+            document.getElementById("replyLabel").textContent = "Replying to " + author + " (#"+id+")";
+            document.querySelector("textarea[name=comment]").focus();
+          }
+          function clearReply(){
+            document.getElementById("parent_comment_id").value = "";
+            document.getElementById("replyLabel").textContent = "";
+          }
+        </script>
+        <div class="d-flex flex-column">
+          <?php render_comment_tree(0, $byParent, 0, $has_comment_parent); ?>
+          <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5 task-panel">
+      <div class="task-right-card p-3 mb-3">
+        <div class="task-block-title mb-2">Task Info</div>
+        <div class="task-info-row"><span class="label">Section</span><span class="value"><?=h(isset($task['phase_name']) ? $task['phase_name'] : 'Development')?></span></div>
+        <div class="task-info-row"><span class="label">Priority</span><span class="value">High</span></div>
+        <div class="task-info-row"><span class="label">Status</span><span class="value"><span class="badge badge-soft"><?=h($task['status'])?></span></span></div>
+        <div class="task-info-row"><span class="label">Assignees</span><span class="value"><?=h($assignee_names ? implode(', ',$assignee_names) : '—')?></span></div>
+        <div class="task-info-row"><span class="label">Due</span><span class="value"><?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></span></div>
+        <div class="task-info-row"><span class="label">Locked</span><span class="value"><?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></span></div>
+      </div>
+
+      <?php if($can_manage): ?>
+      <div class="task-right-card p-3 mb-3">
+        <div class="fw-semibold mb-2">Assign Task</div>
+        <?php if(!$assignable_users): ?>
+          <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
         <?php else: ?>
-        <div class="text-muted small mb-1">Threaded replies are unavailable until the latest DB migration is applied.</div>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <div class="mb-2">
+            <label class="form-label">Assignees (Developer / SEO)</label>
+            <select class="form-select" name="assignees[]" multiple>
+              <?php foreach($assignable_users as $au): ?>
+                <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
+              <?php endforeach; ?>
+            </select>
+            <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
+          </div>
+          <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
+        </form>
         <?php endif; ?>
-        <textarea class="form-control" name="comment" rows="3" placeholder="Write an internal comment..."></textarea>
-        <div class="d-flex justify-content-end mt-2"><button class="btn btn-yellow" name="add_comment" value="1">Post</button></div>
-      </form>
-      <script>
-        function setReply(id, author){
-          document.getElementById("parent_comment_id").value = id;
-          document.getElementById("replyLabel").textContent = "Replying to " + author + " (#"+id+")";
-          document.querySelector("textarea[name=comment]").focus();
-        }
-        function clearReply(){
-          document.getElementById("parent_comment_id").value = "";
-          document.getElementById("replyLabel").textContent = "";
-        }
-      </script>
-      <div class="d-flex flex-column">
-        <?php render_comment_tree(0, $byParent, 0, $has_comment_parent); ?>
-        <?php if(!$comments): ?><div class="text-muted">No comments yet.</div><?php endif; ?>
       </div>
-    </div>
-  </div>
-
-  <div class="col-lg-5">
-    <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Task Details</div>
-      <div class="mb-2"><span class="text-muted">Status:</span> <span class="badge badge-soft"><?=h($task['status'])?></span></div>
-      <div class="mb-2"><span class="text-muted">Assignees:</span> <?=h($assignee_names ? implode(', ',$assignee_names) : '—')?></div>
-      <div class="mb-2"><span class="text-muted">Due:</span> <?=h($task['due_date'] ? format_date($task['due_date']) : '—')?></div>
-      <div class="mb-2"><span class="text-muted">Locked:</span> <?= $locked ? '<span class="badge bg-secondary">Yes</span>' : '<span class="text-muted">No</span>' ?></div>
-    </div>
-    <?php if($can_manage): ?>
-    <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Assign Task</div>
-      <?php if(!$assignable_users): ?>
-        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
-      <?php else: ?>
-      <form method="post">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <div class="mb-2">
-          <label class="form-label">Assignees (Developer / SEO)</label>
-          <select class="form-select" name="assignees[]" multiple>
-            <?php foreach($assignable_users as $au): ?>
-              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
-            <?php endforeach; ?>
-          </select>
-          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
-        </div>
-        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
-      </form>
       <?php endif; ?>
-    </div>
-    <?php endif; ?>
 
-    <?php if($can_manage): ?>
-    <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Assign Task</div>
-      <?php if(!$assignable_users): ?>
-        <div class="text-muted">No active Developer or SEO users found in this workspace.</div>
-      <?php else: ?>
-      <form method="post">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <div class="mb-2">
-          <label class="form-label">Assignees (Developer / SEO)</label>
-          <select class="form-select" name="assignees[]" multiple>
-            <?php foreach($assignable_users as $au): ?>
-              <option value="<?= (int)$au['id'] ?>" <?= in_array((int)$au['id'],$assignee_ids,true) ? 'selected' : '' ?>><?= h($au['name']) ?> (<?= h($au['role_name']) ?>)</option>
-            <?php endforeach; ?>
-          </select>
-          <div class="small-help mt-1">Hold Ctrl (or Cmd on Mac) to select multiple users.</div>
-        </div>
-        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
-      </form>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Update Status</div>
-      <?php if($locked && !$can_manage): ?>
-        <div class="text-muted">This task is locked.</div>
-      <?php else: ?>
-      <form method="post">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <div class="mb-2">
-          <label class="form-label">Status</label>
-          <select class="form-select" name="status">
-            <?php foreach($statuses as $s): ?><option value="<?=h($s)?>" <?= $task['status']===$s ? 'selected' : '' ?>><?=h($s)?></option><?php endforeach; ?>
-          </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Internal Note</label>
-          <textarea class="form-control" name="internal_note" rows="3"><?=h(isset($task['internal_note']) ? $task['internal_note'] : '')?></textarea>
-        </div>
-        <button class="btn btn-yellow w-100" name="update_task" value="1">Save</button>
-      </form>
-      <?php endif; ?>
-    </div>
-
-    <?php if($can_cto): ?>
-      <div class="card p-3 mb-3">
-        <div class="fw-semibold mb-2">CTO Actions</div>
-        <div class="small-help mb-2">Use these when a task is marked <b>Completed (Needs CTO Review)</b>.</div>
-        <form method="post" class="mb-2">
-          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-          <button class="btn btn-outline-light w-100" name="cto_action" value="approve">Approve (Ready to Submit)</button>
-        </form>
+      <div class="task-right-card p-3 mb-3">
+        <div class="fw-semibold mb-2">Update Status</div>
+        <?php if($locked && !$can_manage): ?>
+          <div class="text-muted">This task is locked.</div>
+        <?php else: ?>
         <form method="post">
           <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-          <textarea class="form-control mb-2" name="cto_reason" rows="2" placeholder="Reason to send back..."></textarea>
-          <button class="btn btn-outline-light w-100" name="cto_action" value="reject">Send Back (In Progress)</button>
+          <div class="mb-2">
+            <label class="form-label">Status</label>
+            <select class="form-select" name="status">
+              <?php foreach($statuses as $s): ?><option value="<?=h($s)?>" <?= $task['status']===$s ? 'selected' : '' ?>><?=h($s)?></option><?php endforeach; ?>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Internal Note</label>
+            <textarea class="form-control" name="internal_note" rows="3"><?=h(isset($task['internal_note']) ? $task['internal_note'] : '')?></textarea>
+          </div>
+          <button class="btn btn-yellow w-100" name="update_task" value="1">Save</button>
         </form>
+        <?php endif; ?>
       </div>
 
-      <div class="card p-3">
-        <div class="fw-semibold mb-2">Submit to Client</div>
-        <div class="small-help mb-2">Mark task as <b>Submitted to Client</b> after you push to production / deliver.</div>
-        <form method="post">
-          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-          <button class="btn btn-yellow w-100" name="submit_to_client" value="1">Mark Submitted</button>
-        </form>
-      </div>
-    <?php endif; ?>
+      <?php if($can_cto): ?>
+        <div class="task-right-card p-3 mb-3">
+          <div class="fw-semibold mb-2">CTO Actions</div>
+          <div class="small-help mb-2">Use these when a task is marked <b>Completed (Needs CTO Review)</b>.</div>
+          <form method="post" class="mb-2">
+            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+            <button class="btn task-btn-outline w-100" name="cto_action" value="approve">Approve (Ready to Submit)</button>
+          </form>
+          <form method="post">
+            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+            <textarea class="form-control mb-2" name="cto_reason" rows="2" placeholder="Reason to send back..."></textarea>
+            <button class="btn task-btn-outline w-100" name="cto_action" value="reject">Send Back (In Progress)</button>
+          </form>
+        </div>
+
+        <div class="task-right-card p-3">
+          <div class="fw-semibold mb-2">Submit to Client</div>
+          <div class="small-help mb-2">Mark task as <b>Submitted to Client</b> after you push to production / deliver.</div>
+          <form method="post">
+            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+            <button class="btn btn-yellow w-100" name="submit_to_client" value="1">Mark Submitted</button>
+          </form>
+        </div>
+      <?php endif; ?>
+    </div>
   </div>
 </div>
+
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
