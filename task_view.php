@@ -325,6 +325,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
     </div>
     <div class="card p-3 mb-3">
       <div class="fw-semibold mb-2">Attachments</div>
+      <?php if($has_attachments_table): ?>
       <form method="post" action="upload_task_attachment.php" enctype="multipart/form-data" class="mb-3">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <input type="hidden" name="task_id" value="<?= (int)$id ?>">
@@ -352,7 +353,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
             </form>
           </div>
         <?php endforeach; ?>
-        <?php if(!$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
+        <?php if($has_attachments_table && !$attachments): ?><div class="text-muted">No attachments yet.</div><?php endif; ?>
       </div>
     </div>
 
