@@ -186,9 +186,8 @@ try {
 
     UNION ALL
 
-    SELECT p.updated_at AS happened_at, CONCAT('Project updated: ', p.name) AS message, COALESCE(u.name, 'System') AS actor, 'project' AS source
+    SELECT p.updated_at AS happened_at, CONCAT('Project updated: ', p.name) AS message, 'System' AS actor, 'project' AS source
     FROM projects p
-    LEFT JOIN users u ON u.id = p.created_by
     WHERE p.workspace_id = ? AND p.id = ?
   ) x
   ORDER BY x.happened_at DESC
