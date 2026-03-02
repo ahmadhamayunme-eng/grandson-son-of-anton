@@ -263,42 +263,43 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
 
 ?>
 <style>
-  .task-page{position:relative;padding:1rem;border:1px solid rgba(255,255,255,.15);border-radius:18px;background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(105,92,255,.14), transparent 65%),
-    radial-gradient(900px 500px at 100% 20%, rgba(34,122,255,.12), transparent 70%),
-    linear-gradient(180deg, rgba(8,10,22,.96), rgba(7,10,20,.95));
-    box-shadow:0 30px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
+  .task-page{position:relative;padding:1.25rem;border:1px solid rgba(255,255,255,.15);border-radius:18px;background:
+    radial-gradient(1200px 600px at 15% -5%, rgba(37,59,122,.36), transparent 65%),
+    radial-gradient(900px 500px at 95% 0, rgba(98,70,234,.32), transparent 70%),
+    linear-gradient(180deg, rgba(8,12,26,.96), rgba(8,12,24,.95));
+    box-shadow:0 24px 44px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
   .task-topbar{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:1rem;margin-bottom:1rem}
-  .task-title{font-size:2.15rem;font-weight:500;line-height:1.2;margin:0}
-  .task-meta{color:rgba(236,236,240,.72);font-size:1.02rem}
-  .task-tabs{display:flex;gap:.35rem;margin-top:1rem}
-  .task-tab{padding:.52rem 1.05rem;border-radius:.6rem;border:1px solid rgba(255,255,255,.15);text-decoration:none;color:rgba(232,232,240,.8);background:rgba(255,255,255,.03)}
-  .task-tab.active{color:#f6d469;border-color:rgba(246,212,105,.45);box-shadow:inset 0 -2px 0 #f6d469;background:rgba(246,212,105,.08)}
-  .task-actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end}
-  .task-btn-outline{border:1px solid rgba(255,255,255,.24);color:#f4f4fb;background:rgba(255,255,255,.03)}
-  .task-btn-outline:hover{background:rgba(255,255,255,.11);color:#fff}
-  .task-grid{display:grid;grid-template-columns:2.1fr 1fr;gap:1rem}
-  .task-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;background:linear-gradient(160deg, rgba(26,30,51,.7), rgba(15,18,34,.85))}
-  .task-card .head{padding:.8rem 1rem;border-bottom:1px solid rgba(255,255,255,.09);display:flex;justify-content:space-between;align-items:center}
+  .task-title{font-size:2.1rem;font-weight:500;line-height:1.2;margin:0}
+  .task-meta{color:rgba(214,221,242,.78);font-size:1rem;margin-top:.25rem}
+  .task-tabs{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.9rem}
+  .task-tab{padding:.5rem .95rem;border-radius:.65rem;border:1px solid rgba(255,255,255,.17);text-decoration:none;color:rgba(224,229,247,.88);background:rgba(255,255,255,.05)}
+  .task-tab.active{color:#ffe5a4;border-color:rgba(248,217,120,.5);box-shadow:inset 0 -2px 0 #f8d978;background:rgba(248,217,120,.16)}
+  .task-actions{display:flex;gap:.55rem;flex-wrap:wrap;justify-content:flex-end}
+  .task-btn-outline{border:1px solid rgba(255,255,255,.26);color:#eff3ff;background:rgba(255,255,255,.05)}
+  .task-btn-outline:hover{background:rgba(255,255,255,.13);color:#fff}
+  .task-grid{display:grid;grid-template-columns:1.8fr 1fr;gap:1rem}
+  .task-card{border:1px solid rgba(255,255,255,.14);border-radius:14px;background:linear-gradient(165deg, rgba(27,36,58,.78), rgba(16,22,41,.9));overflow:hidden}
+  .task-card .head{padding:.85rem 1rem;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;gap:.5rem}
   .task-card .body{padding:1rem}
-  .task-chip{display:inline-flex;align-items:center;padding:.38rem .72rem;border-radius:10px;border:1px solid rgba(255,255,255,.15);font-size:.86rem;background:rgba(255,255,255,.06)}
-  .priority-critical{border-color:rgba(255,123,123,.4);color:#ff9b9b}
-  .priority-high{border-color:rgba(255,188,116,.42);color:#ffc982}
-  .priority-medium{border-color:rgba(246,212,105,.42);color:#f6d469}
+  .task-chip{display:inline-flex;align-items:center;padding:.36rem .7rem;border-radius:999px;border:1px solid rgba(255,255,255,.15);font-size:.84rem;background:rgba(255,255,255,.06)}
+  .priority-critical{border-color:rgba(255,123,142,.45);color:#ffb3c0}
+  .priority-high{border-color:rgba(255,188,116,.42);color:#ffd09e}
+  .priority-medium{border-color:rgba(246,212,105,.42);color:#f8d978}
   .priority-low{border-color:rgba(132,235,169,.35);color:#8de9b2}
   .assignee-stack{display:flex;flex-wrap:wrap;gap:.4rem}
-  .avatar-pill{width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;background:linear-gradient(135deg,#f6d469,#b786f7);color:#10121a;border:1px solid rgba(255,255,255,.35)}
-  .task-section-title{font-size:1.85rem;font-weight:500}
-  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03);line-height:1.75}
+  .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
+  .task-section-title{font-size:1.15rem;font-weight:600;margin-bottom:.65rem}
+  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(10,15,30,.55);line-height:1.7;color:rgba(233,237,247,.93)}
+  .task-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.85rem}
+  .task-info-box{border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(7,11,22,.5);padding:.65rem .75rem}
+  .task-info-box .label{color:rgba(204,213,240,.7);font-size:.8rem}
+  .task-info-box .value{font-size:.93rem;margin-top:.2rem}
   .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(4,7,16,.5);margin-bottom:.5rem}
-  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:600;background:linear-gradient(135deg,#f6d469,#b786f7);color:#12131b}
-  .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)}
-  .comment-copy{color:rgba(242,242,247,.9);line-height:1.65}
+  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#12131b}
+  .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.04)}
+  .comment-copy{color:rgba(242,242,247,.92);line-height:1.62}
   .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(5,8,18,.78);border-color:rgba(255,255,255,.2);color:#ececf0}
-  .task-info-row{display:flex;justify-content:space-between;gap:.9rem;padding:.46rem 0;border-bottom:1px dashed rgba(255,255,255,.1)}
-  .task-info-row:last-child{border-bottom:0}
-  .task-info-row .label{color:rgba(236,236,240,.68)}
-  .task-info-row .value{text-align:right}
+  .small-help{color:rgba(205,214,237,.72);font-size:.82rem}
   @media (max-width: 1200px){.task-grid{grid-template-columns:1fr}}
 </style>
 
@@ -337,6 +338,59 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
             <?php if(!$assignees): ?><span class="text-muted small">No assignees</span><?php endif; ?>
           </div>
         </div>
+        <div class="body">
+          <div class="task-section-title">Task Description</div>
+          <div class="task-description"><?= nl2br(h(isset($task['description']) ? $task['description'] : 'No description provided.')) ?></div>
+          <div class="task-info-grid">
+            <div class="task-info-box"><div class="label">Client</div><div class="value"><?=h($task['client_name'])?></div></div>
+            <div class="task-info-box"><div class="label">Due Date</div><div class="value"><?=h($due_display)?></div></div>
+            <div class="task-info-box"><div class="label">Created</div><div class="value"><?=h(isset($task['created_at']) ? $task['created_at'] : '-')?></div></div>
+            <div class="task-info-box"><div class="label">Updated</div><div class="value"><?=h(isset($task['updated_at']) ? $task['updated_at'] : '-')?></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-card mb-3">
+        <div class="head"><div class="fw-semibold">Recent Attachments</div></div>
+        <div class="body">
+          <?php if(!$attachments_ready): ?>
+            <div class="text-muted">Attachment module not available in this workspace.</div>
+          <?php elseif(!$attachments): ?>
+            <div class="text-muted">No attachments uploaded yet.</div>
+          <?php else: ?>
+            <?php foreach($attachments as $att): ?>
+              <div class="file-row">
+                <div>
+                  <div class="fw-semibold"><?=h($att['original_name'])?></div>
+                  <div class="small text-muted"><?=h($att['created_at'])?></div>
+                </div>
+                <div class="small text-muted"><?= isset($att['size_bytes']) ? h(number_format((int)$att['size_bytes']/1024,1).' KB') : '-' ?></div>
+              </div>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="task-card mb-3">
+        <div class="head"><div class="fw-semibold">Team Discussion</div></div>
+        <div class="body">
+          <form method="post" class="task-comment-form mb-3">
+            <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+            <input type="hidden" name="parent_comment_id" id="parent_comment_id" value="">
+            <div class="small-help mb-1" id="reply_hint"></div>
+            <textarea class="form-control mb-2" rows="3" name="comment" placeholder="Write a comment..."></textarea>
+            <button class="btn btn-yellow" name="add_comment" value="1">Add Comment</button>
+          </form>
+          <?php if(!$comments): ?>
+            <div class="text-muted">No comments yet.</div>
+          <?php else: ?>
+            <?php $visited=array(); render_comment_tree(0,$byParent,0,true,$visited); ?>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-panel">
       <?php if($can_manage): ?>
       <div class="task-card mb-3">
         <div class="head"><div class="fw-semibold">Assign Task</div></div>
@@ -410,5 +464,13 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   </div>
 </div>
 
+<script>
+function setReply(commentId, author){
+  var parent=document.getElementById('parent_comment_id');
+  var hint=document.getElementById('reply_hint');
+  if(parent){ parent.value=commentId || ''; }
+  if(hint){ hint.textContent = commentId ? ('Replying to ' + author) : ''; }
+}
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
