@@ -68,14 +68,7 @@ function docs_query(array $extra=[]){
 }
 ?>
 <style>
-  .docs-shell{max-width:1280px;margin:0 auto;border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#0f1222,#0a0d19);box-shadow:0 30px 60px rgba(0,0,0,.45)}
-  .docs-layout{display:grid;grid-template-columns:230px 1fr;min-height:780px}
-  .docs-side{border-right:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));padding:1.1rem .9rem}
-  .docs-brand{font-size:2rem;font-weight:700;letter-spacing:.5px;margin-bottom:1rem}
-  .docs-menu a{display:block;padding:.56rem .6rem;color:rgba(223,227,246,.76);text-decoration:none;border-radius:9px;margin-bottom:.2rem}
-  .docs-menu a.active,.docs-menu a:hover{background:rgba(248,217,120,.12);color:#f8d978}
-  .docs-user{margin-top:1rem;padding:.65rem;border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(255,255,255,.03);display:flex;align-items:center;gap:.5rem}
-  .docs-main{padding:1.2rem 1.35rem}
+  .docs-content-shell{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:1.1rem 1.15rem;background:linear-gradient(180deg,#0f1222,#0a0d19);box-shadow:0 26px 50px rgba(0,0,0,.38)}
   .docs-top{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.95rem}
   .docs-title{font-size:2rem;font-weight:700}
   .docs-actions{display:flex;align-items:center;gap:.5rem}
@@ -98,98 +91,76 @@ function docs_query(array $extra=[]){
   .docs-muted{color:rgba(203,211,236,.72)}
   .docs-person{display:flex;align-items:center;gap:.45rem}
   .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#141827;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35)}
-  @media (max-width: 1100px){.docs-layout{grid-template-columns:1fr}.docs-side{display:none}.docs-bar{grid-template-columns:1fr}.docs-folders{grid-template-columns:1fr 1fr}}
+  @media (max-width: 992px){.docs-bar{grid-template-columns:1fr}.docs-folders{grid-template-columns:1fr 1fr}}
 </style>
 
-<div class="docs-shell">
-  <div class="docs-layout">
-    <aside class="docs-side">
-      <div class="docs-brand">AntonX</div>
-      <nav class="docs-menu">
-        <a href="#">Dashboard</a>
-        <a href="#">My Tasks</a>
-        <a href="#">Clients</a>
-        <a href="#">Projects</a>
-        <a class="active" href="docs.php">Docs</a>
-      </nav>
-      <div class="docs-user">
-        <span class="docs-avatar"><?=h(doc_initials($user['name'] ?? 'U'))?></span>
-        <div>
-          <div class="fw-semibold"><?=h($user['name'] ?? 'User')?></div>
-          <div class="docs-muted small"><?=h($role ?: 'Team')?></div>
-        </div>
+<div class="docs-content-shell">
+  <div class="docs-top">
+    <div class="docs-title">Docs</div>
+    <div class="docs-actions">
+      <div>
+        <span class="docs-bubble">A</span><span class="docs-bubble">N</span><span class="docs-bubble">X</span>
       </div>
-    </aside>
-
-    <main class="docs-main">
-      <div class="docs-top">
-        <div class="docs-title">Docs</div>
-        <div class="docs-actions">
-          <div>
-            <span class="docs-bubble">A</span><span class="docs-bubble">N</span><span class="docs-bubble">X</span>
-          </div>
-          <?php if($can_manage): ?><button class="btn btn-yellow btn-sm" data-bs-toggle="modal" data-bs-target="#addDoc">Add Doc</button><?php endif; ?>
-        </div>
-      </div>
-
-      <form class="docs-bar" method="get">
-        <div class="docs-search">
-          <span class="px-2">🔎</span>
-          <input name="q" value="<?=h($search)?>" placeholder="Search docs, client, project, author">
-        </div>
-        <select class="docs-filter" name="project_id" onchange="this.form.submit()">
-          <option value="">All documents</option>
-          <?php foreach($projects as $p): ?>
-            <option value="<?= (int)$p['id'] ?>" <?= $project_id===(int)$p['id'] ? 'selected' : '' ?>><?=h($p['name'])?></option>
-          <?php endforeach; ?>
-        </select>
-      </form>
-
-      <section class="docs-panel">
-        <div class="docs-tabs">
-          <a class="docs-tab <?= $view==='recent' ? 'active' : '' ?>" href="<?=h(docs_query(['view'=>'recent']))?>">Recent Docs</a>
-          <a class="docs-tab <?= $view==='all' ? 'active' : '' ?>" href="<?=h(docs_query(['view'=>'all']))?>">All Docs</a>
-        </div>
-        <div class="docs-folders">
-          <?php foreach($folderCards as $f): ?>
-            <div class="docs-folder">
-              <div class="fw-semibold">📁 <?=h($f['name'])?></div>
-              <div class="count"><?= (int)$f['count'] ?> docs</div>
-            </div>
-          <?php endforeach; ?>
-          <div class="docs-folder d-flex align-items-center justify-content-center fw-semibold">＋</div>
-        </div>
-
-        <div class="docs-table-wrap">
-          <div class="fw-semibold mb-2">Documents</div>
-          <div class="table-responsive">
-            <table class="docs-table">
-              <thead>
-                <tr><th>Doc Name</th><th>Client</th><th>Last Updated</th><th>Updated By</th><th></th></tr>
-              </thead>
-              <tbody>
-                <?php foreach($shownDocs as $d): ?>
-                  <tr>
-                    <td>
-                      <div class="fw-semibold"><?=h($d['title'])?></div>
-                      <div class="docs-muted small"><?=h($d['project_name'])?></div>
-                    </td>
-                    <td class="docs-muted"><?=h($d['client_name'])?></td>
-                    <td class="docs-muted"><?=h(date('M d', strtotime($d['updated_at'])))?></td>
-                    <td>
-                      <div class="docs-person"><span class="docs-avatar"><?=h(doc_initials($d['author']))?></span><span><?=h($d['author'])?></span></div>
-                    </td>
-                    <td class="text-end"><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=h($d['id'])?>">Open</a></td>
-                  </tr>
-                <?php endforeach; ?>
-                <?php if(!$shownDocs): ?><tr><td colspan="5" class="docs-muted">No docs found.</td></tr><?php endif; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </main>
+      <?php if($can_manage): ?><button class="btn btn-yellow btn-sm" data-bs-toggle="modal" data-bs-target="#addDoc">Add Doc</button><?php endif; ?>
+    </div>
   </div>
+
+  <form class="docs-bar" method="get">
+    <div class="docs-search">
+      <span class="px-2">🔎</span>
+      <input name="q" value="<?=h($search)?>" placeholder="Search docs, client, project, author">
+    </div>
+    <select class="docs-filter" name="project_id" onchange="this.form.submit()">
+      <option value="">All documents</option>
+      <?php foreach($projects as $p): ?>
+        <option value="<?= (int)$p['id'] ?>" <?= $project_id===(int)$p['id'] ? 'selected' : '' ?>><?=h($p['name'])?></option>
+      <?php endforeach; ?>
+    </select>
+  </form>
+
+  <section class="docs-panel">
+    <div class="docs-tabs">
+      <a class="docs-tab <?= $view==='recent' ? 'active' : '' ?>" href="<?=h(docs_query(['view'=>'recent']))?>">Recent Docs</a>
+      <a class="docs-tab <?= $view==='all' ? 'active' : '' ?>" href="<?=h(docs_query(['view'=>'all']))?>">All Docs</a>
+    </div>
+    <div class="docs-folders">
+      <?php foreach($folderCards as $f): ?>
+        <div class="docs-folder">
+          <div class="fw-semibold">📁 <?=h($f['name'])?></div>
+          <div class="count"><?= (int)$f['count'] ?> docs</div>
+        </div>
+      <?php endforeach; ?>
+      <div class="docs-folder d-flex align-items-center justify-content-center fw-semibold">＋</div>
+    </div>
+
+    <div class="docs-table-wrap">
+      <div class="fw-semibold mb-2">Documents</div>
+      <div class="table-responsive">
+        <table class="docs-table">
+          <thead>
+            <tr><th>Doc Name</th><th>Client</th><th>Last Updated</th><th>Updated By</th><th></th></tr>
+          </thead>
+          <tbody>
+            <?php foreach($shownDocs as $d): ?>
+              <tr>
+                <td>
+                  <div class="fw-semibold"><?=h($d['title'])?></div>
+                  <div class="docs-muted small"><?=h($d['project_name'])?></div>
+                </td>
+                <td class="docs-muted"><?=h($d['client_name'])?></td>
+                <td class="docs-muted"><?=h(date('M d', strtotime($d['updated_at'])))?></td>
+                <td>
+                  <div class="docs-person"><span class="docs-avatar"><?=h(doc_initials($d['author']))?></span><span><?=h($d['author'])?></span></div>
+                </td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=h($d['id'])?>">Open</a></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if(!$shownDocs): ?><tr><td colspan="5" class="docs-muted">No docs found.</td></tr><?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </div>
 
 <?php if($can_manage): ?>
