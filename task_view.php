@@ -309,10 +309,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
       <h2 class="task-title"><?=h($task['title'])?></h2>
       <div class="task-meta"><?=h($task['project_name'])?> / <?=h($section_name)?></div>
       <div class="task-tabs">
-        <a class="task-tab" href="project_view.php?id=<?= (int)$task['project_id'] ?>">Overview</a>
-        <a class="task-tab" href="project_u2013_tasks.php?id=<?= (int)$task['project_id'] ?>">Tasks</a>
-        <a class="task-tab active" href="task_view.php?id=<?= (int)$id ?>">Docs</a>
-        <a class="task-tab" href="task_activity_log.php?id=<?= (int)$id ?>">Activity</a>
+        <span class="task-tab active">Docs</span>
       </div>
     </div>
     <div class="task-actions">
@@ -351,12 +348,12 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
       </div>
 
       <div class="task-card mb-3">
-        <div class="head"><div class="fw-semibold">Recent Attachments</div></div>
+        <div class="head"><div class="fw-semibold">Task Docs</div></div>
         <div class="body">
           <?php if(!$attachments_ready): ?>
             <div class="text-muted">Attachment module not available in this workspace.</div>
           <?php elseif(!$attachments): ?>
-            <div class="text-muted">No attachments uploaded yet.</div>
+            <div class="text-muted">No docs uploaded for this task yet.</div>
           <?php else: ?>
             <?php foreach($attachments as $att): ?>
               <div class="file-row">
