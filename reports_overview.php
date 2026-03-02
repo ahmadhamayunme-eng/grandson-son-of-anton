@@ -1,14 +1,29 @@
 <?php
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
+$debug_errors=[];
 
-$tot_tasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws")->fetchColumn();
-$open_tasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status NOT IN ('Approved (Ready to Submit)','Submitted to Client')")->fetchColumn();
-$needs_cto = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status='Completed (Needs CTO Review)'")->fetchColumn();
-$projects = (int)$pdo->query("SELECT COUNT(*) FROM projects WHERE workspace_id=$ws")->fetchColumn();
+function reports_safe_scalar($pdo, $sql, $label, &$debug_errors){
+  try {
+    $v=$pdo->query($sql)->fetchColumn();
+    return $v !== false ? $v : 0;
+  } catch (Throwable $e) {
+    $debug_errors[] = $label . ': ' . $e->getMessage();
+    return 0;
+  }
+}
 
-$income = (float)$pdo->query("SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=$ws")->fetchColumn();
-$expenses = (float)$pdo->query("SELECT COALESCE(SUM(amount),0) FROM project_expenses WHERE workspace_id=$ws")->fetchColumn();
+$tot_tasks = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws", 'Total tasks query failed', $debug_errors);
+$open_tasks = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status NOT IN ('Approved (Ready to Submit)','Submitted to Client')", 'Open tasks query failed', $debug_errors);
+$needs_cto = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status='Completed (Needs CTO Review)'", 'Needs CTO query failed', $debug_errors);
+$projects = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM projects WHERE workspace_id=$ws", 'Projects query failed', $debug_errors);
+
+$income = (float)reports_safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=$ws", 'Income query failed', $debug_errors);
+$expenses = (float)reports_safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM project_expenses WHERE workspace_id=$ws", 'Expenses query failed', $debug_errors);
 $profit = $income - $expenses;
 $outstanding = max(0, $expenses - $income);
 ?>
@@ -31,6 +46,16 @@ $outstanding = max(0, $expenses - $income);
   .reports-chart-area{height:360px;display:flex;align-items:center;justify-content:center;color:rgba(230,230,230,.7);font-size:2rem;text-align:center;padding:1rem}
   .reports-chart-foot{padding:.55rem .8rem;border-top:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;color:rgba(232,232,232,.72)}
 </style>
+<?php if($debug_errors): ?>
+<div class="alert alert-danger mb-3">
+  <div class="fw-semibold">Debug mode: reports_overview.php query errors detected</div>
+  <ul class="mb-0 mt-2">
+    <?php foreach($debug_errors as $err): ?>
+      <li><?=h($err)?></li>
+    <?php endforeach; ?>
+  </ul>
+</div>
+<?php endif; ?>
 
 <div class="reports-shell">
   <div class="reports-head">
