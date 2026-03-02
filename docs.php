@@ -68,15 +68,15 @@ function docs_query(array $extra=[]){
 }
 ?>
 <style>
-  .docs-content-shell{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:1.1rem 1.15rem;background:linear-gradient(180deg,#0f1222,#0a0d19);box-shadow:0 26px 50px rgba(0,0,0,.38)}
+  .docs-content-shell{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:1.1rem 1.15rem;background:linear-gradient(180deg,#111111,#080808);box-shadow:0 26px 50px rgba(0,0,0,.38)}
   .docs-top{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.95rem}
   .docs-title{font-size:2rem;font-weight:700}
   .docs-actions{display:flex;align-items:center;gap:.5rem}
-  .docs-bubble{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(130deg,#f8d978,#8870ff);color:#111426;font-weight:700;font-size:.67rem;border:1px solid rgba(255,255,255,.35);margin-left:-8px}
+  .docs-bubble{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(130deg,#f8d978,#8a8a8a);color:#111426;font-weight:700;font-size:.67rem;border:1px solid rgba(255,255,255,.35);margin-left:-8px}
   .docs-bar{display:grid;grid-template-columns:1fr 220px;gap:.65rem;margin-bottom:.95rem}
-  .docs-search{display:flex;align-items:center;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.04)}
+  .docs-search{display:flex;align-items:center;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
   .docs-search input{flex:1;background:transparent;border:0;color:#e8ecff;padding:.62rem .7rem;outline:none}
-  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.04);color:#e8ecff;padding:.62rem .7rem}
+  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03);color:#e8ecff;padding:.62rem .7rem}
   .docs-panel{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(255,255,255,.02)}
   .docs-tabs{display:flex;gap:.2rem;padding:.65rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .docs-tab{padding:.4rem .7rem;border-radius:8px;color:rgba(223,227,246,.74);text-decoration:none;border:1px solid transparent}
@@ -90,7 +90,7 @@ function docs_query(array $extra=[]){
   .docs-table th{font-weight:600;color:rgba(214,221,242,.82);background:rgba(255,255,255,.03);text-align:left}
   .docs-muted{color:rgba(203,211,236,.72)}
   .docs-person{display:flex;align-items:center;gap:.45rem}
-  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#141827;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35)}
+  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#141827;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35)}
   @media (max-width: 992px){.docs-bar{grid-template-columns:1fr}.docs-folders{grid-template-columns:1fr 1fr}}
 </style>
 

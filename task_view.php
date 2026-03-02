@@ -264,9 +264,9 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
 ?>
 <style>
   .task-page{position:relative;padding:1.25rem;border:1px solid rgba(255,255,255,.15);border-radius:18px;background:
-    radial-gradient(1200px 600px at 15% -5%, rgba(37,59,122,.36), transparent 65%),
-    radial-gradient(900px 500px at 95% 0, rgba(98,70,234,.32), transparent 70%),
-    linear-gradient(180deg, rgba(8,12,26,.96), rgba(8,12,24,.95));
+    radial-gradient(1200px 600px at 15% -5%, rgba(255,255,255,.06), transparent 65%),
+    radial-gradient(900px 500px at 95% 0, rgba(255,255,255,.04), transparent 70%),
+    linear-gradient(180deg, rgba(10,10,10,.98), rgba(7,7,7,.96));
     box-shadow:0 24px 44px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
   .task-topbar{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:1rem;margin-bottom:1rem}
   .task-title{font-size:2.1rem;font-weight:500;line-height:1.2;margin:0}
@@ -278,7 +278,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-btn-outline{border:1px solid rgba(255,255,255,.26);color:#eff3ff;background:rgba(255,255,255,.05)}
   .task-btn-outline:hover{background:rgba(255,255,255,.13);color:#fff}
   .task-grid{display:grid;grid-template-columns:1.8fr 1fr;gap:1rem}
-  .task-card{border:1px solid rgba(255,255,255,.14);border-radius:14px;background:linear-gradient(165deg, rgba(27,36,58,.78), rgba(16,22,41,.9));overflow:hidden}
+  .task-card{border:1px solid rgba(255,255,255,.14);border-radius:14px;background:linear-gradient(165deg, rgba(28,28,28,.86), rgba(16,16,16,.92));overflow:hidden}
   .task-card .head{padding:.85rem 1rem;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;gap:.5rem}
   .task-card .body{padding:1rem}
   .task-chip{display:inline-flex;align-items:center;padding:.36rem .7rem;border-radius:999px;border:1px solid rgba(255,255,255,.15);font-size:.84rem;background:rgba(255,255,255,.06)}
@@ -287,18 +287,18 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .priority-medium{border-color:rgba(246,212,105,.42);color:#f8d978}
   .priority-low{border-color:rgba(132,235,169,.35);color:#8de9b2}
   .assignee-stack{display:flex;flex-wrap:wrap;gap:.4rem}
-  .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
+  .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
   .task-section-title{font-size:1.15rem;font-weight:600;margin-bottom:.65rem}
-  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(10,15,30,.55);line-height:1.7;color:rgba(233,237,247,.93)}
+  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(18,18,18,.68);line-height:1.7;color:rgba(233,237,247,.93)}
   .task-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.85rem}
-  .task-info-box{border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(7,11,22,.5);padding:.65rem .75rem}
+  .task-info-box{border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(16,16,16,.62);padding:.65rem .75rem}
   .task-info-box .label{color:rgba(204,213,240,.7);font-size:.8rem}
   .task-info-box .value{font-size:.93rem;margin-top:.2rem}
-  .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(4,7,16,.5);margin-bottom:.5rem}
-  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#8f6bff);color:#12131b}
-  .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.04)}
+  .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(14,14,14,.62);margin-bottom:.5rem}
+  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#12131b}
+  .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)}
   .comment-copy{color:rgba(242,242,247,.92);line-height:1.62}
-  .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(5,8,18,.78);border-color:rgba(255,255,255,.2);color:#ececf0}
+  .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(16,16,16,.82);border-color:rgba(255,255,255,.2);color:#ececf0}
   .small-help{color:rgba(205,214,237,.72);font-size:.82rem}
   @media (max-width: 1200px){.task-grid{grid-template-columns:1fr}}
 </style>
