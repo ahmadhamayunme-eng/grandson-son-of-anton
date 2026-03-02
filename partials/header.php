@@ -18,7 +18,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
       --bg-2: #161616;
       --line: rgba(255,255,255,.08);
       --text: #ececf0;
-      --muted: rgba(232,232,238,.62);
+      --muted: rgba(232,232,232,.62);
       --yellow: #f6d469;
       --purple: #8b6bff;
       --green: #57c88f;
@@ -41,7 +41,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
       box-shadow: inset -1px 0 0 rgba(255,255,255,.03);
     }
     .brand { color: var(--text); font-size: 2rem; font-weight: 600; letter-spacing: .02em; }
-    .nav-link { color: rgba(236,236,240,.78); border-radius: 10px; padding: 10px 12px; }
+    .nav-link { color: rgba(236,236,236,.78); border-radius: 10px; padding: 10px 12px; }
     .nav-link:hover, .nav-link.active { color: var(--yellow); background: linear-gradient(90deg, rgba(246,212,105,.16), rgba(246,212,105,.04)); }
     .card { background:#121212; border:1px solid var(--line); border-radius:14px; }
     .btn-yellow { background:var(--yellow); border-color:var(--yellow); color:#0f0f11; font-weight:600; }

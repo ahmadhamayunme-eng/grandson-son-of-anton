@@ -272,7 +272,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-title{font-size:2.1rem;font-weight:500;line-height:1.2;margin:0}
   .task-meta{color:rgba(214,221,242,.78);font-size:1rem;margin-top:.25rem}
   .task-tabs{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.9rem}
-  .task-tab{padding:.5rem .95rem;border-radius:.65rem;border:1px solid rgba(255,255,255,.17);text-decoration:none;color:rgba(224,229,247,.88);background:rgba(255,255,255,.05)}
+  .task-tab{padding:.5rem .95rem;border-radius:.65rem;border:1px solid rgba(255,255,255,.17);text-decoration:none;color:rgba(224,224,224,.88);background:rgba(255,255,255,.05)}
   .task-tab.active{color:#ffe5a4;border-color:rgba(248,217,120,.5);box-shadow:inset 0 -2px 0 #f8d978;background:rgba(248,217,120,.16)}
   .task-actions{display:flex;gap:.55rem;flex-wrap:wrap;justify-content:flex-end}
   .task-btn-outline{border:1px solid rgba(255,255,255,.26);color:#eff3ff;background:rgba(255,255,255,.05)}
@@ -289,17 +289,17 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .assignee-stack{display:flex;flex-wrap:wrap;gap:.4rem}
   .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
   .task-section-title{font-size:1.15rem;font-weight:600;margin-bottom:.65rem}
-  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(18,18,18,.68);line-height:1.7;color:rgba(233,237,247,.93)}
+  .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(18,18,18,.68);line-height:1.7;color:rgba(233,233,233,.93)}
   .task-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.85rem}
   .task-info-box{border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(16,16,16,.62);padding:.65rem .75rem}
-  .task-info-box .label{color:rgba(204,213,240,.7);font-size:.8rem}
+  .task-info-box .label{color:rgba(204,204,204,.7);font-size:.8rem}
   .task-info-box .value{font-size:.93rem;margin-top:.2rem}
   .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(14,14,14,.62);margin-bottom:.5rem}
   .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#12131b}
   .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)}
-  .comment-copy{color:rgba(242,242,247,.92);line-height:1.62}
+  .comment-copy{color:rgba(242,242,242,.92);line-height:1.62}
   .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(16,16,16,.82);border-color:rgba(255,255,255,.2);color:#ececf0}
-  .small-help{color:rgba(205,214,237,.72);font-size:.82rem}
+  .small-help{color:rgba(205,205,205,.72);font-size:.82rem}
   @media (max-width: 1200px){.task-grid{grid-template-columns:1fr}}
 </style>
 
