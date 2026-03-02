@@ -337,27 +337,6 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
             <?php if(!$assignees): ?><span class="text-muted small">No assignees</span><?php endif; ?>
           </div>
         </div>
-        <button class="btn btn-yellow w-100" name="assign_task" value="1">Save Assignees</button>
-      </form>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <div class="card p-3 mb-3">
-      <div class="fw-semibold mb-2">Update Status</div>
-      <?php if($locked && !$can_manage): ?>
-        <div class="text-muted">This task is locked.</div>
-      <?php else: ?>
-      <form method="post">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <div class="mb-2">
-          <label class="form-label">Status</label>
-          <select class="form-select" name="status">
-            <?php foreach($statuses as $s): ?><option value="<?=h($s)?>" <?= $task['status']===$s ? 'selected' : '' ?>><?=h($s)?></option><?php endforeach; ?>
-          </select>
-        </div>
-      </div>
-
       <?php if($can_manage): ?>
       <div class="task-card mb-3">
         <div class="head"><div class="fw-semibold">Assign Task</div></div>
