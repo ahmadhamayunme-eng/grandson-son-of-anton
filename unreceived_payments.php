@@ -204,156 +204,128 @@ $summary = $summaryStmt->fetch() ?: [
 ];
 ?>
 
-<h2 class="mb-3">Unreceived Payments</h2>
+<style>
+  .ur-shell{border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
+  .ur-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .ur-title{font-size:2.2rem;font-weight:600;margin:0}
+  .ur-controls{display:flex;gap:.45rem;flex-wrap:wrap}
+  .ur-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
+  .ur-body{padding:1rem 1.1rem;color:#fff}
+  .ur-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
+  .ur-table .table th,.ur-table .table td{border-bottom:1px solid rgba(255,255,255,.08)}
+  .ur-overdue{color:#ff8f70;font-weight:600}
+  .form-label{color:#fff !important}
+  .text-muted{color:#fff !important;opacity:.9}
+  details summary{color:#fff}
 
-<div class="row g-3 mb-4">
-  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Open Balance</div><div class="h4 mb-0"><?= number_format((float)$summary['open_balance'], 2) ?></div></div></div>
-  <div class="col-md-2"><div class="card p-3"><div class="text-muted">Pending</div><div class="h4 mb-0"><?= (int)$summary['pending_count'] ?></div></div></div>
-  <div class="col-md-2"><div class="card p-3"><div class="text-muted">Partial</div><div class="h4 mb-0"><?= (int)$summary['partial_count'] ?></div></div></div>
-  <div class="col-md-2"><div class="card p-3"><div class="text-muted">Received</div><div class="h4 mb-0"><?= (int)$summary['received_count'] ?></div></div></div>
-  <div class="col-md-3"><div class="card p-3"><div class="text-muted">Overdue Open</div><div class="h4 mb-0 text-warning"><?= (int)$summary['overdue_count'] ?></div></div></div>
-</div>
+</style>
 
-<div class="card p-3 mb-4">
-  <form method="post" class="row g-2">
-    <input type="hidden" name="action" value="create">
-    <div class="col-md-3">
-      <label class="form-label">Client</label>
-      <select class="form-select" name="client_id">
-        <option value="">-- optional --</option>
-        <?php foreach ($clients as $c): ?>
-          <option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+<div class="ur-shell">
+  <div class="ur-head">
+    <h2 class="ur-title">Unreceived Payments</h2>
+    <div class="ur-controls">
+      <span class="ur-pill">All Clients ▾</span>
+      <span class="ur-pill">All Status ▾</span>
+      <span class="ur-pill">OVERDUE ▾</span>
+      <a class="btn btn-outline-light btn-sm" href="payments_received.php">Show All</a>
+      <a class="btn btn-yellow btn-sm" href="client_reports.php">Export</a>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">Project</label>
-      <select class="form-select" name="project_id">
-        <option value="">-- optional --</option>
-        <?php foreach ($projects as $p): ?>
-          <option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'] . ' — ' . $p['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Expected Amount</label>
-      <input class="form-control" name="expected_amount" type="number" min="0" step="0.01" required>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Due Date</label>
-      <input class="form-control" name="due_date" type="date" value="<?= date('Y-m-d') ?>" required>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Reference</label>
-      <input class="form-control" name="reference" placeholder="#invoice">
-    </div>
-    <div class="col-md-4">
-      <label class="form-label">Description</label>
-      <input class="form-control" name="description" placeholder="Milestone / invoice description">
-    </div>
-    <div class="col-md-5">
-      <label class="form-label">Notes</label>
-      <input class="form-control" name="notes" placeholder="Optional notes">
-    </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-light w-100">Add Unreceived Payment</button>
-    </div>
-  </form>
-</div>
-
-<div class="card p-3 mb-3">
-  <div class="d-flex flex-wrap gap-2 align-items-center">
-    <span class="text-muted">Filter:</span>
-    <?php
-      $filters = [
-        'open' => 'Open',
-        'pending' => 'Pending',
-        'partial' => 'Partial',
-        'received' => 'Received',
-        'cancelled' => 'Cancelled',
-        'all' => 'All',
-      ];
-      foreach ($filters as $key => $label):
-        $active = $statusFilter === $key;
-    ?>
-      <a class="btn btn-sm <?= $active ? 'btn-light' : 'btn-outline-light' ?>" href="unreceived_payments.php?status=<?= h($key) ?>"><?= h($label) ?></a>
-    <?php endforeach; ?>
-    <a class="btn btn-sm btn-outline-info ms-auto" href="payments_received.php">Go to Payments Received</a>
   </div>
-</div>
 
-<div class="card p-3">
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
-      <thead>
-        <tr>
-          <th>Due</th><th>Expected</th><th>Received</th><th>Balance</th><th>Status</th><th>Client</th><th>Project</th><th>Reference</th><th>Description</th><th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-      <?php foreach ($rows as $r): ?>
+  <div class="ur-body">
+    <div class="row g-3 mb-3">
+      <div class="col-md-3"><div class="card p-3"><div class="text-muted">Open Balance</div><div class="h4 mb-0"><?= number_format((float)$summary['open_balance'], 2) ?></div></div></div>
+      <div class="col-md-2"><div class="card p-3"><div class="text-muted">Pending</div><div class="h4 mb-0"><?= (int)$summary['pending_count'] ?></div></div></div>
+      <div class="col-md-2"><div class="card p-3"><div class="text-muted">Partial</div><div class="h4 mb-0"><?= (int)$summary['partial_count'] ?></div></div></div>
+      <div class="col-md-2"><div class="card p-3"><div class="text-muted">Received</div><div class="h4 mb-0"><?= (int)$summary['received_count'] ?></div></div></div>
+      <div class="col-md-3"><div class="card p-3"><div class="text-muted">Overdue Open</div><div class="h4 mb-0 ur-overdue"><?= (int)$summary['overdue_count'] ?></div></div></div>
+    </div>
+
+    <details class="mb-3"><summary class="btn btn-outline-light btn-sm">Add Unreceived Payment</summary>
+      <div class="card p-3 mt-2">
+        <form method="post" class="row g-2">
+          <input type="hidden" name="action" value="create">
+          <div class="col-md-3"><label class="form-label">Client</label><select class="form-select" name="client_id"><option value="">-- optional --</option><?php foreach ($clients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-3"><label class="form-label">Project</label><select class="form-select" name="project_id"><option value="">-- optional --</option><?php foreach ($projects as $p): ?><option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'] . ' — ' . $p['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-2"><label class="form-label">Expected Amount</label><input class="form-control" name="expected_amount" type="number" min="0" step="0.01" required></div>
+          <div class="col-md-2"><label class="form-label">Due Date</label><input class="form-control" name="due_date" type="date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="col-md-2"><label class="form-label">Reference</label><input class="form-control" name="reference"></div>
+          <div class="col-md-4"><label class="form-label">Description</label><input class="form-control" name="description"></div>
+          <div class="col-md-5"><label class="form-label">Notes</label><input class="form-control" name="notes"></div>
+          <div class="col-md-3 d-flex align-items-end"><button class="btn btn-yellow w-100">Save</button></div>
+        </form>
+      </div>
+    </details>
+
+    <div class="card p-3 mb-3">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="text-muted">Filter:</span>
         <?php
-          $status = (string)$r['status'];
-          $badgeClass = $status === 'received' ? 'bg-success' : ($status === 'partial' ? 'bg-info text-dark' : ($status === 'cancelled' ? 'bg-secondary' : 'bg-warning text-dark'));
-          $isOpen = in_array($status, ['pending', 'partial'], true);
+          $filters = [
+            'open' => 'Open',
+            'pending' => 'Pending',
+            'partial' => 'Partial',
+            'received' => 'Received',
+            'cancelled' => 'Cancelled',
+            'all' => 'All',
+          ];
+          foreach ($filters as $key => $label):
+            $active = $statusFilter === $key;
         ?>
-        <tr>
-          <td>
-            <?php if ((int)$r['is_overdue'] === 1): ?><span class="badge bg-danger me-1">Overdue</span><?php endif; ?>
-            <?= h($r['due_date']) ?>
-          </td>
-          <td><?= number_format((float)$r['expected_amount'], 2) ?></td>
-          <td><?= number_format((float)$r['received_amount'], 2) ?></td>
-          <td><?= number_format(max(0, (float)$r['balance_due']), 2) ?></td>
-          <td><span class="badge <?= $badgeClass ?>"><?= h(ucfirst($status)) ?></span></td>
-          <td><?= h($r['client_name'] ?? '-') ?></td>
-          <td><?= h($r['project_name'] ?? '-') ?></td>
-          <td><?= h($r['reference'] ?? '-') ?></td>
-          <td><?= h($r['description'] ?? '') ?></td>
-          <td>
-            <?php if ($isOpen): ?>
-              <details>
-                <summary class="btn btn-sm btn-outline-light">Record Receipt</summary>
-                <form method="post" class="mt-2" onsubmit="return confirm('Record this payment and push it to Payments Received?');">
-                  <input type="hidden" name="action" value="record_received">
-                  <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                  <div class="mb-2">
-                    <input class="form-control form-control-sm" type="number" name="payment_amount" min="0" step="0.01" max="<?= h((string)max(0, (float)$r['balance_due'])) ?>" placeholder="Amount" required>
-                  </div>
-                  <div class="mb-2">
-                    <input class="form-control form-control-sm" type="date" name="received_date" value="<?= date('Y-m-d') ?>" required>
-                  </div>
-                  <div class="mb-2">
-                    <input class="form-control form-control-sm" name="method" placeholder="Bank/Stripe/Cash">
-                  </div>
-                  <div class="mb-2">
-                    <input class="form-control form-control-sm" name="payment_reference" placeholder="Txn ref (optional)">
-                  </div>
-                  <div class="mb-2">
-                    <input class="form-control form-control-sm" name="payment_notes" placeholder="Note (optional)">
-                  </div>
-                  <button class="btn btn-sm btn-success w-100">Save Receipt</button>
+          <a class="btn btn-sm <?= $active ? 'btn-yellow' : 'btn-outline-light' ?>" href="unreceived_payments.php?status=<?= h($key) ?>"><?= h($label) ?></a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <div class="ur-table p-3">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Invoice</th><th>Amount</th><th>Status</th><th>Due Date</th><th>Overdue by</th><th>Client</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($rows as $r): ?>
+            <?php
+              $status = (string)$r['status'];
+              $badgeClass = $status === 'received' ? 'bg-success' : ($status === 'partial' ? 'bg-info text-dark' : ($status === 'cancelled' ? 'bg-secondary' : 'bg-danger'));
+              $isOpen = in_array($status, ['pending', 'partial'], true);
+              $daysOver = (int)$r['is_overdue']===1 ? floor((time()-strtotime((string)$r['due_date']))/86400) : 0;
+            ?>
+            <tr>
+              <td><?= h($r['reference'] ?: ('INV-'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT))) ?></td>
+              <td class="ur-overdue">$<?= number_format((float)$r['expected_amount'], 2) ?></td>
+              <td><span class="badge <?= $badgeClass ?>"><?= h(ucfirst($status)) ?></span></td>
+              <td><?= h(date('M d', strtotime((string)$r['due_date']))) ?></td>
+              <td class="ur-overdue"><?= $daysOver>0 ? ($daysOver.' days') : '-' ?></td>
+              <td><?= h($r['client_name'] ?? '-') ?></td>
+              <td>
+                <?php if ($isOpen): ?>
+                  <details>
+                    <summary class="btn btn-sm btn-outline-light">Record</summary>
+                    <form method="post" class="mt-2" onsubmit="return confirm('Record this payment and push it to Payments Received?');">
+                      <input type="hidden" name="action" value="record_received">
+                      <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                      <input class="form-control form-control-sm mb-2" type="number" name="payment_amount" min="0" step="0.01" max="<?= h((string)max(0, (float)$r['balance_due'])) ?>" placeholder="Amount" required>
+                      <input class="form-control form-control-sm mb-2" type="date" name="received_date" value="<?= date('Y-m-d') ?>" required>
+                      <input class="form-control form-control-sm mb-2" name="method" placeholder="Bank/Stripe/Cash">
+                      <button class="btn btn-sm btn-success w-100">Save Receipt</button>
+                    </form>
+                  </details>
+                <?php endif; ?>
+                <form method="post" class="mt-2" onsubmit="return confirm('Delete this receivable?');">
+                  <input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                  <button class="btn btn-sm btn-outline-danger w-100">Delete</button>
                 </form>
-              </details>
-              <form method="post" class="mt-2" onsubmit="return confirm('Cancel this receivable?');">
-                <input type="hidden" name="action" value="mark_cancelled">
-                <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                <button class="btn btn-sm btn-outline-warning w-100">Cancel</button>
-              </form>
-            <?php endif; ?>
-            <form method="post" class="mt-2" onsubmit="return confirm('Delete this receivable?');">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-              <button class="btn btn-sm btn-outline-danger w-100">Delete</button>
-            </form>
-          </td>
-        </tr>
-      <?php endforeach; ?>
-      <?php if (!$rows): ?>
-        <tr><td colspan="10" class="text-center text-muted">No receivables found for this filter.</td></tr>
-      <?php endif; ?>
-      </tbody>
-    </table>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if (!$rows): ?><tr><td colspan="7" class="text-center text-muted">No receivables found for this filter.</td></tr><?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
