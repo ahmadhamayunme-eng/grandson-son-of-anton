@@ -1,6 +1,18 @@
 <?php
 function h($str): string { return htmlspecialchars((string)$str, ENT_QUOTES, 'UTF-8'); }
-function redirect(string $to): never { header('Location: ' . $to); exit; }
+function redirect(string $to): never {
+  $location = trim($to) !== '' ? $to : './';
+  if (!headers_sent()) {
+    header('Location: ' . $location, true, 303);
+    exit;
+  }
+
+  $safe = h($location);
+  echo '<script>window.location.replace(' . json_encode($location) . ');</script>';
+  echo '<meta http-equiv="refresh" content="0;url=' . $safe . '">';
+  echo '<a href="' . $safe . '">Continue</a>';
+  exit;
+}
 function now(): string { return date('Y-m-d H:i:s'); }
 
 function flash_set(string $key, string $msg): void { $_SESSION['flash'][$key] = $msg; }
