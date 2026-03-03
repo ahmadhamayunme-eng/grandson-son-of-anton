@@ -13,8 +13,9 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
 ?>
 <style>
   .sidebar-wrap { display: flex; flex-direction: column; height: 100%; }
-  .sidebar-brand { display: flex; align-items: center; padding: 8px 8px 16px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .sidebar-brand-logo { display: block; width: 100%; max-width: 210px; height: auto; object-fit: contain; }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 16px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .brand-badge { width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center; border: 1px solid rgba(246,212,105,.55); color: #f6d469; font-size: 1.25rem; line-height: 1; }
+  .sidebar-brand-name { font-size: 2.6rem; font-weight: 600; color: #f0f0f0; letter-spacing: .01em; }
   .sidebar-link { display: flex; align-items: center; gap: 10px; font-size: 1.02rem; margin-bottom: 3px; }
   .sidebar-icon { width: 22px; text-align: center; opacity: .86; color: inherit; font-size: 1rem; line-height: 1; }
   .sidebar-label { margin-top: 14px; margin-bottom: 6px; text-transform: uppercase; font-size: .82rem; color: rgba(236,236,236,.62); letter-spacing: .08em; font-weight: 600; padding: 0 10px; }
