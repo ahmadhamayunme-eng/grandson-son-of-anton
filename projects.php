@@ -172,7 +172,7 @@ SQL;
 ?>
 
 <style>
-  .projects-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(150deg, rgba(13,14,21,.97), rgba(10,11,17,.96)); box-shadow: 0 24px 58px rgba(0,0,0,.42); padding: 16px; }
+  .projects-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(150deg, rgba(13,13,13,.97), rgba(10,10,10,.96)); box-shadow: 0 24px 58px rgba(0,0,0,.42); padding: 16px; }
   .projects-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
   .projects-title { margin: 0; font-size: 2rem; font-weight: 600; }
   .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; gap: 10px; margin-bottom: 12px; }
@@ -182,7 +182,7 @@ SQL;
   .tool-select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04); color: #eceef5; min-width: 132px; }
   .tool-select:focus, .tool-search:focus { outline: none; border-color: rgba(255,212,83,.5); box-shadow: 0 0 0 3px rgba(255,212,83,.12); }
 
-  .projects-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; overflow: hidden; background: linear-gradient(160deg, rgba(24,25,35,.68), rgba(16,17,24,.58)); }
+  .projects-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; overflow: hidden; background: linear-gradient(160deg, rgba(24,24,24,.68), rgba(16,16,16,.58)); }
   .projects-table { width: 100%; border-collapse: collapse; }
   .projects-table th, .projects-table td { border-top: 1px solid rgba(255,255,255,.07); padding: 12px 14px; vertical-align: middle; }
   .projects-table th { font-size: .86rem; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,.64); font-weight: 600; }

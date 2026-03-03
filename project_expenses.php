@@ -1,8 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-echo "START\n";
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
 auth_require_perm('finance.view');
@@ -49,83 +45,68 @@ $rows = $pdo->prepare("SELECT fe.*, p.name AS project_name, c.name AS client_nam
 $rows->execute([$ws]);
 $rows = $rows->fetchAll();
 ?>
+<style>
+  .exp-shell{border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
+  .exp-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .exp-title{font-size:2.1rem;font-weight:600;margin:0}
+  .exp-controls{display:flex;gap:.45rem;flex-wrap:wrap}
+  .exp-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
+  .exp-body{padding:1rem 1.1rem;color:#fff}
+  .exp-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
+  .exp-table table{width:100%;border-collapse:collapse}
+  .exp-table th,.exp-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
+  .exp-table th{background:rgba(255,255,255,.03);color:#fff;font-weight:600}
+  .amt{color:#ff8f70;font-weight:600}
+  .form-label{color:#fff !important}
+  .text-muted{color:#fff !important;opacity:.9}
+  details summary{color:#fff}
 
-<h2 class="mb-3">Project Expenses</h2>
+</style>
 
-<div class="card p-3 mb-4">
-  <form method="post" class="row g-2">
-    <input type="hidden" name="action" value="create">
+<div class="exp-shell">
+  <div class="exp-head">
+    <h2 class="exp-title">Project Expenses</h2>
+    <div class="exp-controls">
+      <span class="exp-pill">SpeedX ▾</span><span class="exp-pill"><?=date('F Y')?> ▾</span><span class="exp-pill">◉</span>
+      <a class="btn btn-outline-light btn-sm" href="finance.php">Show All</a>
+      <a class="btn btn-yellow btn-sm" href="client_reports.php">Export</a>
+    </div>
+  </div>
 
-    <div class="col-md-4">
-      <label class="form-label">Project</label>
-      <select class="form-select" name="project_id">
-        <option value="">-- optional --</option>
-        <?php foreach($projects as $p): ?>
-          <option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'].' — '.$p['name']) ?></option>
+  <div class="exp-body">
+    <details class="mb-3"><summary class="btn btn-outline-light btn-sm">Add Expense</summary>
+      <div class="card p-3 mt-2">
+        <form method="post" class="row g-2">
+          <input type="hidden" name="action" value="create">
+          <div class="col-md-4"><label class="form-label">Project</label><select class="form-select" name="project_id"><option value="">-- optional --</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'].' — '.$p['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-3"><label class="form-label">Category</label><input class="form-control" name="category" required></div>
+          <div class="col-md-2"><label class="form-label">Amount</label><input class="form-control" name="amount" type="number" step="0.01" required></div>
+          <div class="col-md-3"><label class="form-label">Date</label><input class="form-control" name="expense_date" type="date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="col-md-4"><label class="form-label">Vendor</label><input class="form-control" name="vendor"></div>
+          <div class="col-md-5"><label class="form-label">Notes</label><input class="form-control" name="notes"></div>
+          <div class="col-md-3 d-flex align-items-end"><button class="btn btn-yellow w-100">Save</button></div>
+        </form>
+      </div>
+    </details>
+
+    <div class="exp-table">
+      <table>
+        <thead><tr><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Assigned To</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach($rows as $r): ?>
+          <tr>
+            <td><?=h($r['category'])?></td>
+            <td><?=h($r['notes'] ?: ($r['vendor'] ?: 'Project expense'))?></td>
+            <td class="amt">$<?=number_format((float)$r['amount'],2)?></td>
+            <td><?=h(date('M d', strtotime((string)$r['expense_date'])))?></td>
+            <td><?=h(($r['client_name'] ? $r['client_name'].' — ' : '').($r['project_name'] ?? '-'))?></td>
+            <td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('Delete this expense?');"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td>
+          </tr>
         <?php endforeach; ?>
-      </select>
+        <?php if(!$rows): ?><tr><td colspan="6" class="text-muted">No project expenses yet.</td></tr><?php endif; ?>
+        </tbody>
+      </table>
     </div>
-
-    <div class="col-md-3">
-      <label class="form-label">Category</label>
-      <input class="form-control" name="category" placeholder="Hosting, Ads, Tools" required>
-    </div>
-
-    <div class="col-md-2">
-      <label class="form-label">Amount</label>
-      <input class="form-control" name="amount" type="number" step="0.01" required>
-    </div>
-
-    <div class="col-md-3">
-      <label class="form-label">Date</label>
-      <input class="form-control" name="expense_date" type="date" value="<?= date('Y-m-d') ?>" required>
-    </div>
-
-    <div class="col-md-4">
-      <label class="form-label">Vendor</label>
-      <input class="form-control" name="vendor" placeholder="Optional">
-    </div>
-
-    <div class="col-md-5">
-      <label class="form-label">Notes</label>
-      <input class="form-control" name="notes" placeholder="Optional">
-    </div>
-
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-light w-100">Add Expense</button>
-    </div>
-  </form>
-</div>
-
-<div class="card p-3">
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
-      <thead>
-        <tr>
-          <th>Date</th><th>Amount</th><th>Category</th><th>Project</th><th>Vendor</th><th>Notes</th>
-          <th class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-      <?php foreach($rows as $r): ?>
-        <tr>
-          <td><?= h($r['expense_date']) ?></td>
-          <td><?= number_format((float)$r['amount'],2) ?></td>
-          <td><?= h($r['category']) ?></td>
-          <td><?= h(($r['client_name'] ? $r['client_name'].' — ' : '').($r['project_name'] ?? '-')) ?></td>
-          <td><?= h($r['vendor'] ?? '-') ?></td>
-          <td><?= h($r['notes'] ?? '') ?></td>
-          <td class="text-end">
-            <form method="post" style="display:inline" onsubmit="return confirm('Delete this expense?');">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-              <button class="btn btn-sm btn-outline-danger">Delete</button>
-            </form>
-          </td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
   </div>
 </div>
 
