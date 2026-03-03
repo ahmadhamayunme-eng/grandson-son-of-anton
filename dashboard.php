@@ -95,13 +95,13 @@ $previousMonthPayments = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM 
 $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMonthPayments) / $previousMonthPayments) * 100 : 0;
 ?>
 <style>
-  .dashboard-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,16,24,.93), rgba(9,11,16,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
+  .dashboard-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
   .dashboard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .dashboard-title { margin: 0; font-size: 2rem; font-weight: 600; }
   .top-icons { display: flex; align-items: center; gap: 12px; color: rgba(236,236,240,.76); }
   .top-dot { width: 24px; height: 24px; border-radius: 50%; background: #7f6dff; display: inline-block; }
-  .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,25,36,.92), rgba(14,16,24,.9)); padding: 14px 16px; min-height: 98px; }
-  .kpi-label { color: rgba(236,236,240,.72); font-size: .9rem; margin-bottom: 4px; }
+  .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,23,23,.92), rgba(14,14,14,.9)); padding: 14px 16px; min-height: 98px; }
+  .kpi-label { color: rgba(236,236,236,.72); font-size: .9rem; margin-bottom: 4px; }
   .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
   .kpi-icon { color: #f6d469; margin-right: 8px; }
   .kpi-red .kpi-icon { color: #f3797e; }
@@ -109,7 +109,7 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .kpi-change { font-size: .95rem; margin-left: 6px; }
   .pos { color: #55cb90; }
   .neg { color: #f3797e; }
-  .panel { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(120deg, rgba(24,26,37,.88), rgba(16,18,27,.88)); }
+  .panel { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(120deg, rgba(24,24,24,.88), rgba(16,16,16,.88)); }
   .panel-head { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.07); display: flex; justify-content: space-between; align-items: center; font-size: 1.6rem; font-weight: 600; }
   .task-row, .project-row { display: flex; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
   .task-row:last-child, .project-row:last-child { border-bottom: 0; }
@@ -121,14 +121,14 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
   .chip-purple { background: rgba(139,107,255,.16); border-color: rgba(139,107,255,.32); color: #b9a2ff; }
   .chart-wrap { padding: 8px 14px 14px; }
-  .chart-legend { display: flex; justify-content: space-between; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,240,.72); font-size: .9rem; }
+  .chart-legend { display: flex; justify-content: space-between; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,236,.72); font-size: .9rem; }
   .chart-legend-left { display: flex; gap: 16px; }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; }
   .legend-yellow { background: #f6d469; }
   .legend-purple { background: #8b6bff; }
   .finance-box { padding: 14px 16px; }
   .finance-line { border-bottom: 1px solid rgba(255,255,255,.08); padding: 11px 0; }
-  .finance-label { color: rgba(236,236,240,.68); }
+  .finance-label { color: rgba(236,236,236,.68); }
   .finance-value { font-size: 2rem; font-weight: 600; line-height: 1.2; }
 </style>
 

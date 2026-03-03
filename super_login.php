@@ -20,9 +20,9 @@ include __DIR__ . '/partials/header.php';
     align-items: center;
     justify-content: center;
     padding: 32px 16px;
-    background-color: #07080d;
+    background-color: #050505;
     background-image:
-      radial-gradient(circle at 50% 15%, rgba(15, 29, 90, 0.4), transparent 52%),
+      radial-gradient(circle at 50% 15%, rgba(255,255,255,0.06), transparent 52%),
       repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 6px);
   }
 
