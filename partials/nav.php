@@ -32,8 +32,7 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
 <div class="sidebar p-3">
   <div class="sidebar-wrap">
     <div class="sidebar-brand">
-      <div class="brand-badge">⚡</div>
-      <div class="sidebar-brand-name">AntonX</div>
+      <img class="sidebar-brand-logo" src="partials/antonx-logo.png" alt="AntonX logo">
     </div>
 
     <nav class="nav flex-column">
@@ -43,7 +42,6 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
       <?=nav_item('clients.php', 'Clients', '✉', $path)?>
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
-      <?=nav_item('reports_overview.php', 'Reports', '◫', $path)?>
 
       <?php if ($role === 'CTO' || $role === 'Super Admin'): ?>
         <div class="sidebar-label">CTO</div>

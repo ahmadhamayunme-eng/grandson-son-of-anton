@@ -135,7 +135,6 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
 <div class="dashboard-shell">
   <div class="dashboard-top">
     <h1 class="dashboard-title">Dashboard</h1>
-    <div class="top-icons"><span class="top-dot"></span>◔◔◔◔ ↻ ⋮</div>
   </div>
 
   <div class="row g-3 mb-3">
