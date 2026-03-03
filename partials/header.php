@@ -20,7 +20,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
       --text: #ececf0;
       --muted: rgba(232,232,232,.62);
       --yellow: #f6d469;
-      --purple: #8b6bff;
+      --purple: #8e8e8e;
       --green: #57c88f;
       --red: #f36f75;
     }

@@ -31,7 +31,7 @@ if ($q !== '') {
   .search-shell {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
-    background: linear-gradient(130deg, rgba(17, 18, 25, 0.93), rgba(10, 11, 16, 0.93));
+    background: linear-gradient(130deg, rgba(16, 16, 16, 0.95), rgba(9, 9, 9, 0.95));
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     padding: 24px;
   }
@@ -47,7 +47,7 @@ if ($q !== '') {
   }
   .search-input {
     width: 100%;
-    background: linear-gradient(90deg, rgba(32, 33, 42, 0.95), rgba(23, 24, 34, 0.92));
+    background: linear-gradient(90deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.92));
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
     padding: 12px 52px 12px 44px;
