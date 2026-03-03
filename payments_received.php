@@ -54,14 +54,18 @@ $rows = $rows->fetchAll();
   .pay-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
   .pay-title{font-size:2.2rem;font-weight:600;margin:0}
   .pay-controls{display:flex;gap:.5rem;flex-wrap:wrap}
-  .pay-pill{padding:.45rem .72rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#ededed}
-  .pay-body{padding:1rem 1.1rem}
+  .pay-pill{padding:.45rem .72rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
+  .pay-body{padding:1rem 1.1rem;color:#fff}
   .pay-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
   .pay-table table{width:100%;border-collapse:collapse}
   .pay-table th,.pay-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
-  .pay-table th{background:rgba(255,255,255,.03);color:rgba(230,230,230,.82);font-weight:600}
+  .pay-table th{background:rgba(255,255,255,.03);color:#fff;font-weight:600}
   .amt-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(87,200,143,.15);border:1px solid rgba(87,200,143,.35);color:#9de8bf}
   .method-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(246,212,105,.12);border:1px solid rgba(246,212,105,.35);color:#f6d469}
+  .form-label{color:#fff !important}
+  .text-muted{color:#fff !important;opacity:.9}
+  details summary{color:#fff}
+
 </style>
 
 <div class="pay-shell">

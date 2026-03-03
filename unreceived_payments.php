@@ -209,11 +209,15 @@ $summary = $summaryStmt->fetch() ?: [
   .ur-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
   .ur-title{font-size:2.2rem;font-weight:600;margin:0}
   .ur-controls{display:flex;gap:.45rem;flex-wrap:wrap}
-  .ur-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#ececec}
-  .ur-body{padding:1rem 1.1rem}
+  .ur-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
+  .ur-body{padding:1rem 1.1rem;color:#fff}
   .ur-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
   .ur-table .table th,.ur-table .table td{border-bottom:1px solid rgba(255,255,255,.08)}
   .ur-overdue{color:#ff8f70;font-weight:600}
+  .form-label{color:#fff !important}
+  .text-muted{color:#fff !important;opacity:.9}
+  details summary{color:#fff}
+
 </style>
 
 <div class="ur-shell">

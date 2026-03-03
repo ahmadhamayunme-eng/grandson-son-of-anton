@@ -50,13 +50,17 @@ $rows = $rows->fetchAll();
   .exp-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
   .exp-title{font-size:2.1rem;font-weight:600;margin:0}
   .exp-controls{display:flex;gap:.45rem;flex-wrap:wrap}
-  .exp-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#ececec}
-  .exp-body{padding:1rem 1.1rem}
+  .exp-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
+  .exp-body{padding:1rem 1.1rem;color:#fff}
   .exp-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
   .exp-table table{width:100%;border-collapse:collapse}
   .exp-table th,.exp-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
-  .exp-table th{background:rgba(255,255,255,.03);color:rgba(226,226,226,.82);font-weight:600}
+  .exp-table th{background:rgba(255,255,255,.03);color:#fff;font-weight:600}
   .amt{color:#ff8f70;font-weight:600}
+  .form-label{color:#fff !important}
+  .text-muted{color:#fff !important;opacity:.9}
+  details summary{color:#fff}
+
 </style>
 
 <div class="exp-shell">
