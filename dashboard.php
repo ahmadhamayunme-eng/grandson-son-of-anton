@@ -98,8 +98,6 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .dashboard-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
   .dashboard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .dashboard-title { margin: 0; font-size: 2rem; font-weight: 600; }
-  .top-icons { display: flex; align-items: center; gap: 12px; color: rgba(236,236,240,.76); }
-  .top-dot { width: 24px; height: 24px; border-radius: 50%; background: #8a8a8a; display: inline-block; }
   .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,23,23,.92), rgba(14,14,14,.9)); padding: 14px 16px; min-height: 98px; }
   .kpi-label { color: rgba(236,236,236,.72); font-size: .9rem; margin-bottom: 4px; }
   .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
@@ -135,7 +133,6 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
 <div class="dashboard-shell">
   <div class="dashboard-top">
     <h1 class="dashboard-title">Dashboard</h1>
-    <div class="top-icons"><span class="top-dot"></span>◔◔◔◔ ↻ ⋮</div>
   </div>
 
   <div class="row g-3 mb-3">
