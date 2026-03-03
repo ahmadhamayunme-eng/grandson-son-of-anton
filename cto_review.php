@@ -13,26 +13,63 @@ $rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_n
   WHERE t.workspace_id=$ws AND t.status='Completed (Needs CTO Review)'
   GROUP BY t.id
   ORDER BY t.updated_at DESC")->fetchAll();
+
+$total=count($rows);
+$unique_clients=[];
+foreach($rows as $r){ $unique_clients[$r['client_name']]=1; }
+$client_count=count($unique_clients);
 ?>
-<h2 class="mb-3">CTO Review</h2>
-<div class="card p-3">
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead><tr><th>Task</th><th>Client</th><th>Project</th><th>Assignees</th><th>Updated</th><th></th></tr></thead>
-      <tbody>
-        <?php foreach($rows as $r): ?>
-          <tr>
-            <td class="fw-semibold"><?=h($r['title'])?></td>
-            <td class="text-muted"><?=h($r['client_name'])?></td>
-            <td class="text-muted"><?=h($r['project_name'])?></td>
-            <td class="text-muted"><?=h($r['assignees'] ?? '—')?></td>
-            <td class="text-muted"><?=h($r['updated_at'])?></td>
-            <td class="text-end"><a class="btn btn-sm btn-yellow" href="task_view.php?id=<?=h($r['id'])?>">Review</a></td>
-          </tr>
-        <?php endforeach; ?>
-        <?php if(!$rows): ?><tr><td colspan="6" class="text-muted">No tasks waiting for review.</td></tr><?php endif; ?>
-      </tbody>
-    </table>
+<style>
+  .cto-shell{border:1px solid rgba(255,255,255,.11);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
+  .cto-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .cto-title{font-size:2rem;font-weight:600;margin:0}
+  .cto-sub{color:rgba(220,220,220,.7);margin-top:.2rem}
+  .cto-badges{display:flex;gap:.5rem;flex-wrap:wrap}
+  .cto-badge{padding:.42rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#eaeaea;font-size:.88rem}
+  .cto-body{padding:1rem 1.1rem}
+  .queue-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.02));margin-bottom:.7rem}
+  .queue-row{display:flex;justify-content:space-between;gap:1rem;padding:.9rem 1rem;align-items:center;flex-wrap:wrap}
+  .queue-title{font-size:1.25rem;font-weight:600}
+  .queue-meta{color:rgba(220,220,220,.72);font-size:.92rem}
+  .queue-right{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+  .status-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(246,212,105,.45);background:rgba(246,212,105,.12);color:#f6d469;font-size:.8rem}
+  .assignee-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5e5e5;font-size:.8rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
+</style>
+
+<div class="cto-shell">
+  <div class="cto-head">
+    <div>
+      <h2 class="cto-title">CTO Review Queue</h2>
+      <div class="cto-sub">Review completed work before approval and client submission.</div>
+    </div>
+    <div class="cto-badges">
+      <span class="cto-badge">Waiting: <?= (int)$total ?></span>
+      <span class="cto-badge">Clients: <?= (int)$client_count ?></span>
+      <span class="cto-badge">Role: CTO</span>
+    </div>
+  </div>
+
+  <div class="cto-body">
+    <?php if(!$rows): ?>
+      <div class="empty-box">No tasks are waiting for CTO review right now.</div>
+    <?php else: ?>
+      <?php foreach($rows as $r): ?>
+        <div class="queue-card">
+          <div class="queue-row">
+            <div>
+              <div class="queue-title"><?=h($r['title'])?></div>
+              <div class="queue-meta"><?=h($r['client_name'])?> · <?=h($r['project_name'])?> · Updated <?=h($r['updated_at'])?></div>
+            </div>
+            <div class="queue-right">
+              <span class="status-chip">Needs CTO Review</span>
+              <span class="assignee-chip" title="<?=h($r['assignees'] ?? '—')?>"><?=h($r['assignees'] ?? 'Unassigned')?></span>
+              <a class="btn btn-yellow btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open Review</a>
+            </div>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    <?php endif; ?>
   </div>
 </div>
 <?php require_once __DIR__ . '/layout_end.php'; ?>
