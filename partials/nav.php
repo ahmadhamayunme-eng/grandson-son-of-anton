@@ -43,7 +43,6 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
       <?=nav_item('clients.php', 'Clients', '✉', $path)?>
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
-      <?=nav_item('reports_overview.php', 'Reports', '◫', $path)?>
 
       <?php if ($role === 'CTO' || $role === 'Super Admin'): ?>
         <div class="sidebar-label">CTO</div>
