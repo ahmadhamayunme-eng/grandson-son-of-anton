@@ -8,7 +8,7 @@ return [
     'charset' => 'utf8mb4',
   ],
   'app' => [
-    'name' => 'SpeedX BMS',
+    'name' => 'Anton X - Powered By SpeedX',
     'base_url' => '',
   ],
 ];
