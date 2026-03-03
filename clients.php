@@ -123,7 +123,7 @@ function client_status_class(string $status): string {
   }
   .clients-search:focus { outline: none; border-color: rgba(255, 212, 83, 0.55); box-shadow: 0 0 0 3px rgba(255, 212, 83, 0.13); }
   .clients-new-btn {
-    border: 1px solid rgba(255, 255, 255, 0.08); background: linear-gradient(160deg, rgba(42, 43, 57, 0.92), rgba(31, 32, 44, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.08); background: linear-gradient(160deg, rgba(36, 36, 36, 0.92), rgba(24, 24, 24, 0.9));
     border-radius: 10px; color: #efeff2; font-weight: 600; padding: 10px 14px; text-decoration: none;
   }
   .clients-new-btn:hover { color: #fff; border-color: rgba(255, 212, 83, 0.35); }

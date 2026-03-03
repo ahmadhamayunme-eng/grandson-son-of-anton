@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Task View Redesign Mock</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#131a2d; --panel2:#1a2239; --txt:#f3f6ff; --muted:#96a3c2;
+    --accent:#7c9cff; --gold:#f8d978; --green:#47d7a5; --danger:#ff7b8e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1200px 600px at 15% -5%,#253b7a66,transparent),radial-gradient(900px 500px at 95% 0%,#6246ea55,transparent),var(--bg);color:var(--txt)}
+  .wrap{max-width:1280px;margin:32px auto;padding:0 20px}
+  .top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+  h1{margin:0;font-size:34px;letter-spacing:.2px}
+  .meta{margin-top:6px;color:var(--muted);font-size:15px}
+  .tabs{display:flex;gap:8px;margin-top:14px}
+  .tab{padding:8px 14px;border-radius:10px;border:1px solid #ffffff26;background:#ffffff0d;color:#d9e0f7;font-size:14px}
+  .tab.active{border-color:#f8d97866;background:#f8d9781e;color:#ffe9a9}
+  .actions{display:flex;gap:10px}
+  .btn{padding:10px 16px;border-radius:10px;border:0;font-weight:600}
+  .btn.dark{background:#ffffff14;color:#eef3ff;border:1px solid #ffffff2a}
+  .btn.gold{background:linear-gradient(140deg,#f8d978,#efc949);color:#1e2333}
+  .grid{display:grid;grid-template-columns:1.8fr 1fr;gap:16px}
+  .card{background:linear-gradient(165deg,var(--panel2),var(--panel));border:1px solid #ffffff22;border-radius:16px;overflow:hidden;box-shadow:0 18px 30px #00000040}
+  .head{padding:14px 16px;border-bottom:1px solid #ffffff1f;display:flex;justify-content:space-between;align-items:center}
+  .body{padding:16px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:6px 10px;border-radius:999px;border:1px solid #ffffff2a;font-size:12px;color:#eaf0ff;background:#ffffff0d}
+  .chip.warn{border-color:#ff7b8e75;color:#ffbcc7;background:#ff7b8e1c}
+  .chip.ok{border-color:#47d7a56b;color:#9df0d6;background:#47d7a51a}
+  .desc{line-height:1.65;color:#d5ddf5;font-size:15px;background:#0f1527;border:1px solid #ffffff1a;border-radius:12px;padding:14px}
+  .info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .k{color:var(--muted);font-size:13px}.v{font-size:14px;margin-top:3px}
+  .avatar{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#f8d978,#8f6bff);color:#1f2434;font-weight:700;font-size:12px;margin-right:7px}
+  .comment{display:flex;gap:10px;padding:10px;border-radius:12px;background:#0f1527;border:1px solid #ffffff14;margin-bottom:10px}
+  .cmeta{color:var(--muted);font-size:12px;margin-bottom:4px}
+  .field{margin-bottom:12px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .input,textarea,select{width:100%;background:#0d1325;color:#eef2ff;border:1px solid #ffffff2a;border-radius:10px;padding:10px;font-size:14px}
+  .submit{width:100%;padding:11px;border-radius:10px;border:0;background:linear-gradient(145deg,#7c9cff,#6f7bff);color:white;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Landing Page Speed Optimization</h1>
+      <div class="meta">Acme Corp Website / SEO Phase 2</div>
+      <div class="tabs"><div class="tab">Overview</div><div class="tab">Tasks</div><div class="tab active">Docs</div><div class="tab">Activity</div></div>
+    </div>
+    <div class="actions"><button class="btn dark">Lock</button><button class="btn gold">Save</button></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="head">
+          <div class="chips"><span class="chip"># SEO Phase 2</span><span class="chip warn">Priority: High</span><span class="chip ok">In Progress</span></div>
+          <div><span class="avatar">RK</span><span class="avatar">AA</span><span class="avatar">MJ</span></div>
+        </div>
+        <div class="body">
+          <h3 style="margin:0 0 10px">Task Description</h3>
+          <div class="desc">Improve the LCP and CLS metrics on the main landing page by optimizing hero image delivery, eliminating render-blocking CSS, and deferring non-critical JavaScript.</div>
+          <div class="info">
+            <div><div class="k">Due Date</div><div class="v">10 Mar 2026</div></div>
+            <div><div class="k">Created By</div><div class="v">Sabrina (CTO)</div></div>
+            <div><div class="k">Estimated Time</div><div class="v">8 hours</div></div>
+            <div><div class="k">Last Update</div><div class="v">Today, 10:24 AM</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="head"><strong>Team Discussion</strong></div>
+        <div class="body">
+          <div class="comment"><div class="avatar">RK</div><div><div class="cmeta">Ritik • 9:12 AM</div><div>Compressed hero image to AVIF and reduced payload by 62%.</div></div></div>
+          <div class="comment"><div class="avatar">AA</div><div><div class="cmeta">Aarav • 9:27 AM</div><div>Moved non-critical CSS and deferred chat widget script for better LCP.</div></div></div>
+          <div class="comment"><div class="avatar">MJ</div><div><div class="cmeta">Maya • 9:44 AM</div><div>CLS issue remains on mobile. Investigating the dynamic banner injection.</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="head"><strong>Assign Task</strong></div>
+        <div class="body">
+          <div class="field"><label>Assignees</label><select class="input"><option>Ritik (Developer)</option><option>Aarav (SEO)</option><option>Maya (Developer)</option></select></div>
+          <button class="submit">Save Assignees</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="head"><strong>Update Status</strong></div>
+        <div class="body">
+          <div class="field"><label>Status</label><select><option>In Progress</option></select></div>
+          <div class="field"><label>Internal Note</label><textarea rows="4">Optimizations deployed to staging, waiting for Lighthouse pass.</textarea></div>
+          <button class="submit">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
