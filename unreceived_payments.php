@@ -211,6 +211,7 @@ $summary = $summaryStmt->fetch() ?: [
   .ur-controls{display:flex;gap:.45rem;flex-wrap:wrap}
   .ur-pill{padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff}
   .ur-body{padding:1rem 1.1rem;color:#fff}
+  .ur-body .h4,.ur-body .h4.mb-0,.ur-body .h4.mb-0.ur-overdue{color:#fff !important;opacity:1}
   .ur-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
   .ur-table .table th,.ur-table .table td{border-bottom:1px solid rgba(255,255,255,.08)}
   .ur-overdue{color:#ff8f70;font-weight:600}
@@ -238,7 +239,7 @@ $summary = $summaryStmt->fetch() ?: [
       <div class="col-md-2"><div class="card p-3"><div class="text-muted">Pending</div><div class="h4 mb-0"><?= (int)$summary['pending_count'] ?></div></div></div>
       <div class="col-md-2"><div class="card p-3"><div class="text-muted">Partial</div><div class="h4 mb-0"><?= (int)$summary['partial_count'] ?></div></div></div>
       <div class="col-md-2"><div class="card p-3"><div class="text-muted">Received</div><div class="h4 mb-0"><?= (int)$summary['received_count'] ?></div></div></div>
-      <div class="col-md-3"><div class="card p-3"><div class="text-muted">Overdue Open</div><div class="h4 mb-0 ur-overdue"><?= (int)$summary['overdue_count'] ?></div></div></div>
+      <div class="col-md-3"><div class="card p-3"><div class="text-muted">Overdue Open</div><div class="h4 mb-0 ur-overdue"><span class="ur-overdue"><?= (int)$summary['overdue_count'] ?></span></div></div></div>
     </div>
 
     <details class="mb-3"><summary class="btn btn-outline-light btn-sm">Add Unreceived Payment</summary>
