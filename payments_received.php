@@ -1,7 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
 auth_require_perm('finance.view');
@@ -9,7 +6,6 @@ $pdo = db();
 $ws = auth_workspace_id();
 $u = auth_user();
 
-// Load dropdowns
 $clients = $pdo->prepare("SELECT id,name FROM clients WHERE workspace_id=? ORDER BY name");
 $clients->execute([$ws]);
 $clients = $clients->fetchAll();
@@ -53,89 +49,68 @@ $rows = $pdo->prepare("SELECT fp.*, c.name AS client_name, p.name AS project_nam
 $rows->execute([$ws]);
 $rows = $rows->fetchAll();
 ?>
+<style>
+  .pay-shell{border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
+  .pay-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .pay-title{font-size:2.2rem;font-weight:600;margin:0}
+  .pay-controls{display:flex;gap:.5rem;flex-wrap:wrap}
+  .pay-pill{padding:.45rem .72rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#ededed}
+  .pay-body{padding:1rem 1.1rem}
+  .pay-table{border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))}
+  .pay-table table{width:100%;border-collapse:collapse}
+  .pay-table th,.pay-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
+  .pay-table th{background:rgba(255,255,255,.03);color:rgba(230,230,230,.82);font-weight:600}
+  .amt-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(87,200,143,.15);border:1px solid rgba(87,200,143,.35);color:#9de8bf}
+  .method-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(246,212,105,.12);border:1px solid rgba(246,212,105,.35);color:#f6d469}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0">Payments Received</h2>
-  <a class="btn btn-outline-info btn-sm" href="unreceived_payments.php">View Unreceived Payments</a>
-</div>
+<div class="pay-shell">
+  <div class="pay-head">
+    <h2 class="pay-title">Payments Received</h2>
+    <div class="pay-controls">
+      <span class="pay-pill">All Clients ▾</span>
+      <span class="pay-pill">All Payment Methods ▾</span>
+      <span class="pay-pill"><?=date('F Y')?> ▾</span>
+      <a class="btn btn-yellow btn-sm" href="client_reports.php">Export</a>
+    </div>
+  </div>
 
-<div class="card p-3 mb-4">
-  <form method="post" class="row g-2">
-    <input type="hidden" name="action" value="create">
-    <div class="col-md-3">
-      <label class="form-label">Client</label>
-      <select class="form-select" name="client_id">
-        <option value="">-- optional --</option>
-        <?php foreach($clients as $c): ?>
-          <option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option>
+  <div class="pay-body">
+    <details class="mb-3">
+      <summary class="btn btn-outline-light btn-sm">Add Payment</summary>
+      <div class="card p-3 mt-2">
+        <form method="post" class="row g-2">
+          <input type="hidden" name="action" value="create">
+          <div class="col-md-3"><label class="form-label">Client</label><select class="form-select" name="client_id"><option value="">-- optional --</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-3"><label class="form-label">Project</label><select class="form-select" name="project_id"><option value="">-- optional --</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'].' — '.$p['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-2"><label class="form-label">Amount</label><input class="form-control" name="amount" type="number" step="0.01" required></div>
+          <div class="col-md-2"><label class="form-label">Date</label><input class="form-control" name="received_date" type="date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="col-md-2"><label class="form-label">Method</label><input class="form-control" name="method" placeholder="Bank/Stripe/Cash"></div>
+          <div class="col-md-3"><label class="form-label">Reference</label><input class="form-control" name="reference"></div>
+          <div class="col-md-6"><label class="form-label">Notes</label><input class="form-control" name="notes"></div>
+          <div class="col-md-3 d-flex align-items-end"><button class="btn btn-yellow w-100">Save Payment</button></div>
+        </form>
+      </div>
+    </details>
+
+    <div class="pay-table">
+      <table>
+        <thead><tr><th>Receipt</th><th>Client</th><th>Amount</th><th>Payment Method</th><th>Date Received</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach($rows as $r): ?>
+          <tr>
+            <td><?= h($r['reference'] ?: ('REC-'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT))) ?></td>
+            <td><?= h($r['client_name'] ?? '-') ?></td>
+            <td><span class="amt-chip">$<?= number_format((float)$r['amount'],2) ?></span></td>
+            <td><span class="method-chip"><?= h($r['method'] ?? 'Bank Transfer') ?></span></td>
+            <td><?= h(date('M d', strtotime((string)$r['received_date']))) ?></td>
+            <td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('Delete this payment?');"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td>
+          </tr>
         <?php endforeach; ?>
-      </select>
+        <?php if(!$rows): ?><tr><td colspan="6" class="text-muted">No payments received yet.</td></tr><?php endif; ?>
+        </tbody>
+      </table>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">Project</label>
-      <select class="form-select" name="project_id">
-        <option value="">-- optional --</option>
-        <?php foreach($projects as $p): ?>
-          <option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'].' — '.$p['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Amount</label>
-      <input class="form-control" name="amount" type="number" step="0.01" required>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Date</label>
-      <input class="form-control" name="received_date" type="date" value="<?= date('Y-m-d') ?>" required>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Method</label>
-      <input class="form-control" name="method" placeholder="Bank/Stripe/Cash">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Reference</label>
-      <input class="form-control" name="reference" placeholder="#invoice / txn id">
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">Notes</label>
-      <input class="form-control" name="notes" placeholder="Optional">
-    </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-light w-100">Add Payment</button>
-    </div>
-  </form>
-</div>
-
-<div class="card p-3">
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
-      <thead>
-        <tr>
-          <th>Date</th><th>Amount</th><th>Client</th><th>Project</th><th>Method</th><th>Reference</th><th>Notes</th>
-          <th class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-      <?php foreach($rows as $r): ?>
-        <tr>
-          <td><?= h($r['received_date']) ?></td>
-          <td><?= number_format((float)$r['amount'],2) ?></td>
-          <td><?= h($r['client_name'] ?? '-') ?></td>
-          <td><?= h($r['project_name'] ?? '-') ?></td>
-          <td><?= h($r['method'] ?? '-') ?></td>
-          <td><?= h($r['reference'] ?? '-') ?></td>
-          <td><?= h($r['notes'] ?? '') ?></td>
-          <td class="text-end">
-            <form method="post" style="display:inline" onsubmit="return confirm('Delete this payment?');">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-              <button class="btn btn-sm btn-outline-danger">Delete</button>
-            </form>
-          </td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
   </div>
 </div>
 
