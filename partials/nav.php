@@ -14,7 +14,7 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
 <style>
   .sidebar-wrap { display: flex; flex-direction: column; height: 100%; }
   .sidebar-brand { display: flex; align-items: center; padding: 8px 8px 16px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .sidebar-brand-logo { display: block; width: 100%; max-width: 230px; height: auto; object-fit: contain; }
+  .sidebar-brand-logo { display: block; width: 100%; max-width: 210px; height: auto; object-fit: contain; }
   .sidebar-link { display: flex; align-items: center; gap: 10px; font-size: 1.02rem; margin-bottom: 3px; }
   .sidebar-icon { width: 22px; text-align: center; opacity: .86; color: inherit; font-size: 1rem; line-height: 1; }
   .sidebar-label { margin-top: 14px; margin-bottom: 6px; text-transform: uppercase; font-size: .82rem; color: rgba(236,236,236,.62); letter-spacing: .08em; font-weight: 600; padding: 0 10px; }
@@ -31,7 +31,7 @@ $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
 <div class="sidebar p-3">
   <div class="sidebar-wrap">
     <div class="sidebar-brand">
-      <img class="sidebar-brand-logo" src="partials/antonx-logo.svg" alt="AntonX logo">
+      <img class="sidebar-brand-logo" src="partials/antonx-logo.png" alt="AntonX logo">
     </div>
 
     <nav class="nav flex-column">
