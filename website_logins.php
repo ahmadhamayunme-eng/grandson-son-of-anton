@@ -103,7 +103,12 @@ $rows = $list->fetchAll();
 ?>
 
 <style>
-  .wl-shell{border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;background:linear-gradient(160deg, rgba(13,13,13,.96), rgba(9,9,9,.96));}
+  .wl-shell{border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;background:linear-gradient(160deg, rgba(13,13,13,.96), rgba(9,9,9,.96));color:#f4f4f6;}
+  .wl-shell h2,.wl-shell h5,.wl-shell .form-label,.wl-shell .table,.wl-shell .table th,.wl-shell .table td{color:#fff !important;}
+  .wl-shell .card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.12);}
+  .wl-shell .form-control,.wl-shell .form-select{background:rgba(0,0,0,.2);border-color:rgba(255,255,255,.16);color:#fff;}
+  .wl-shell .form-control::placeholder{color:rgba(255,255,255,.55);}
+  .wl-shell .text-muted,.wl-shell .small.text-muted{color:rgba(255,255,255,.72) !important;}
   .pw{font-family:ui-monospace, SFMono-Regular, Menlo, monospace}
 </style>
 
