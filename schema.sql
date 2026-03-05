@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   status VARCHAR(120) NOT NULL DEFAULT 'To Do',
   due_date DATE NULL,
   internal_note TEXT NULL,
-  cto_feedback TEXT NULL,
+  manager_feedback TEXT NULL,
   locked_at DATETIME NULL,
   locked_by INT NULL,
   created_by INT NOT NULL,

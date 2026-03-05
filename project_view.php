@@ -5,7 +5,7 @@ $pdo = db();
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
-$can_manage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 $isSuperAdmin = $role === 'Super Admin';
 
 $id = (int)($_GET['id'] ?? 0);
@@ -55,6 +55,58 @@ try {
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_post();
     csrf_verify();
+
+    if (isset($_POST['delete_phase'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $phaseDeleteId = (int)($_POST['phase_id'] ?? 0);
+      if ($phaseDeleteId <= 0) { flash_set('error', 'Invalid phase selected.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $st = $pdo->prepare('DELETE FROM phases WHERE workspace_id = ? AND project_id = ? AND id = ?');
+      $st->execute([$ws, $id, $phaseDeleteId]);
+      flash_set('success', $st->rowCount() ? 'Phase deleted permanently.' : 'Phase not found.');
+      redirect("project_view.php?id=$id&tab=tasks");
+    }
+
+    if (isset($_POST['delete_task'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $taskDeleteId = (int)($_POST['task_id'] ?? 0);
+      if ($taskDeleteId <= 0) { flash_set('error', 'Invalid task selected.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $st = $pdo->prepare('DELETE FROM tasks WHERE workspace_id = ? AND project_id = ? AND id = ?');
+      $st->execute([$ws, $id, $taskDeleteId]);
+      flash_set('success', $st->rowCount() ? 'Task deleted permanently.' : 'Task not found.');
+      redirect("project_view.php?id=$id&tab=tasks");
+    }
+
+    if (isset($_POST['bulk_delete_tasks'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['task_ids'] ?? [])))));
+      if (!$ids) { flash_set('error', 'Select at least one task to delete.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $marks = implode(',', array_fill(0, count($ids), '?'));
+      $st = $pdo->prepare("DELETE FROM tasks WHERE workspace_id = ? AND project_id = ? AND id IN ($marks)");
+      $st->execute(array_merge([$ws, $id], $ids));
+      flash_set('success', $st->rowCount() . ' task(s) deleted permanently.');
+      redirect("project_view.php?id=$id&tab=tasks");
+    }
+
+    if (isset($_POST['delete_doc'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=docs"); }
+      $docDeleteId = (int)($_POST['doc_id'] ?? 0);
+      if ($docDeleteId <= 0) { flash_set('error', 'Invalid document selected.'); redirect("project_view.php?id=$id&tab=docs"); }
+      $st = $pdo->prepare('DELETE FROM docs WHERE workspace_id = ? AND project_id = ? AND id = ?');
+      $st->execute([$ws, $id, $docDeleteId]);
+      flash_set('success', $st->rowCount() ? 'Document deleted permanently.' : 'Document not found.');
+      redirect("project_view.php?id=$id&tab=docs");
+    }
+
+    if (isset($_POST['bulk_delete_docs'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=docs"); }
+      $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['doc_ids'] ?? [])))));
+      if (!$ids) { flash_set('error', 'Select at least one document to delete.'); redirect("project_view.php?id=$id&tab=docs"); }
+      $marks = implode(',', array_fill(0, count($ids), '?'));
+      $st = $pdo->prepare("DELETE FROM docs WHERE workspace_id = ? AND project_id = ? AND id IN ($marks)");
+      $st->execute(array_merge([$ws, $id], $ids));
+      flash_set('success', $st->rowCount() . ' document(s) deleted permanently.');
+      redirect("project_view.php?id=$id&tab=docs");
+    }
 
     if (isset($_POST['add_phase'])) {
       if (!$can_manage) {
@@ -137,7 +189,7 @@ try {
   $statusesStmt->execute([$ws]);
   $statuses = array_map(fn($r) => $r['name'], $statusesStmt->fetchAll());
   if (!$statuses) {
-    $statuses = ['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client'];
+    $statuses = ['Backlog','To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)','Submitted to Client'];
   }
 
   $teamStmt = $pdo->prepare("SELECT u.id,u.name,r.name AS role_name
@@ -276,9 +328,11 @@ try {
       </div>
     </div>
   <?php elseif($tab==='tasks'): ?>
+    <?php if($can_manage): ?><form method="post" id="bulkDeleteTasks" class="mb-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="bulk_delete_tasks" value="1"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected tasks. Are you sure?');">Delete Selected Tasks</button></form><?php endif; ?>
     <section class="phase-wrap">
       <?php foreach($phases as $ph): ?>
         <article class="phase">
+          <?php if($can_manage): ?><div class="p-2 text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this phase and all tasks under it. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_phase" value="1"><input type="hidden" name="phase_id" value="<?= (int)$ph['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete Phase</button></form></div><?php endif; ?>
           <div class="card-h">
             <h4><?=h($ph['name'])?></h4>
             <?php if($can_manage): ?><button class="btn btn-sm btn-yellow" data-bs-toggle="modal" data-bs-target="#addTask">+ Add Task</button><?php endif; ?>
@@ -298,10 +352,10 @@ try {
                   <td class="status-cell"><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span></td>
                   <td class="assignee-cell"><div class="task-title"><?=h($t['assignee_names'] ?: '—')?></div></td>
                   <td class="due-cell"><?=h($t['due_date'] ? format_date($t['due_date']) : '—')?></td>
-                  <td class="action-cell"><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=$t['id']?>">Open</a></td>
+                  <td class="action-cell d-flex gap-2 justify-content-center"><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=$t['id']?>">Open</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this task. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_task" value="1"><input type="hidden" name="task_id" value="<?= (int)$t['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
                 </tr>
               <?php endforeach; ?>
-              <?php if(!($by_phase[$ph['id']] ?? [])): ?><tr><td colspan="5" class="text-muted">No tasks in this phase.</td></tr><?php endif; ?>
+              <?php if(!($by_phase[$ph['id']] ?? [])): ?><tr><td colspan="6" class="text-muted">No tasks in this phase.</td></tr><?php endif; ?>
             </tbody>
           </table>
         </article>
@@ -309,7 +363,7 @@ try {
       <?php if(!$phases): ?><div class="glass p-4 text-muted">No phases yet. Add a phase to start tasks.</div><?php endif; ?>
     </section>
   <?php elseif($tab==='docs'): ?>
-    <section><form class="docs-toolbar" method="get"><input type="hidden" name="id" value="<?=$id?>"><input type="hidden" name="tab" value="docs"><input class="docs-search" name="dq" value="<?=h($docsQ)?>" placeholder="Search documents..."><?php if($can_manage): ?><button type="button" class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addDoc">+ New Doc</button><?php endif; ?><a class="btn btn-outline-light" href="docs.php?project_id=<?=$id?>">Upload</a></form><div class="glass docs-section"><div class="card-h"><h3>Project Documents</h3><span><?=count($docs)?> files</span></div><?php foreach($docs as $d): ?><div class="doc-item"><div><div><?=h($d['title'])?></div><div class="sub">Updated <?=h(format_date($d['updated_at']))?> by <?=h($d['author_name'] ?: 'Unknown')?></div></div><span class="text-muted"><?=strlen((string)($d['content'] ?? ''))?> chars</span><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=$d['id']?>">Open</a></div><?php endforeach; ?><?php if(!$docs): ?><div class="p-4 text-muted">No documents found.</div><?php endif; ?></div></section>
+    <section><?php if($can_manage): ?><form method="post" id="bulkDeleteDocs" class="mb-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="bulk_delete_docs" value="1"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected documents. Are you sure?');">Delete Selected Docs</button></form><?php endif; ?><form class="docs-toolbar" method="get"><input type="hidden" name="id" value="<?=$id?>"><input type="hidden" name="tab" value="docs"><input class="docs-search" name="dq" value="<?=h($docsQ)?>" placeholder="Search documents..."><?php if($can_manage): ?><button type="button" class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addDoc">+ New Doc</button><?php endif; ?><a class="btn btn-outline-light" href="docs.php?project_id=<?=$id?>">Upload</a></form><div class="glass docs-section"><div class="card-h"><h3>Project Documents</h3><span><?=count($docs)?> files</span></div><?php foreach($docs as $d): ?><div class="doc-item"><div><?php if($can_manage): ?><input type="checkbox" class="me-2" name="doc_ids[]" value="<?= (int)$d['id'] ?>" form="bulkDeleteDocs"><?php endif; ?><div class="d-inline"><?=h($d['title'])?></div><div class="sub">Updated <?=h(format_date($d['updated_at']))?> by <?=h($d['author_name'] ?: 'Unknown')?></div></div><span class="text-muted"><?=strlen((string)($d['content'] ?? ''))?> chars</span><div class="d-flex gap-2 justify-content-end"><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=$d['id']?>">Open</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this document. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_doc" value="1"><input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></div></div><?php endforeach; ?><?php if(!$docs): ?><div class="p-4 text-muted">No documents found.</div><?php endif; ?></div></section>
   <?php else: ?>
     <section class="glass activity"><div class="card-h"><h3>Activity</h3><span><?=count($activities)?> events</span></div><?php foreach($activities as $a): ?><div class="row-item"><div class="ico"><?=h(strtoupper(substr((string)$a['source'],0,1)))?></div><div><div><?=h($a['message'])?></div><div class="sub">by <?=h($a['actor'])?></div></div><div class="text-muted"><?=h(format_date($a['happened_at']))?></div></div><?php endforeach; ?><?php if(!$activities): ?><div class="p-4 text-muted">No activity yet.</div><?php endif; ?></section>
   <?php endif; ?>

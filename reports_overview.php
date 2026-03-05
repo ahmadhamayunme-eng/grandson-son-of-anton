@@ -19,7 +19,7 @@ function reports_safe_scalar($pdo, $sql, $label, &$debug_errors){
 
 $tot_tasks = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws", 'Total tasks query failed', $debug_errors);
 $open_tasks = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status NOT IN ('Approved (Ready to Submit)','Submitted to Client')", 'Open tasks query failed', $debug_errors);
-$needs_cto = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status='Completed (Needs CTO Review)'", 'Needs CTO query failed', $debug_errors);
+$needs_manager = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM tasks WHERE workspace_id=$ws AND status='Completed (Needs Manager Review)'", 'Needs Manager query failed', $debug_errors);
 $projects = (int)reports_safe_scalar($pdo, "SELECT COUNT(*) FROM projects WHERE workspace_id=$ws", 'Projects query failed', $debug_errors);
 
 $income = (float)reports_safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=$ws", 'Income query failed', $debug_errors);
@@ -94,7 +94,7 @@ $outstanding = max(0, $expenses - $income);
       <div class="reports-chart-head">
         <div class="small text-muted">Quick Links</div>
         <div class="d-flex gap-2">
-          <a class="btn btn-sm btn-outline-light" href="review_completed_tasks.php">CTO Review</a>
+          <a class="btn btn-sm btn-outline-light" href="review_completed_tasks.php">Manager Review</a>
           <a class="btn btn-sm btn-outline-light" href="developer_performance.php">Developer</a>
           <a class="btn btn-sm btn-outline-light" href="task_activity_log.php">Activity</a>
         </div>
@@ -107,7 +107,7 @@ $outstanding = max(0, $expenses - $income);
       </div>
       <div class="reports-chart-foot">
         <div>1–<?= min(46, max(1, $projects + $tot_tasks)) ?> of 46</div>
-        <div>Projects: <?= $projects ?> · Open: <?= $open_tasks ?> · CTO: <?= $needs_cto ?></div>
+        <div>Projects: <?= $projects ?> · Open: <?= $open_tasks ?> · Manager: <?= $needs_manager ?></div>
       </div>
     </div>
   </div>

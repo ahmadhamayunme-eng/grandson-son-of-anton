@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 $role = auth_user()['role_name'] ?? '';
-if (!in_array($role, ['CEO','CTO','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
+if (!in_array($role, ['CEO','Manager','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
 ?>
 
 <style>

@@ -2,10 +2,39 @@
 require_once __DIR__ . '/layout.php';
 $pdo = db(); $ws = auth_workspace_id();
 $role = auth_user()['role_name'] ?? '';
-if (!in_array($role, ['CEO','CTO','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
+if (!in_array($role, ['CEO','Manager','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require_post(); csrf_verify();
+  $action = $_POST['action'] ?? 'add';
+
+  if ($action === 'delete') {
+    $id = (int)($_POST['id'] ?? 0);
+    if ($id <= 0) { flash_set('error', 'Invalid project status selected.'); redirect('settings_project_statuses.php'); }
+    try {
+      $st = $pdo->prepare('DELETE FROM project_statuses WHERE workspace_id = ? AND id = ?');
+      $st->execute([$ws, $id]);
+      flash_set('success', $st->rowCount() ? 'Project status deleted permanently.' : 'Project status not found.');
+    } catch (Throwable $e) {
+      flash_set('error', 'Unable to delete this project status. It may still be in use.');
+    }
+    redirect('settings_project_statuses.php');
+  }
+
+  if ($action === 'bulk_delete') {
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+    if (!$ids) { flash_set('error', 'Select at least one project status to delete.'); redirect('settings_project_statuses.php'); }
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    try {
+      $st = $pdo->prepare("DELETE FROM project_statuses WHERE workspace_id = ? AND id IN ($marks)");
+      $st->execute(array_merge([$ws], $ids));
+      flash_set('success', $st->rowCount() . ' project status(s) deleted permanently.');
+    } catch (Throwable $e) {
+      flash_set('error', 'Some selected project status values could not be deleted because they are in use.');
+    }
+    redirect('settings_project_statuses.php');
+  }
+
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_project_statuses.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM project_statuses WHERE workspace_id=$ws")->fetch()['n'];
@@ -56,13 +85,13 @@ $rows = $pdo->query("SELECT * FROM project_statuses WHERE workspace_id=$ws ORDER
     </div>
 
     <div class="sps-card">
-      <div class="sps-card-title">Current Statuses</div>
+      <div class="sps-card-title d-flex justify-content-between align-items-center">Current Statuses<button type="submit" form="bulkDeleteStatuses" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected project statuses. Are you sure?');">Delete Selected</button></div>
       <div class="sps-table">
         <table>
-          <thead><tr><th>Name</th><th class="text-muted">Sort</th></tr></thead>
+          <thead><tr><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.status-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
           <tbody>
-            <?php foreach($rows as $r): ?><tr><td class="fw-semibold"><?=h($r['name'])?></td><td class="text-muted"><?=h($r['sort_order'])?></td></tr><?php endforeach; ?>
-            <?php if(!$rows): ?><tr><td colspan="2" class="text-muted">No statuses yet.</td></tr><?php endif; ?>
+            <?php foreach($rows as $r): ?><tr><td><input class="status-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteStatuses"></td><td class="fw-semibold"><?=h($r['name'])?></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this status. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
+            <?php if(!$rows): ?><tr><td colspan="4" class="text-muted">No statuses yet.</td></tr><?php endif; ?>
           </tbody>
         </table>
       </div>

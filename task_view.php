@@ -2,8 +2,8 @@
 require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
-$can_cto=in_array($role,['CTO','Super Admin'],true);
-$can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
+$can_manager=in_array($role,['Manager','Super Admin'],true);
+$can_manage=in_array($role,['CEO','Manager','Super Admin'],true);
 
 function tv_column_exists($pdo, $table, $column) {
   try {
@@ -80,7 +80,7 @@ try {
 } catch (Exception $e) {
   $statuses=[];
 }
-if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client']; }
+if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)','Submitted to Client']; }
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   require_post(); csrf_verify();
@@ -139,15 +139,15 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     redirect("task_view.php?id=$id");
   }
 
-  if(isset($_POST['cto_action'])){
-    if(!$can_cto){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
-    $action=$_POST['cto_action'];
+  if(isset($_POST['manager_action'])){
+    if(!$can_manager){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    $action=$_POST['manager_action'];
     if($action==='approve'){
       $pdo->prepare("UPDATE tasks SET status='Approved (Ready to Submit)', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
       flash_set('success','Task approved.');
     } elseif($action==='reject'){
-      $reason=trim(isset($_POST['cto_reason']) ? $_POST['cto_reason'] : 'Needs changes.');
-      $pdo->prepare("UPDATE tasks SET status='In Progress', cto_feedback=?, updated_at=? WHERE id=? AND workspace_id=?")
+      $reason=trim(isset($_POST['manager_reason']) ? $_POST['manager_reason'] : 'Needs changes.');
+      $pdo->prepare("UPDATE tasks SET status='In Progress', internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$reason,now(),$id,$ws]);
       flash_set('success','Task sent back to In Progress.');
     }
@@ -155,7 +155,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
 
   if(isset($_POST['submit_to_client'])){
-    if(!$can_cto){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
+    if(!$can_manager){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
     $pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=? WHERE id=? AND workspace_id=?")
         ->execute([now(),$u['id'],$id,$ws]);
     flash_set('success','Task marked as Submitted to Client.');
@@ -431,18 +431,18 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
         </div>
       </div>
 
-      <?php if($can_cto): ?>
+      <?php if($can_manager): ?>
       <div class="task-card mb-3">
-        <div class="head"><div class="fw-semibold">CTO Actions</div></div>
+        <div class="head"><div class="fw-semibold">Manager Actions</div></div>
         <div class="body">
           <form method="post" class="mb-2">
             <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <button class="btn task-btn-outline w-100" name="cto_action" value="approve">Approve (Ready to Submit)</button>
+            <button class="btn task-btn-outline w-100" name="manager_action" value="approve">Approve (Ready to Submit)</button>
           </form>
           <form method="post">
             <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <textarea class="form-control mb-2" name="cto_reason" rows="2" placeholder="Reason to send back..."></textarea>
-            <button class="btn task-btn-outline w-100" name="cto_action" value="reject">Send Back (In Progress)</button>
+            <textarea class="form-control mb-2" name="manager_reason" rows="2" placeholder="Reason to send back..."></textarea>
+            <button class="btn task-btn-outline w-100" name="manager_action" value="reject">Send Back (In Progress)</button>
           </form>
         </div>
       </div>

@@ -6,13 +6,33 @@ $ws = auth_workspace_id();
 $user = auth_user();
 $userId = (int)($user['id'] ?? 0);
 $role = $user['role_name'] ?? '';
-$can_manage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require_post();
   csrf_verify();
   if (!$can_manage) {
     flash_set('error', 'No permission.');
+    redirect('clients.php');
+  }
+
+  $action = $_POST['action'] ?? 'create';
+  if ($action === 'delete') {
+    $id = (int)($_POST['id'] ?? 0);
+    if ($id <= 0) { flash_set('error', 'Invalid client selected.'); redirect('clients.php'); }
+    $st = $pdo->prepare('DELETE FROM clients WHERE workspace_id = ? AND id = ?');
+    $st->execute([$ws, $id]);
+    flash_set('success', $st->rowCount() ? 'Client deleted permanently.' : 'Client not found.');
+    redirect('clients.php');
+  }
+
+  if ($action === 'bulk_delete') {
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+    if (!$ids) { flash_set('error', 'Select at least one client to delete.'); redirect('clients.php'); }
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $st = $pdo->prepare("DELETE FROM clients WHERE workspace_id = ? AND id IN ($marks)");
+    $st->execute(array_merge([$ws], $ids));
+    flash_set('success', $st->rowCount() . ' client(s) deleted permanently.');
     redirect('clients.php');
   }
 
@@ -200,6 +220,15 @@ function client_status_class(string $status): string {
       <div>Page <?=$page?> of <?=$totalPages?></div>
     </div>
 
+    
+    <?php if($can_manage): ?>
+      <form method="post" id="bulkDeleteClients" class="px-3 pt-2">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="action" value="bulk_delete">
+        <button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected clients and all their linked projects/tasks/docs. Are you sure?');">Delete Selected</button>
+      </form>
+    <?php endif; ?>
+
     <div class="clients-responsive">
       <table class="clients-table">
         <thead>
@@ -210,12 +239,12 @@ function client_status_class(string $status): string {
             <th>Status</th>
             <th>Projects</th>
             <th>Last Active</th>
-            <th></th>
+            <th class="text-center" style="width:44px;"><?php if ($can_manage): ?><input type="checkbox" onclick="document.querySelectorAll('.client-check').forEach(cb=>cb.checked=this.checked)"><?php endif; ?></th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php if (!$clients): ?>
-            <tr><td colspan="7" class="text-muted">No clients found.</td></tr>
+            <tr><td colspan="8" class="text-muted">No clients found.</td></tr>
           <?php else: foreach ($clients as $c):
             $status = client_status_label($c);
             $statusClass = client_status_class($status);
@@ -232,7 +261,8 @@ function client_status_class(string $status): string {
               <td><span class="<?=$statusClass?>"><span class="status-dot"></span><?=h($status)?></span></td>
               <td><?= (int)$c['project_count'] ?></td>
               <td class="text-muted"><?=h(client_last_active_label($c['last_active']))?></td>
-              <td class="text-end"><a class="text-decoration-none" href="client_view.php?id=<?=$c['id']?>">›</a></td>
+              <td class="text-center"><?php if ($can_manage): ?><input class="client-check" type="checkbox" name="ids[]" value="<?= (int)$c['id'] ?>" form="bulkDeleteClients"><?php endif; ?></td>
+              <td class="text-end d-flex justify-content-end gap-2"><a class="text-decoration-none" href="client_view.php?id=<?=$c['id']?>">›</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
@@ -257,7 +287,7 @@ function client_status_class(string $status): string {
         <h5 class="modal-title">Add Client</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form method="post">
+      <form method="post"><input type="hidden" name="action" value="create">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <div class="modal-body">
           <div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="name" required></div>
