@@ -1,12 +1,3 @@
-<?php
-require_once __DIR__ . '/layout.php';
-
-$pdo = db();
-$ws = auth_workspace_id();
-$user = auth_user();
-$role = $user['role_name'] ?? '';
-$canManage = in_array($role, ['CEO','Manager','Super Admin'], true);
-
 $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
   id INT AUTO_INCREMENT PRIMARY KEY,
   workspace_id INT NOT NULL,
@@ -148,11 +139,7 @@ $rows = $list->fetchAll();
 
   <div class="table-responsive">
     <table class="table table-dark table-striped align-middle">
-<<<<<<< codex/add-account-settings-page-to-navbar-exlhi8
       <thead><tr><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Production URL</th><th>Notes</th><th></th></tr></thead>
-=======
-      <thead><tr><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Login URL</th><th>Notes</th><th></th></tr></thead>
->>>>>>> main
       <tbody>
       <?php foreach($rows as $r): ?>
         <tr>

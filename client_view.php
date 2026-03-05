@@ -39,30 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_client'])) {
   $pdo->prepare('UPDATE clients SET name=?, notes=?, updated_at=? WHERE id=? AND workspace_id=?')
       ->execute([$newName, $newNotes ?: null, now(), $id, $ws]);
 
-  if ((string)($_POST['remove_client_logo'] ?? '') === '1') {
-    foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
-      $f = __DIR__ . '/uploads/client_logos/' . $id . '.' . $ext;
-      if (is_file($f)) { @unlink($f); }
-    }
-  }
-
-  if (isset($_FILES['client_logo']) && is_array($_FILES['client_logo']) && (int)($_FILES['client_logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $tmp=(string)($_FILES['client_logo']['tmp_name'] ?? '');
-    $size=(int)($_FILES['client_logo']['size'] ?? 0);
-    $info=@getimagesize($tmp);
-    $mime=strtolower((string)($info['mime'] ?? ''));
-    $allowed=['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
-    if ($size > 0 && $size <= 2*1024*1024 && isset($allowed[$mime])) {
-      $dir=__DIR__ . '/uploads/client_logos';
-      if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
-      foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
-        $f=$dir . '/' . $id . '.' . $ext;
-        if (is_file($f)) @unlink($f);
-      }
-      @move_uploaded_file($tmp, $dir . '/' . $id . '.' . $allowed[$mime]);
-    }
-  }
-
   flash_set('success', 'Client updated successfully.');
   redirect("client_view.php?id=$id&tab=$tab");
 }
@@ -524,7 +500,7 @@ function initials_from_names(string $names): string {
 <?php if ($can_manage): ?>
 <div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div><div class="mb-3"><label class="form-label">Current Live Website URL (optional)</label><input class="form-control" name="live_website_url" placeholder="https://example.com"></div><hr><h6 class="mb-2">Website Login (optional)</h6><div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div><div class="mb-3"><label class="form-label">Production URL</label><input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div><div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div><div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2"></textarea></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
 
-<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
+<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
 
 <div class="modal fade" id="addDoc" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Create Doc</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_doc" value="1"><div class="modal-body"><div class="row g-3"><div class="col-md-8"><label class="form-label">Title</label><input class="form-control" name="doc_title" required></div><div class="col-md-4"><label class="form-label">Project</label><select class="form-select" name="doc_project_id" required><?php foreach($clientProjects as $cp): ?><option value="<?=h($cp['id'])?>"><?=h($cp['name'])?></option><?php endforeach; ?></select></div><div class="col-12"><label class="form-label">Content</label><textarea class="form-control" name="doc_content" rows="9" placeholder="Write document..."></textarea></div></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create Doc</button></div></form></div></div></div>
 <?php endif; ?>
