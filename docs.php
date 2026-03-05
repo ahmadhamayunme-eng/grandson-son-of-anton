@@ -9,7 +9,7 @@ $project_id=(int)($_GET['project_id'] ?? 0);
 $search=trim((string)($_GET['q'] ?? ''));
 $view=($_GET['view'] ?? 'recent') === 'all' ? 'all' : 'recent';
 
-$q="SELECT d.*, p.name AS project_name, c.name AS client_name, u.name AS author
+$q="SELECT d.*, p.name AS project_name, c.name AS client_name, u.name AS author, u.id AS author_id
   FROM docs d
   JOIN projects p ON p.id=d.project_id
   JOIN clients c ON c.id=p.client_id
@@ -49,15 +49,6 @@ foreach($docs as $d){
 $folderCards=array_slice(array_values($folderCounts),0,4);
 $shownDocs=$view==='recent' ? array_slice($docs,0,8) : $docs;
 
-function doc_initials($name){
-  $name=trim((string)$name);
-  if($name==='') return '?';
-  $parts=preg_split('/\s+/', $name);
-  $a=strtoupper(substr($parts[0],0,1));
-  $b='';
-  if(count($parts)>1){ $b=strtoupper(substr($parts[count($parts)-1],0,1)); }
-  return $a.$b;
-}
 
 function docs_query(array $extra=[]){
   $base=[];
@@ -90,7 +81,7 @@ function docs_query(array $extra=[]){
   .docs-table th{font-weight:600;color:rgba(214,214,214,.82);background:rgba(255,255,255,.03);text-align:left}
   .docs-muted{color:rgba(203,203,203,.72)}
   .docs-person{display:flex;align-items:center;gap:.45rem}
-  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#171717;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35)}
+  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#171717;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35);object-fit:cover;overflow:hidden}
   @media (max-width: 992px){.docs-bar{grid-template-columns:1fr}.docs-folders{grid-template-columns:1fr 1fr}}
 </style>
 
@@ -150,7 +141,7 @@ function docs_query(array $extra=[]){
                 <td class="docs-muted"><?=h($d['client_name'])?></td>
                 <td class="docs-muted"><?=h(date('M d', strtotime($d['updated_at'])))?></td>
                 <td>
-                  <div class="docs-person"><span class="docs-avatar"><?=h(doc_initials($d['author']))?></span><span><?=h($d['author'])?></span></div>
+                  <div class="docs-person"><?= user_avatar_html((int)$d['author_id'], (string)$d['author'], 'docs-avatar') ?><span><?=h($d['author'])?></span></div>
                 </td>
                 <td class="text-end"><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=h($d['id'])?>">Open</a></td>
               </tr>

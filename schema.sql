@@ -378,3 +378,27 @@ CREATE TABLE IF NOT EXISTS finance_overheads (
   CONSTRAINT fk_fo_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   CONSTRAINT fk_fo_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Website login vault (client/project scoped)
+CREATE TABLE IF NOT EXISTS website_logins (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  workspace_id INT NOT NULL,
+  client_id INT NULL,
+  project_id INT NULL,
+  site_name VARCHAR(190) NOT NULL,
+  website_url VARCHAR(255) NULL,
+  login_url VARCHAR(255) NULL,
+  login_username VARCHAR(190) NULL,
+  login_password TEXT NULL,
+  notes TEXT NULL,
+  created_by INT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  INDEX idx_wl_ws (workspace_id),
+  INDEX idx_wl_client (client_id),
+  INDEX idx_wl_project (project_id),
+  CONSTRAINT fk_wl_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wl_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_wl_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+  CONSTRAINT fk_wl_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
