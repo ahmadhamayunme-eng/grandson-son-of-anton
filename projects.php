@@ -3,8 +3,45 @@ require_once __DIR__ . '/layout.php';
 
 $pdo = db();
 $ws = auth_workspace_id();
-$role = auth_user()['role_name'] ?? '';
+$user = auth_user();
+$role = $user['role_name'] ?? '';
 $canManage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
+
+
+function projects_has_live_url_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'live_website_url'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
+if (!projects_has_live_url_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+
+try {
+  $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id INT NOT NULL,
+    client_id INT NULL,
+    project_id INT NULL,
+    site_name VARCHAR(190) NOT NULL,
+    website_url VARCHAR(255) NULL,
+    login_url VARCHAR(255) NULL,
+    login_username VARCHAR(190) NULL,
+    login_password TEXT NULL,
+    notes TEXT NULL,
+    created_by INT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_wl_ws (workspace_id),
+    INDEX idx_wl_client (client_id),
+    INDEX idx_wl_project (project_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) {}
+
 $isSuperAdmin = $role === 'Super Admin';
 
 $projects = [];
@@ -100,14 +137,27 @@ try {
     $typeId = (int)($_POST['type_id'] ?? 0);
     $statusId = (int)($_POST['status_id'] ?? 0);
     $dueDate = trim((string)($_POST['due_date'] ?? ''));
+    $liveWebsiteUrl = trim((string)($_POST['live_website_url'] ?? ''));
+    $wlSiteName = trim((string)($_POST['wl_site_name'] ?? ''));
+    $wlLoginUrl = trim((string)($_POST['wl_login_url'] ?? ''));
+    $wlUsername = trim((string)($_POST['wl_login_username'] ?? ''));
+    $wlPassword = (string)($_POST['wl_login_password'] ?? '');
+    $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
 
     if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
       flash_set('error', 'Project name, client, type and status are required.');
       redirect('projects.php');
     }
 
-    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, null, now(), now()]);
+    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, live_website_url, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $liveWebsiteUrl ?: null, null, now(), now()]);
+
+    $newProjectId = (int)$pdo->lastInsertId();
+    if ($wlSiteName !== '' || $wlUsername !== '' || $wlPassword !== '' || $wlLoginUrl !== '') {
+      $siteName = $wlSiteName !== '' ? $wlSiteName : $name;
+      $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $newProjectId, $siteName, $liveWebsiteUrl ?: null, $wlLoginUrl ?: null, $wlUsername ?: null, $wlPassword ?: null, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+    }
 
     flash_set('success', 'Project created.');
     redirect('projects.php');
@@ -328,6 +378,14 @@ SQL;
           <div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
           <div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
           <div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div>
+          <div class="mb-3"><label class="form-label">Current Live Website URL (optional)</label><input class="form-control" name="live_website_url" placeholder="https://example.com"></div>
+          <hr>
+          <h6 class="mb-2">Website Login (optional)</h6>
+          <div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div>
+          <div class="mb-3"><label class="form-label">Login URL</label><input class="form-control" name="wl_login_url" placeholder="https://example.com/wp-admin"></div>
+          <div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div>
+          <div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div>
+          <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea></div>
         </div>
         <div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div>
       </form>

@@ -109,6 +109,8 @@ $rows = $list->fetchAll();
   .wl-shell .form-control,.wl-shell .form-select{background:rgba(0,0,0,.2);border-color:rgba(255,255,255,.16);color:#fff;}
   .wl-shell .form-control::placeholder{color:rgba(255,255,255,.55);}
   .wl-shell .text-muted,.wl-shell .small.text-muted{color:rgba(255,255,255,.72) !important;}
+  .sidebar{width:320px !important;}
+  .sidebar-link span{white-space:nowrap;}
   .pw{font-family:ui-monospace, SFMono-Regular, Menlo, monospace}
   .pw-input-wrap{position:relative;}
   .pw-input-wrap .form-control{padding-right:44px;}

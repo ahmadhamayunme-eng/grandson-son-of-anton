@@ -402,3 +402,7 @@ CREATE TABLE IF NOT EXISTS website_logins (
   CONSTRAINT fk_wl_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
   CONSTRAINT fk_wl_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Optional project live website URL
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS live_website_url VARCHAR(255) NULL AFTER due_date;
