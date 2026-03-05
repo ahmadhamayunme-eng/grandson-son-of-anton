@@ -54,6 +54,8 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
 
+      <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
+
       <?php if ($role === 'Manager' || $role === 'Super Admin'): ?>
         <div class="sidebar-label">Manager</div>
         <a class="sidebar-dot-item <?=active('manager_review.php', $path)?>" href="manager_review.php">Review Completed Tasks</a>
