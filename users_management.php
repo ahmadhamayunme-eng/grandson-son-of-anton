@@ -101,9 +101,9 @@ foreach ($users as $urow) {
 
   .password-input-wrap{position:relative}
   .password-input-wrap .form-control{padding-right:2.5rem}
-  .password-toggle-btn{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:rgba(232,232,232,.7);display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;cursor:pointer}
-  .password-toggle-btn:hover{color:#f0cb47}
-  .password-toggle-btn:focus{outline:none;color:#f0cb47}
+  .password-toggle-btn{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#111;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;cursor:pointer}
+  .password-toggle-btn:hover{color:#000}
+  .password-toggle-btn:focus{outline:none;color:#000}
   .password-toggle-btn svg{width:18px;height:18px}
   @media (max-width: 1100px){.users-grid{grid-template-columns:1fr}.users-metrics{grid-template-columns:1fr}}
 </style>
