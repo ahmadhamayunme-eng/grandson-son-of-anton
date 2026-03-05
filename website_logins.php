@@ -110,6 +110,10 @@ $rows = $list->fetchAll();
   .wl-shell .form-control::placeholder{color:rgba(255,255,255,.55);}
   .wl-shell .text-muted,.wl-shell .small.text-muted{color:rgba(255,255,255,.72) !important;}
   .pw{font-family:ui-monospace, SFMono-Regular, Menlo, monospace}
+  .pw-input-wrap{position:relative;}
+  .pw-input-wrap .form-control{padding-right:44px;}
+  .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#111;font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;}
+  .pw-toggle:focus{outline:none;box-shadow:0 0 0 2px rgba(255,212,83,.28);border-radius:6px;}
 </style>
 
 <div class="wl-shell">
@@ -131,7 +135,7 @@ $rows = $list->fetchAll();
         <div class="col-md-6"><label class="form-label">Website URL</label><input class="form-control" name="website_url" placeholder="https://example.com"></div>
         <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" name="login_url" placeholder="https://example.com/wp-admin"></div>
         <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="login_username"></div>
-        <div class="col-md-6"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password"></div>
+        <div class="col-md-6"><label class="form-label">Password</label><div class="pw-input-wrap"><input class="form-control" type="password" name="login_password" id="new_login_password"><button type="button" class="pw-toggle" data-target="new_login_password" aria-label="Show password" title="Show/Hide Password">👁</button></div></div>
         <div class="col-md-6"><label class="form-label">Client (optional)</label><select class="form-select" name="client_id"><option value="0">None</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $prefillClientId===(int)$c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
         <div class="col-md-12"><label class="form-label">Project (optional)</label><select class="form-select" name="project_id"><option value="0">None</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>" <?= $prefillProjectId===(int)$p['id'] ? 'selected' : '' ?>><?= h($p['name']) ?> — <?= h($p['client_name']) ?></option><?php endforeach; ?></select></div>
         <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3" placeholder="2FA notes / owner contact etc."></textarea></div>
@@ -162,6 +166,18 @@ $rows = $list->fetchAll();
 </div>
 
 <script>
+document.querySelectorAll('.pw-toggle').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var id = btn.getAttribute('data-target');
+    var input = document.getElementById(id);
+    if (!input) return;
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  });
+});
+
 document.querySelectorAll('.reveal-btn').forEach(function(btn){
   btn.addEventListener('click', function(){
     var td = btn.closest('td');
