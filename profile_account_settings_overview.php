@@ -4,19 +4,6 @@ require_once __DIR__ . '/layout.php';
 $u = auth_user();
 $pdo = db();
 $userId = (int)($u['id'] ?? 0);
-$avatarDir = __DIR__ . '/uploads/profile_pictures';
-$avatarWebBase = 'uploads/profile_pictures';
-
-function account_avatar_url(int $userId, string $avatarDir, string $avatarWebBase): ?string {
-  foreach (['jpg', 'jpeg', 'png', 'webp', 'gif'] as $ext) {
-    $file = $avatarDir . '/' . $userId . '.' . $ext;
-    if (is_file($file)) {
-      return $avatarWebBase . '/' . $userId . '.' . $ext . '?v=' . (int)@filemtime($file);
-    }
-  }
-  return null;
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
   $action = (string)($_POST['action'] ?? 'change_password');
@@ -127,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 }
 
-$avatarUrl = account_avatar_url($userId, $avatarDir, $avatarWebBase);
+$avatarUrl = user_avatar_url($userId);
 ?>
 
 <style>
