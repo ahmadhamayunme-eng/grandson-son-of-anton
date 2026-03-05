@@ -96,6 +96,33 @@ include __DIR__ . '/partials/header.php';
   }
 
   .login-input::placeholder { color: #a5a5a5; }
+  .login-input:-webkit-autofill,
+  .login-input:-webkit-autofill:hover,
+  .login-input:-webkit-autofill:focus,
+  .login-input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f3f3f3;
+    -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
+    box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
+    caret-color: #f3f3f3;
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  .password-toggle {
+    border: 0;
+    background: transparent;
+    color: #b8b8b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    cursor: pointer;
+  }
+  .password-toggle:hover { color: #f0cb47; }
+  .password-toggle:focus { outline: none; color: #f0cb47; }
+  .password-toggle svg { width: 20px; height: 20px; }
+
 
   .password-toggle {
     border: 0;
