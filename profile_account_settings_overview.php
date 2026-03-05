@@ -2,14 +2,6 @@
 require_once __DIR__ . '/layout.php';
 
 $u = auth_user();
-$role = $u['role_name'] ?? '';
-if (!in_array($role, ['SEO', 'Developer'], true)) {
-  http_response_code(403);
-  echo '<div class="alert alert-danger">Forbidden</div>';
-  require_once __DIR__ . '/layout_end.php';
-  exit;
-}
-
 $pdo = db();
 $userId = (int)($u['id'] ?? 0);
 
@@ -56,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <style>
   .acc-wrap { max-width: 720px; }
   .acc-card { border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); }
+  .acc-card h5, .acc-card .form-label { color: #f3f3f3; }
 </style>
 
 <div class="acc-wrap">
