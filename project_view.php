@@ -308,6 +308,7 @@ try {
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="docs.php?project_id=<?=h($id)?>">Project Docs</a>
+      <a class="btn btn-outline-light" href="website_logins.php?project_id=<?= (int)$id ?>">Website Logins</a>
       <?php if($can_manage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addPhase">Add Phase</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addTask">Add Task</button><?php endif; ?>
     </div>
   </header>

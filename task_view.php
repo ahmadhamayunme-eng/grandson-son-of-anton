@@ -200,20 +200,6 @@ try {
   $attachments_ready=false;
 }
 
-function tv_initials($name){
-  $name=trim((string)$name);
-  if($name==='') return '?';
-  $parts=preg_split('/\s+/', $name);
-  $a=isset($parts[0][0]) ? strtoupper($parts[0][0]) : '';
-  $b='';
-  if(count($parts)>1){
-    $last=$parts[count($parts)-1];
-    $b=isset($last[0]) ? strtoupper($last[0]) : '';
-  } elseif(isset($parts[0][1])) {
-    $b=strtoupper($parts[0][1]);
-  }
-  return $a.$b;
-}
 
 function tv_priority_from_task($task){
   $status=strtolower((string)(isset($task['status']) ? $task['status'] : ''));
@@ -246,10 +232,10 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
     $visited[$cid] = 1;
     $pad = min(60, $level*20);
     $author=(string)$c['author'];
-    $initials = tv_initials($author);
+    $authorId=(int)($c['author_id'] ?? 0);
     echo '<div class="comment-thread-item mb-3" style="margin-left:'.$pad.'px;">';
     echo '<div class="d-flex gap-3">';
-    echo '<div class="comment-avatar">'.h($initials).'</div>';
+    echo user_avatar_html($authorId, $author, 'comment-avatar');
     echo '<div class="comment-body-wrap flex-grow-1">';
     echo '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><div class="fw-semibold">'.h($author).'</div><div class="text-muted small">'.h($c['created_at']).'</div></div>';
     echo '<div class="comment-copy mt-2">'.nl2br(h($c['body'])).'</div>';
@@ -296,6 +282,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-info-box .value{font-size:.93rem;margin-top:.2rem}
   .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(14,14,14,.62);margin-bottom:.5rem}
   .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#12131b}
+  .avatar-pill,.comment-avatar{object-fit:cover;overflow:hidden}
   .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)}
   .comment-copy{color:rgba(242,242,242,.92);line-height:1.62}
   .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(16,16,16,.82);border-color:rgba(255,255,255,.2);color:#ececf0}
@@ -330,7 +317,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
           </div>
           <div class="assignee-stack">
             <?php foreach($assignees as $asg): ?>
-              <span class="avatar-pill" title="<?=h($asg['name'])?>"><?=h(tv_initials($asg['name']))?></span>
+              <?= user_avatar_html((int)$asg['id'], (string)$asg['name'], 'avatar-pill') ?>
             <?php endforeach; ?>
             <?php if(!$assignees): ?><span class="text-muted small">No assignees</span><?php endif; ?>
           </div>
