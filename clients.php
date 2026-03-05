@@ -45,6 +45,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $pdo->prepare('INSERT INTO clients (workspace_id,name,notes,created_at,updated_at) VALUES (?,?,?,?,?)')
       ->execute([$ws, $name, $notes ?: null, now(), now()]);
+  $newClientId = (int)$pdo->lastInsertId();
+
+  if (isset($_FILES['logo']) && is_array($_FILES['logo']) && (int)($_FILES['logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+    $tmp = (string)($_FILES['logo']['tmp_name'] ?? '');
+    $size = (int)($_FILES['logo']['size'] ?? 0);
+    if ($size > 0 && $size <= 2 * 1024 * 1024) {
+      $info = @getimagesize($tmp);
+      $mime = strtolower((string)($info['mime'] ?? ''));
+      $allowed = ['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
+      if (isset($allowed[$mime])) {
+        $dir = __DIR__ . '/uploads/client_logos';
+        if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+        foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+          $oldLogo = $dir . '/' . $newClientId . '.' . $ext;
+          if (is_file($oldLogo)) { @unlink($oldLogo); }
+        }
+        @move_uploaded_file($tmp, $dir . '/' . $newClientId . '.' . $allowed[$mime]);
+      }
+    }
+  }
+
   flash_set('success', 'Client created.');
   redirect('clients.php');
 }
@@ -253,7 +274,7 @@ function client_status_class(string $status): string {
           ?>
             <tr>
               <td>
-                <span class="clients-logo">⚡</span>
+                <?= client_logo_html((int)$c['id'], (string)$c['name'], 'clients-logo') ?>
                 <a class="clients-name" href="client_view.php?id=<?=$c['id']?>"><?=h($c['name'])?></a>
               </td>
               <td class="text-muted">—</td>
@@ -287,11 +308,12 @@ function client_status_class(string $status): string {
         <h5 class="modal-title">Add Client</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form method="post"><input type="hidden" name="action" value="create">
+      <form method="post" enctype="multipart/form-data"><input type="hidden" name="action" value="create">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <div class="modal-body">
           <div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="name" required></div>
           <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
+          <div class="mb-3"><label class="form-label">Business Logo (optional)</label><input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></div>
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button>

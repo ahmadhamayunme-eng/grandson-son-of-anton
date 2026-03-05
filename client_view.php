@@ -16,10 +16,55 @@ if (!in_array($tab, ['overview', 'projects', 'docs'], true)) {
 $clientStmt = $pdo->prepare('SELECT * FROM clients WHERE id = ? AND workspace_id = ?');
 $clientStmt->execute([$id, $ws]);
 $client = $clientStmt->fetch();
+
 if (!$client) {
   echo '<h3>Client not found</h3>';
   require __DIR__ . '/layout_end.php';
   exit;
+}
+
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_client'])) {
+  require_post();
+  csrf_verify();
+  if (!$can_manage) { flash_set('error', 'No permission.'); redirect("client_view.php?id=$id&tab=$tab"); }
+
+  $newName = trim((string)($_POST['client_name'] ?? ''));
+  $newNotes = trim((string)($_POST['client_notes'] ?? ''));
+  if ($newName === '') {
+    flash_set('error', 'Client name is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $pdo->prepare('UPDATE clients SET name=?, notes=?, updated_at=? WHERE id=? AND workspace_id=?')
+      ->execute([$newName, $newNotes ?: null, now(), $id, $ws]);
+
+  if ((string)($_POST['remove_client_logo'] ?? '') === '1') {
+    foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+      $f = __DIR__ . '/uploads/client_logos/' . $id . '.' . $ext;
+      if (is_file($f)) { @unlink($f); }
+    }
+  }
+
+  if (isset($_FILES['client_logo']) && is_array($_FILES['client_logo']) && (int)($_FILES['client_logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+    $tmp=(string)($_FILES['client_logo']['tmp_name'] ?? '');
+    $size=(int)($_FILES['client_logo']['size'] ?? 0);
+    $info=@getimagesize($tmp);
+    $mime=strtolower((string)($info['mime'] ?? ''));
+    $allowed=['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
+    if ($size > 0 && $size <= 2*1024*1024 && isset($allowed[$mime])) {
+      $dir=__DIR__ . '/uploads/client_logos';
+      if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+      foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+        $f=$dir . '/' . $id . '.' . $ext;
+        if (is_file($f)) @unlink($f);
+      }
+      @move_uploaded_file($tmp, $dir . '/' . $id . '.' . $allowed[$mime]);
+    }
+  }
+
+  flash_set('success', 'Client updated successfully.');
+  redirect("client_view.php?id=$id&tab=$tab");
 }
 
 $typeStmt = $pdo->prepare('SELECT id, name FROM project_types WHERE workspace_id = ? ORDER BY sort_order ASC');
@@ -29,6 +74,38 @@ $types = $typeStmt->fetchAll();
 $statusStmt = $pdo->prepare('SELECT id, name FROM project_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
 $statusStmt->execute([$ws]);
 $statuses = $statusStmt->fetchAll();
+
+function client_view_has_live_url_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'live_website_url'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+if (!client_view_has_live_url_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+try {
+  $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id INT NOT NULL,
+    client_id INT NULL,
+    project_id INT NULL,
+    site_name VARCHAR(190) NOT NULL,
+    website_url VARCHAR(255) NULL,
+    login_url VARCHAR(255) NULL,
+    login_username VARCHAR(190) NULL,
+    login_password TEXT NULL,
+    notes TEXT NULL,
+    created_by INT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_wl_ws (workspace_id),
+    INDEX idx_wl_client (client_id),
+    INDEX idx_wl_project (project_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) {}
 
 $clientProjectsStmt = $pdo->prepare('SELECT id, name FROM projects WHERE workspace_id = ? AND client_id = ? ORDER BY id DESC');
 $clientProjectsStmt->execute([$ws, $id]);
@@ -46,14 +123,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $name = trim($_POST['name'] ?? '');
   $type_id = (int)($_POST['type_id'] ?? 0);
   $status_id = (int)($_POST['status_id'] ?? 0);
+  $liveWebsiteUrl = trim((string)($_POST['live_website_url'] ?? ''));
+  $wlSiteName = trim((string)($_POST['wl_site_name'] ?? ''));
+  $wlLoginUrl = trim((string)($_POST['wl_login_url'] ?? ''));
+  $wlUsername = trim((string)($_POST['wl_login_username'] ?? ''));
+  $wlPassword = (string)($_POST['wl_login_password'] ?? '');
+  $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
 
   if ($name === '') {
     flash_set('error', 'Project name required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
-  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $_POST['due_date'] ?: null, null, now(), now()]);
+  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $name, $type_id, $status_id, $_POST['due_date'] ?: null, $liveWebsiteUrl ?: null, null, now(), now()]);
+
+  $newProjectId = (int)$pdo->lastInsertId();
+  if ($wlSiteName !== '' || $wlUsername !== '' || $wlPassword !== '' || $wlLoginUrl !== '') {
+    $siteName = $wlSiteName !== '' ? $wlSiteName : $name;
+    $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $newProjectId, $siteName, $liveWebsiteUrl ?: null, $wlLoginUrl ?: null, $wlUsername ?: null, $wlPassword ?: null, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+  }
 
   flash_set('success', 'Project created.');
   redirect("client_view.php?id=$id&tab=$tab");
@@ -246,6 +336,8 @@ function initials_from_names(string $names): string {
   .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
+  .client-logo-img, .client-logo-fallback { width:46px; height:46px; border-radius:12px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
+  .client-logo-fallback { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#f8d978,#9d9d9d); color:#181818; font-weight:700; }
   .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #f4cd5c; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
   .client-name { font-size: 2rem; margin: 0; font-weight: 500; }
   .client-badge { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(102, 83, 211, .18); color: #d2c7ff; border: 1px solid rgba(159, 139, 255, .25); border-radius: 8px; padding: 4px 9px; font-size: .83rem; }
@@ -331,10 +423,10 @@ function initials_from_names(string $names): string {
 <section class="client-shell">
   <header class="client-head">
     <div>
-      <div class="client-title-row"><span class="client-icon">⚡</span><h1 class="client-name"><?=h($client['name'])?></h1></div>
+      <div class="client-title-row"><?php if (client_logo_url((int)$client['id'])): ?><img class="client-logo-img" src="<?= h(client_logo_url((int)$client['id'])) ?>" alt="<?= h($client['name']) ?>"><?php else: ?><span class="client-logo-fallback"><?= h(user_initials((string)$client['name'])) ?></span><?php endif; ?><h1 class="client-name"><?=h($client['name'])?></h1></div>
       <span class="client-badge">◍ <?=h(format_date($client['created_at'] ?? now()))?></span>
     </div>
-    <?php if ($can_manage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?>
+    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#editClient">Edit Project</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
 
   <nav class="client-tabs">
@@ -414,7 +506,9 @@ function initials_from_names(string $names): string {
 </section>
 
 <?php if ($can_manage): ?>
-<div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
+<div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div><div class="mb-3"><label class="form-label">Current Live Website URL (optional)</label><input class="form-control" name="live_website_url" placeholder="https://example.com"></div><hr><h6 class="mb-2">Website Login (optional)</h6><div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div><div class="mb-3"><label class="form-label">Login URL</label><input class="form-control" name="wl_login_url" placeholder="https://example.com/wp-admin"></div><div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div><div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2"></textarea></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
+
+<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
 
 <div class="modal fade" id="addDoc" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Create Doc</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_doc" value="1"><div class="modal-body"><div class="row g-3"><div class="col-md-8"><label class="form-label">Title</label><input class="form-control" name="doc_title" required></div><div class="col-md-4"><label class="form-label">Project</label><select class="form-select" name="doc_project_id" required><?php foreach($clientProjects as $cp): ?><option value="<?=h($cp['id'])?>"><?=h($cp['name'])?></option><?php endforeach; ?></select></div><div class="col-12"><label class="form-label">Content</label><textarea class="form-control" name="doc_content" rows="9" placeholder="Write document..."></textarea></div></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create Doc</button></div></form></div></div></div>
 <?php endif; ?>
