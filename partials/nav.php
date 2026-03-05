@@ -10,6 +10,7 @@ function nav_item($href, $label, $icon, $path){
   return '<a class="nav-link sidebar-link '.$cls.'" href="'.$href.'"><span class="sidebar-icon">'.$icon.'</span><span>'.h($label).'</span></a>';
 }
 $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
+$avatarUrl = user_avatar_url((int)($u['id'] ?? 0));
 $logoFile = null;
 foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand.png', 'sidebar-logo.png'] as $candidate) {
   if (file_exists(__DIR__ . '/' . $candidate)) {
@@ -32,7 +33,8 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
   .sidebar-dot-item.active { background: rgba(246,212,105,.12); color: #f6d469; }
   .sidebar-dot-item.active::before { background: #f6d469; }
   .sidebar-footer { margin-top: auto; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); padding: 10px; display: flex; gap: 10px; align-items: center; }
-  .sidebar-avatar { width: 36px; height: 36px; border-radius: 999px; background: linear-gradient(135deg, #3a3a3a, #1f1f1f); color: #fff; font-weight: 600; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.2); flex: none; }
+  .sidebar-avatar { width: 36px; height: 36px; border-radius: 999px; background: linear-gradient(135deg, #3a3a3a, #1f1f1f); color: #fff; font-weight: 600; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.2); flex: none; overflow:hidden; }
+  .sidebar-avatar-img { width:100%; height:100%; object-fit:cover; display:block; }
   .sidebar-user-name { font-size: .95rem; font-weight: 600; line-height: 1.2; color: #efefef; }
   .sidebar-user-role { font-size: .82rem; color: rgba(236,236,236,.62); line-height: 1.15; }
 </style>
@@ -53,6 +55,8 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
       <?=nav_item('clients.php', 'Clients', '✉', $path)?>
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
+
+      <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
 
       <?php if ($role === 'Manager' || $role === 'Super Admin'): ?>
         <div class="sidebar-label">Manager</div>
@@ -81,7 +85,7 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
     </nav>
 
     <div class="sidebar-footer mt-3">
-      <div class="sidebar-avatar"><?=h($initials)?></div>
+      <div class="sidebar-avatar"><?php if ($avatarUrl): ?><img class="sidebar-avatar-img" src="<?= h($avatarUrl) ?>" alt="<?= h($u['name'] ?? 'User') ?>"><?php else: ?><?=h($initials)?><?php endif; ?></div>
       <div>
         <div class="sidebar-user-name"><?=h($u['name'] ?? 'User')?></div>
         <div class="sidebar-user-role"><?=h($role ?: 'Member')?></div>
