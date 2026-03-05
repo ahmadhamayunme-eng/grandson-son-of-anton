@@ -124,23 +124,6 @@ include __DIR__ . '/partials/header.php';
   .password-toggle svg { width: 20px; height: 20px; }
 
 
-  .password-toggle {
-    border: 0;
-    background: transparent;
-    color: #b8b8b8;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    cursor: pointer;
-  }
-  .password-toggle:hover { color: #f0cb47; }
-  .password-toggle:focus { outline: none; color: #f0cb47; }
-  .password-toggle svg { width: 20px; height: 20px; }
-
-
   .login-links {
     display: flex;
     justify-content: flex-end;
@@ -262,8 +245,6 @@ include __DIR__ . '/partials/header.php';
       <button class="login-submit" type="submit">Sign In</button>
     </form>
 
-    <div class="login-sep"></div>
-    <div class="login-signup">Don't have an account? <a href="super_login.php">Sign up</a></div>
   </div>
 </div>
 
