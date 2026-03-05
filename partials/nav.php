@@ -11,7 +11,7 @@ function nav_item($href, $label, $icon, $path){
 }
 $initials = strtoupper(substr($u['name'] ?? 'U', 0, 1));
 $logoFile = null;
-foreach (['logo.png', 'antonx.png', 'brand.png', 'sidebar-logo.png'] as $candidate) {
+foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand.png', 'sidebar-logo.png'] as $candidate) {
   if (file_exists(__DIR__ . '/' . $candidate)) {
     $logoFile = $candidate;
     break;

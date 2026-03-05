@@ -50,6 +50,43 @@ function project_initials(string $name): string {
 }
 
 try {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_project'])) {
+    require_post();
+    csrf_verify();
+    if (!$canManage) {
+      flash_set('error', 'No permission.');
+      redirect('projects.php');
+    }
+    $deleteId = (int)($_POST['id'] ?? 0);
+    if ($deleteId <= 0) {
+      flash_set('error', 'Invalid project selected.');
+      redirect('projects.php');
+    }
+    $st = $pdo->prepare('DELETE FROM projects WHERE workspace_id = ? AND id = ?');
+    $st->execute([$ws, $deleteId]);
+    flash_set('success', $st->rowCount() ? 'Project deleted permanently.' : 'Project not found.');
+    redirect('projects.php');
+  }
+
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_delete_projects'])) {
+    require_post();
+    csrf_verify();
+    if (!$canManage) {
+      flash_set('error', 'No permission.');
+      redirect('projects.php');
+    }
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+    if (!$ids) {
+      flash_set('error', 'Select at least one project to delete.');
+      redirect('projects.php');
+    }
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $st = $pdo->prepare("DELETE FROM projects WHERE workspace_id = ? AND id IN ($marks)");
+    $st->execute(array_merge([$ws], $ids));
+    flash_set('success', $st->rowCount() . ' project(s) deleted permanently.');
+    redirect('projects.php');
+  }
+
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
     require_post();
     csrf_verify();
@@ -231,20 +268,22 @@ SQL;
     </select>
   </form>
 
+  <?php if($canManage): ?><form method="post" id="bulkDeleteProjects" class="mb-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="bulk_delete_projects" value="1"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected projects and all linked tasks/docs/phases. Are you sure?');">Delete Selected</button></form><?php endif; ?>
   <section class="projects-card">
     <div class="projects-scroll">
       <table class="projects-table">
         <thead>
-          <tr><th>Project</th><th>Client</th><th>Status</th><th>Assignees</th><th>Last Activity</th></tr>
+          <tr><th class="text-center" style="width:44px;"><?php if($canManage): ?><input type="checkbox" onclick="document.querySelectorAll('.project-check').forEach(cb=>cb.checked=this.checked)"><?php endif; ?></th><th>Project</th><th>Client</th><th>Status</th><th>Assignees</th><th>Last Activity</th><th>Actions</th></tr>
         </thead>
         <tbody>
           <?php if (!$projects): ?>
-            <tr><td colspan="5" class="text-muted">No projects found.</td></tr>
+            <tr><td colspan="7" class="text-muted">No projects found.</td></tr>
           <?php else: foreach ($projects as $p):
             $badge = project_badge_class((string)$p['status_name']);
             $assignees = array_values(array_filter(array_map('trim', explode(',', (string)($p['assignee_names'] ?? '')))));
           ?>
             <tr>
+              <td class="text-center"><?php if($canManage): ?><input class="project-check" type="checkbox" name="ids[]" value="<?= (int)$p['id'] ?>" form="bulkDeleteProjects"><?php endif; ?></td>
               <td>
                 <a class="name-link" href="project_view.php?id=<?=h($p['id'])?>"><?=h($p['name'])?></a>
                 <div class="sub-client"><?=h($p['client_name'])?></div>
@@ -258,6 +297,7 @@ SQL;
                 <span class="assignee-count"><?= (int)$p['assignee_count'] ?></span>
               </td>
               <td><?=h(project_last_activity_label($p['last_activity']))?></td>
+              <td class="text-end"><?php if($canManage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this project and all linked tasks/docs/phases. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_project" value="1"><input type="hidden" name="id" value="<?= (int)$p['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>

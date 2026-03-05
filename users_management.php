@@ -98,6 +98,13 @@ foreach ($users as $urow) {
   .status-pill{display:inline-flex;padding:.23rem .6rem;border-radius:999px;border:1px solid transparent;font-size:.75rem;font-weight:600}
   .status-active{color:#78dfab;border-color:rgba(87,200,143,.35);background:rgba(87,200,143,.12)}
   .status-disabled{color:#d5d5d5;border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.08)}
+
+  .password-input-wrap{position:relative}
+  .password-input-wrap .form-control{padding-right:2.5rem}
+  .password-toggle-btn{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#111;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;cursor:pointer}
+  .password-toggle-btn:hover{color:#000}
+  .password-toggle-btn:focus{outline:none;color:#000}
+  .password-toggle-btn svg{width:18px;height:18px}
   @media (max-width: 1100px){.users-grid{grid-template-columns:1fr}.users-metrics{grid-template-columns:1fr}}
 </style>
 
@@ -133,7 +140,7 @@ foreach ($users as $urow) {
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="mb-2"><label class="form-label">Password <?= $edit ? '(leave blank to keep)' : '' ?></label><input class="form-control" name="password" type="password" <?= $edit ? '' : 'required' ?>></div>
+        <div class="mb-2"><label class="form-label">Password <?= $edit ? '(leave blank to keep)' : '' ?></label><div class="password-input-wrap"><input class="form-control" id="user-password" name="password" type="password" <?= $edit ? '' : 'required' ?>><button class="password-toggle-btn" type="button" aria-label="Show password" data-toggle-password="user-password" data-show-label="Show password" data-hide-label="Hide password"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></div>
         <?php if ($edit): ?>
           <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_active" <?= ((int)$edit['is_active'] === 1) ? 'checked' : '' ?>> <label class="form-check-label">Active</label></div>
         <?php endif; ?>
@@ -171,5 +178,28 @@ foreach ($users as $urow) {
     </div>
   </div>
 </div>
+
+
+<script>
+  (function(){
+    function eyeSvg(){
+      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>';
+    }
+    function eyeOffSvg(){
+      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.2 3.2L20.8 20.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 6.4C11 6.33 11.5 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C21 13.6 19.8 15 18.3 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.1 14.1C13.6 14.6 12.9 15 12 15C10.3 15 9 13.7 9 12C9 11.1 9.4 10.4 9.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.1 7.6C4.5 8.6 3.2 10.1 2.2 12C3.9 15.4 7.4 17.7 12 17.7C13.8 17.7 15.4 17.3 16.8 16.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    }
+
+    document.querySelectorAll('[data-toggle-password]').forEach(function(btn){
+      var input = document.getElementById(btn.getAttribute('data-toggle-password'));
+      if (!input) return;
+      btn.addEventListener('click', function(){
+        var hidden = input.type === 'password';
+        input.type = hidden ? 'text' : 'password';
+        btn.innerHTML = hidden ? eyeOffSvg() : eyeSvg();
+        btn.setAttribute('aria-label', hidden ? (btn.dataset.hideLabel || 'Hide password') : (btn.dataset.showLabel || 'Show password'));
+      });
+    });
+  })();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
