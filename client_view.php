@@ -429,22 +429,6 @@ function initials_from_names(string $names): string {
     <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#editClient">Edit Client</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
 
-  <?php if ($can_manage): ?>
-    <div class="px-3 pb-2 d-flex gap-2 flex-wrap">
-      <form method="post" enctype="multipart/form-data" class="d-flex gap-2">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="upload_client_logo" value="1">
-        <input class="form-control form-control-sm" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif" required>
-        <button class="btn btn-sm btn-outline-light">Upload Logo</button>
-      </form>
-      <form method="post" onsubmit="return confirm('Remove client logo?');">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="remove_client_logo" value="1">
-        <button class="btn btn-sm btn-outline-danger">Remove Logo</button>
-      </form>
-    </div>
-  <?php endif; ?>
-
   <nav class="client-tabs">
     <a class="client-tab <?=$tab === 'overview' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=overview">Overview</a>
     <a class="client-tab <?=$tab === 'projects' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=projects">Projects</a>
@@ -522,7 +506,72 @@ function initials_from_names(string $names): string {
 </section>
 
 <?php if ($can_manage): ?>
-<div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div><div class="mb-3"><label class="form-label">Current Live Website URL (optional)</label><input class="form-control" name="live_website_url" placeholder="https://example.com"></div><hr><h6 class="mb-2">Website Login (optional)</h6><div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div><div class="mb-3"><label class="form-label">Production URL</label><input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div><div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div><div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2"></textarea></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
+<div class="modal fade" id="addProject" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content card p-3">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Add Project</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="create_project" value="1">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Project Name</label>
+              <input class="form-control" name="name" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Type</label>
+              <select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Due Date (optional)</label>
+              <input class="form-control" type="date" name="due_date">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Current Live Website URL (optional)</label>
+              <input class="form-control" name="live_website_url" placeholder="https://example.com">
+            </div>
+          </div>
+          <hr>
+          <h6 class="mb-2">Website Login (optional)</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Website Name</label>
+              <input class="form-control" name="wl_site_name" placeholder="Main website">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Production URL</label>
+              <input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Username</label>
+              <input class="form-control" name="wl_login_username">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Password</label>
+              <input class="form-control" type="password" name="wl_login_password">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea class="form-control" name="wl_notes" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-yellow" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
 
