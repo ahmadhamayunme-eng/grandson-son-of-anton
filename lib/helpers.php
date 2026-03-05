@@ -72,3 +72,25 @@ function user_avatar_html(int $userId, string $name, string $class = 'avatar'): 
   }
   return '<span class="' . h($safeClass) . '">' . h(user_initials($name)) . '</span>';
 }
+
+
+function client_logo_url(int $clientId): ?string {
+  if ($clientId <= 0) return null;
+  $root = dirname(__DIR__);
+  $dir = $root . '/uploads/client_logos';
+  foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+    $file = $dir . '/' . $clientId . '.' . $ext;
+    if (is_file($file)) {
+      return 'uploads/client_logos/' . $clientId . '.' . $ext . '?v=' . (int)@filemtime($file);
+    }
+  }
+  return null;
+}
+
+function client_logo_html(int $clientId, string $name, string $class='client-logo'): string {
+  $url = client_logo_url($clientId);
+  if ($url) {
+    return '<img src="' . h($url) . '" alt="' . h($name) . '" class="' . h($class) . '">';
+  }
+  return '<span class="' . h($class) . '">' . h(user_initials($name)) . '</span>';
+}

@@ -55,6 +55,9 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
       <?=nav_item('clients.php', 'Clients', '✉', $path)?>
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
+      <?=nav_item('website_logins.php', 'Website Logins', '⌗', $path)?>
+
+      <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
 
       <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
 
