@@ -41,17 +41,13 @@ include __DIR__ . '/partials/header.php';
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    color: #f2f2f2;
-    font-size: 28px;
-    font-weight: 500;
-    line-height: 1;
     margin-bottom: 28px;
   }
 
-  .login-brand svg {
-    width: 30px;
-    height: 30px;
+  .login-brand img {
+    width: 170px;
+    height: auto;
+    display: block;
   }
 
   .login-form-group {
@@ -172,8 +168,8 @@ include __DIR__ . '/partials/header.php';
 
   @media (max-width: 900px) {
     .login-card { max-width: 500px; }
-    .login-brand { font-size: 26px; margin-bottom: 24px; }
-    .login-brand svg { width: 28px; height: 28px; }
+    .login-brand { margin-bottom: 24px; }
+    .login-brand img { width: 156px; }
     .login-label { font-size: 18px; }
     .input-shell { min-height: 50px; }
     .login-input { font-size: 14px; }
@@ -184,7 +180,8 @@ include __DIR__ . '/partials/header.php';
 
   @media (max-width: 640px) {
     .login-card { padding: 24px 16px 18px; border-radius: 12px; }
-    .login-brand { font-size: 22px; margin-bottom: 18px; }
+    .login-brand { margin-bottom: 18px; }
+    .login-brand img { width: 142px; }
     .login-label { font-size: 16px; margin-bottom: 6px; }
     .input-shell { min-height: 46px; padding: 0 12px; }
     .input-shell svg { width: 18px; height: 18px; }
@@ -198,11 +195,7 @@ include __DIR__ . '/partials/header.php';
 <div class="login-page">
   <div class="login-card">
     <div class="login-brand" aria-label="AntonX">
-      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="24" cy="24" r="21" stroke="#f0cb47" stroke-width="3"/>
-        <path d="M27.8 10.5L16.9 26.2H24.1L20.4 37.5L31.3 21.8H24.1L27.8 10.5Z" fill="#f0cb47"/>
-      </svg>
-      <span>AntonX</span>
+      <img src="partials/antonx-logo.png" alt="AntonX">
     </div>
 
     <?php if ($error): ?><div class="alert alert-danger login-alert"><?=h($error)?></div><?php endif; ?>
