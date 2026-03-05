@@ -54,9 +54,7 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
 
-      <?php if (in_array($role, ['SEO', 'Developer'], true)): ?>
-        <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
-      <?php endif; ?>
+      <?=nav_item('profile_account_settings_overview.php', 'Account Settings', '⚙', $path)?>
 
       <?php if ($role === 'Manager' || $role === 'Super Admin'): ?>
         <div class="sidebar-label">Manager</div>
