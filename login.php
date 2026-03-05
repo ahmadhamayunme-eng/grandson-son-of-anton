@@ -96,6 +96,33 @@ include __DIR__ . '/partials/header.php';
   }
 
   .login-input::placeholder { color: #a5a5a5; }
+  .login-input:-webkit-autofill,
+  .login-input:-webkit-autofill:hover,
+  .login-input:-webkit-autofill:focus,
+  .login-input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f3f3f3;
+    -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
+    box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
+    caret-color: #f3f3f3;
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  .password-toggle {
+    border: 0;
+    background: transparent;
+    color: #b8b8b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    cursor: pointer;
+  }
+  .password-toggle:hover { color: #f0cb47; }
+  .password-toggle:focus { outline: none; color: #f0cb47; }
+  .password-toggle svg { width: 20px; height: 20px; }
+
 
   .login-links {
     display: flex;
@@ -202,6 +229,12 @@ include __DIR__ . '/partials/header.php';
             <path d="M8.5 11V8.5C8.5 6.57 10.07 5 12 5C13.93 5 15.5 6.57 15.5 8.5V11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           </svg>
           <input class="login-input" id="login-password" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+          <button class="password-toggle" type="button" aria-label="Show password" data-toggle-password="login-password" data-show-label="Show password" data-hide-label="Hide password">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -212,8 +245,29 @@ include __DIR__ . '/partials/header.php';
       <button class="login-submit" type="submit">Sign In</button>
     </form>
 
-    <div class="login-sep"></div>
-    <div class="login-signup">Don't have an account? <a href="super_login.php">Sign up</a></div>
   </div>
 </div>
+
+<script>
+  (function(){
+    function eyeSvg(){
+      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>';
+    }
+    function eyeOffSvg(){
+      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.2 3.2L20.8 20.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 6.4C11 6.33 11.5 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C21 13.6 19.8 15 18.3 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.1 14.1C13.6 14.6 12.9 15 12 15C10.3 15 9 13.7 9 12C9 11.1 9.4 10.4 9.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.1 7.6C4.5 8.6 3.2 10.1 2.2 12C3.9 15.4 7.4 17.7 12 17.7C13.8 17.7 15.4 17.3 16.8 16.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    }
+
+    document.querySelectorAll('[data-toggle-password]').forEach(function(btn){
+      var input = document.getElementById(btn.getAttribute('data-toggle-password'));
+      if (!input) return;
+      btn.addEventListener('click', function(){
+        var hidden = input.type === 'password';
+        input.type = hidden ? 'text' : 'password';
+        btn.innerHTML = hidden ? eyeOffSvg() : eyeSvg();
+        btn.setAttribute('aria-label', hidden ? (btn.dataset.hideLabel || 'Hide password') : (btn.dataset.showLabel || 'Show password'));
+      });
+    });
+  })();
+</script>
+
 <?php include __DIR__ . '/partials/footer.php'; ?>
