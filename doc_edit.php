@@ -2,7 +2,7 @@
 require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
 $role=auth_user()['role_name'] ?? '';
-$can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
+$can_manage=in_array($role,['CEO','Manager','Super Admin'],true);
 
 $id=(int)($_GET['id'] ?? 0);
 $stmt=$pdo->prepare("SELECT d.*, p.name AS project_name, c.name AS client_name

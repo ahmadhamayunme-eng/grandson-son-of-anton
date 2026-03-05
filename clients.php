@@ -6,7 +6,7 @@ $ws = auth_workspace_id();
 $user = auth_user();
 $userId = (int)($user['id'] ?? 0);
 $role = $user['role_name'] ?? '';
-$can_manage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require_post();

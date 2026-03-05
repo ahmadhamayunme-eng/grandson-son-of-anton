@@ -6,12 +6,12 @@ $stmt=$pdo->prepare("SELECT t.id,t.title,t.updated_at,p.name AS project_name,c.n
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
   JOIN clients c ON c.id=p.client_id
-  WHERE t.workspace_id=? AND t.status='Completed (Needs CTO Review)'
+  WHERE t.workspace_id=? AND t.status='Completed (Needs Manager Review)'
   ORDER BY t.updated_at DESC");
 $stmt->execute([$ws]);
 $rows=$stmt->fetchAll();
 ?>
-<h2 class="mb-3">Completed Tasks (Needs CTO Review)</h2>
+<h2 class="mb-3">Completed Tasks (Needs Manager Review)</h2>
 <div class="card p-3">
   <div class="table-responsive">
     <table class="table table-dark table-hover align-middle mb-0">

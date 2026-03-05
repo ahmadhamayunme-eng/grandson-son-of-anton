@@ -26,7 +26,7 @@ function safe_rows(PDO $pdo, string $sql, array $params = []): array {
 
 $clients = (int)$pdo->query("SELECT COUNT(*) c FROM clients WHERE workspace_id=$ws")->fetch()['c'];
 $projects = (int)$pdo->query("SELECT COUNT(*) c FROM projects WHERE workspace_id=$ws")->fetch()['c'];
-$tasks = (int)$pdo->query("SELECT COUNT(*) c FROM tasks WHERE workspace_id=$ws AND status IN ('To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)')")->fetch()['c'];
+$tasks = (int)$pdo->query("SELECT COUNT(*) c FROM tasks WHERE workspace_id=$ws AND status IN ('To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)')")->fetch()['c'];
 
 $finance = finance_totals($ws);
 $monthlyRevenue = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(CURDATE(), '%Y-%m')", [$ws]);

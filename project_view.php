@@ -5,7 +5,7 @@ $pdo = db();
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
-$can_manage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 $isSuperAdmin = $role === 'Super Admin';
 
 $id = (int)($_GET['id'] ?? 0);
@@ -189,7 +189,7 @@ try {
   $statusesStmt->execute([$ws]);
   $statuses = array_map(fn($r) => $r['name'], $statusesStmt->fetchAll());
   if (!$statuses) {
-    $statuses = ['Backlog','To Do','In Progress','Completed (Needs CTO Review)','Approved (Ready to Submit)','Submitted to Client'];
+    $statuses = ['Backlog','To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)','Submitted to Client'];
   }
 
   $teamStmt = $pdo->prepare("SELECT u.id,u.name,r.name AS role_name

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/layout.php';
 $pdo = db(); $ws = auth_workspace_id();
 $role = auth_user()['role_name'] ?? '';
-if (!in_array($role, ['CEO','CTO','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
+if (!in_array($role, ['CEO','Manager','Super Admin'], true)) { http_response_code(403); echo 'Forbidden'; require __DIR__ . '/layout_end.php'; exit; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require_post(); csrf_verify();

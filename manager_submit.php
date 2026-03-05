@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
-auth_require_any(['CTO','Super Admin']);
+auth_require_any(['Manager','Super Admin']);
 $pdo=db(); $ws=auth_workspace_id();
 
 $rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,

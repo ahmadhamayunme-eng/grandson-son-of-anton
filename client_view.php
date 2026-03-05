@@ -5,7 +5,7 @@ $pdo = db();
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
-$can_manage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 
 $id = (int)($_GET['id'] ?? 0);
 $tab = strtolower(trim((string)($_GET['tab'] ?? 'overview')));

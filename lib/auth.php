@@ -11,7 +11,7 @@ function auth_require_any(array $roleNames): void {
 }
 function auth_can_finance(): bool {
   $r = auth_user()['role_name'] ?? '';
-  return in_array($r, ['CEO','CFO','CTO','Super Admin'], true);
+  return in_array($r, ['CEO','CFO','Manager','Super Admin'], true);
 }
 function auth_workspace_id(): int { return (int)(auth_user()['workspace_id'] ?? 0); }
 

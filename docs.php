@@ -3,7 +3,7 @@ require_once __DIR__ . '/layout.php';
 $pdo=db(); $ws=auth_workspace_id();
 $user=auth_user();
 $role=$user['role_name'] ?? '';
-$can_manage=in_array($role,['CEO','CTO','Super Admin'],true);
+$can_manage=in_array($role,['CEO','Manager','Super Admin'],true);
 
 $project_id=(int)($_GET['project_id'] ?? 0);
 $search=trim((string)($_GET['q'] ?? ''));

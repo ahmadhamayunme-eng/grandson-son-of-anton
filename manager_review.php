@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
-auth_require_any(['CTO','Super Admin']);
+auth_require_any(['Manager','Super Admin']);
 $pdo=db(); $ws=auth_workspace_id();
 
 $rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,
@@ -10,7 +10,7 @@ $rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_n
   JOIN clients c ON c.id=p.client_id
   LEFT JOIN task_assignees ta ON ta.task_id=t.id
   LEFT JOIN users u ON u.id=ta.user_id
-  WHERE t.workspace_id=$ws AND t.status='Completed (Needs CTO Review)'
+  WHERE t.workspace_id=$ws AND t.status='Completed (Needs Manager Review)'
   GROUP BY t.id
   ORDER BY t.updated_at DESC")->fetchAll();
 
@@ -20,13 +20,13 @@ foreach($rows as $r){ $unique_clients[$r['client_name']]=1; }
 $client_count=count($unique_clients);
 ?>
 <style>
-  .cto-shell{border:1px solid rgba(255,255,255,.11);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
-  .cto-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
-  .cto-title{font-size:2rem;font-weight:600;margin:0}
-  .cto-sub{color:rgba(220,220,220,.7);margin-top:.2rem}
-  .cto-badges{display:flex;gap:.5rem;flex-wrap:wrap}
-  .cto-badge{padding:.42rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#eaeaea;font-size:.88rem}
-  .cto-body{padding:1rem 1.1rem}
+  .manager-shell{border:1px solid rgba(255,255,255,.11);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
+  .manager-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .manager-title{font-size:2rem;font-weight:600;margin:0}
+  .manager-sub{color:rgba(220,220,220,.7);margin-top:.2rem}
+  .manager-badges{display:flex;gap:.5rem;flex-wrap:wrap}
+  .manager-badge{padding:.42rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#eaeaea;font-size:.88rem}
+  .manager-body{padding:1rem 1.1rem}
   .queue-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.02));margin-bottom:.7rem}
   .queue-row{display:flex;justify-content:space-between;gap:1rem;padding:.9rem 1rem;align-items:center;flex-wrap:wrap}
   .queue-title{font-size:1.25rem;font-weight:600}
@@ -37,22 +37,22 @@ $client_count=count($unique_clients);
   .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
 </style>
 
-<div class="cto-shell">
-  <div class="cto-head">
+<div class="manager-shell">
+  <div class="manager-head">
     <div>
-      <h2 class="cto-title">CTO Review Queue</h2>
-      <div class="cto-sub">Review completed work before approval and client submission.</div>
+      <h2 class="manager-title">Manager Review Queue</h2>
+      <div class="manager-sub">Review completed work before approval and client submission.</div>
     </div>
-    <div class="cto-badges">
-      <span class="cto-badge">Waiting: <?= (int)$total ?></span>
-      <span class="cto-badge">Clients: <?= (int)$client_count ?></span>
-      <span class="cto-badge">Role: CTO</span>
+    <div class="manager-badges">
+      <span class="manager-badge">Waiting: <?= (int)$total ?></span>
+      <span class="manager-badge">Clients: <?= (int)$client_count ?></span>
+      <span class="manager-badge">Role: Manager</span>
     </div>
   </div>
 
-  <div class="cto-body">
+  <div class="manager-body">
     <?php if(!$rows): ?>
-      <div class="empty-box">No tasks are waiting for CTO review right now.</div>
+      <div class="empty-box">No tasks are waiting for Manager review right now.</div>
     <?php else: ?>
       <?php foreach($rows as $r): ?>
         <div class="queue-card">
@@ -62,7 +62,7 @@ $client_count=count($unique_clients);
               <div class="queue-meta"><?=h($r['client_name'])?> · <?=h($r['project_name'])?> · Updated <?=h($r['updated_at'])?></div>
             </div>
             <div class="queue-right">
-              <span class="status-chip">Needs CTO Review</span>
+              <span class="status-chip">Needs Manager Review</span>
               <span class="assignee-chip" title="<?=h($r['assignees'] ?? '—')?>"><?=h($r['assignees'] ?? 'Unassigned')?></span>
               <a class="btn btn-yellow btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open Review</a>
             </div>

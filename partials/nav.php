@@ -54,10 +54,10 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
       <?=nav_item('projects.php', 'Projects', '⌂', $path)?>
       <?=nav_item('docs.php', 'Docs', '⌕', $path)?>
 
-      <?php if ($role === 'CTO' || $role === 'Super Admin'): ?>
-        <div class="sidebar-label">CTO</div>
-        <a class="sidebar-dot-item <?=active('cto_review.php', $path)?>" href="cto_review.php">Review Completed Tasks</a>
-        <a class="sidebar-dot-item <?=active('cto_submit.php', $path)?>" href="cto_submit.php">Submit to Client</a>
+      <?php if ($role === 'Manager' || $role === 'Super Admin'): ?>
+        <div class="sidebar-label">Manager</div>
+        <a class="sidebar-dot-item <?=active('manager_review.php', $path)?>" href="manager_review.php">Review Completed Tasks</a>
+        <a class="sidebar-dot-item <?=active('manager_submit.php', $path)?>" href="manager_submit.php">Submit to Client</a>
       <?php endif; ?>
 
       <?php if (auth_can_finance()): ?>
@@ -70,7 +70,7 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
         <a class="sidebar-dot-item <?=active('overhead_cost.php', $path)?>" href="overhead_cost.php">Overhead</a>
       <?php endif; ?>
 
-      <?php if (in_array($role, ['CEO','CTO','Super Admin'], true)): ?>
+      <?php if (in_array($role, ['CEO','Manager','Super Admin'], true)): ?>
         <div class="sidebar-label">Admin</div>
         <a class="sidebar-dot-item <?=active('users_management.php', $path)?>" href="users_management.php">Users</a>
         <a class="sidebar-dot-item <?=active('roles_permissions.php', $path)?>" href="roles_permissions.php">Roles & Permissions</a>

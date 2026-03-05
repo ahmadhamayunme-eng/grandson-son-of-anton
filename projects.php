@@ -4,7 +4,7 @@ require_once __DIR__ . '/layout.php';
 $pdo = db();
 $ws = auth_workspace_id();
 $role = auth_user()['role_name'] ?? '';
-$canManage = in_array($role, ['CEO', 'CTO', 'Super Admin'], true);
+$canManage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 $isSuperAdmin = $role === 'Super Admin';
 
 $projects = [];
