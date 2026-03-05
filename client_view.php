@@ -16,12 +16,54 @@ if (!in_array($tab, ['overview', 'projects', 'docs'], true)) {
 $clientStmt = $pdo->prepare('SELECT * FROM clients WHERE id = ? AND workspace_id = ?');
 $clientStmt->execute([$id, $ws]);
 $client = $clientStmt->fetch();
+
 if (!$client) {
   echo '<h3>Client not found</h3>';
   require __DIR__ . '/layout_end.php';
   exit;
 }
 
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_client_logo'])) {
+  require_post();
+  csrf_verify();
+  if (!$can_manage) { flash_set('error', 'No permission.'); redirect("client_view.php?id=$id&tab=$tab"); }
+  if (!isset($_FILES['client_logo']) || !is_array($_FILES['client_logo']) || (int)($_FILES['client_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    flash_set('error', 'Please choose a valid logo image.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+  $tmp=(string)($_FILES['client_logo']['tmp_name'] ?? '');
+  $size=(int)($_FILES['client_logo']['size'] ?? 0);
+  $info=@getimagesize($tmp);
+  $mime=strtolower((string)($info['mime'] ?? ''));
+  $allowed=['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
+  if ($size <= 0 || $size > 2*1024*1024 || !isset($allowed[$mime])) {
+    flash_set('error', 'Logo must be JPG, PNG, WEBP, or GIF and under 2MB.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+  $dir=__DIR__ . '/uploads/client_logos';
+  if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+  foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+    $f=$dir . '/' . $id . '.' . $ext;
+    if (is_file($f)) @unlink($f);
+  }
+  @move_uploaded_file($tmp, $dir . '/' . $id . '.' . $allowed[$mime]);
+  flash_set('success', 'Client logo updated.');
+  redirect("client_view.php?id=$id&tab=$tab");
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_client_logo'])) {
+  require_post();
+  csrf_verify();
+  if (!$can_manage) { flash_set('error', 'No permission.'); redirect("client_view.php?id=$id&tab=$tab"); }
+  $removed=false;
+  foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+    $f=__DIR__ . '/uploads/client_logos/' . $id . '.' . $ext;
+    if (is_file($f) && @unlink($f)) $removed=true;
+  }
+  flash_set($removed ? 'success' : 'error', $removed ? 'Client logo removed.' : 'No logo found.');
+  redirect("client_view.php?id=$id&tab=$tab");
+}
 $typeStmt = $pdo->prepare('SELECT id, name FROM project_types WHERE workspace_id = ? ORDER BY sort_order ASC');
 $typeStmt->execute([$ws]);
 $types = $typeStmt->fetchAll();
@@ -246,6 +288,8 @@ function initials_from_names(string $names): string {
   .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
+  .client-logo-img, .client-logo-fallback { width:46px; height:46px; border-radius:12px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
+  .client-logo-fallback { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#f8d978,#9d9d9d); color:#181818; font-weight:700; }
   .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #f4cd5c; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
   .client-name { font-size: 2rem; margin: 0; font-weight: 500; }
   .client-badge { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(102, 83, 211, .18); color: #d2c7ff; border: 1px solid rgba(159, 139, 255, .25); border-radius: 8px; padding: 4px 9px; font-size: .83rem; }
@@ -331,11 +375,27 @@ function initials_from_names(string $names): string {
 <section class="client-shell">
   <header class="client-head">
     <div>
-      <div class="client-title-row"><span class="client-icon">⚡</span><h1 class="client-name"><?=h($client['name'])?></h1></div>
+      <div class="client-title-row"><?php if (client_logo_url((int)$client['id'])): ?><img class="client-logo-img" src="<?= h(client_logo_url((int)$client['id'])) ?>" alt="<?= h($client['name']) ?>"><?php else: ?><span class="client-logo-fallback"><?= h(user_initials((string)$client['name'])) ?></span><?php endif; ?><h1 class="client-name"><?=h($client['name'])?></h1></div>
       <span class="client-badge">◍ <?=h(format_date($client['created_at'] ?? now()))?></span>
     </div>
-    <?php if ($can_manage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?>
+    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
+
+  <?php if ($can_manage): ?>
+    <div class="px-3 pb-2 d-flex gap-2 flex-wrap">
+      <form method="post" enctype="multipart/form-data" class="d-flex gap-2">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="upload_client_logo" value="1">
+        <input class="form-control form-control-sm" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif" required>
+        <button class="btn btn-sm btn-outline-light">Upload Logo</button>
+      </form>
+      <form method="post" onsubmit="return confirm('Remove client logo?');">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="remove_client_logo" value="1">
+        <button class="btn btn-sm btn-outline-danger">Remove Logo</button>
+      </form>
+    </div>
+  <?php endif; ?>
 
   <nav class="client-tabs">
     <a class="client-tab <?=$tab === 'overview' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=overview">Overview</a>
