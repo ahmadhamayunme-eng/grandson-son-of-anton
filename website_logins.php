@@ -1,3 +1,12 @@
+<?php
+require_once __DIR__ . '/layout.php';
+
+$pdo = db();
+$ws = auth_workspace_id();
+$user = auth_user();
+$role = $user['role_name'] ?? '';
+$canManage = in_array($role, ['CEO','Manager','Super Admin'], true);
+
 $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
   id INT AUTO_INCREMENT PRIMARY KEY,
   workspace_id INT NOT NULL,
