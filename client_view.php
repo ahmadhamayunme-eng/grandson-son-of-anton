@@ -429,22 +429,6 @@ function initials_from_names(string $names): string {
     <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#editClient">Edit Client</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
 
-  <?php if ($can_manage): ?>
-    <div class="px-3 pb-2 d-flex gap-2 flex-wrap">
-      <form method="post" enctype="multipart/form-data" class="d-flex gap-2">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="upload_client_logo" value="1">
-        <input class="form-control form-control-sm" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif" required>
-        <button class="btn btn-sm btn-outline-light">Upload Logo</button>
-      </form>
-      <form method="post" onsubmit="return confirm('Remove client logo?');">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="remove_client_logo" value="1">
-        <button class="btn btn-sm btn-outline-danger">Remove Logo</button>
-      </form>
-    </div>
-  <?php endif; ?>
-
   <nav class="client-tabs">
     <a class="client-tab <?=$tab === 'overview' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=overview">Overview</a>
     <a class="client-tab <?=$tab === 'projects' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=projects">Projects</a>
