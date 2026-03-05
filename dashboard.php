@@ -1,4 +1,16 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/helpers.php';
+auth_require_login();
+
+$role = auth_user()['role_name'] ?? '';
+if (in_array($role, ['Developer', 'SEO'], true)) {
+  redirect('dashboard_member.php');
+}
+
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/finance.php';
 $pdo = db();
