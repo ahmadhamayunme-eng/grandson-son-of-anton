@@ -135,7 +135,7 @@ $rows = $list->fetchAll();
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">Website Name</label><input class="form-control" name="site_name" required></div>
         <div class="col-md-6"><label class="form-label">Website URL</label><input class="form-control" name="website_url" placeholder="https://example.com"></div>
-        <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" name="login_url" placeholder="https://example.com/wp-admin"></div>
+        <div class="col-md-6"><label class="form-label">Production URL</label><input class="form-control" name="login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div>
         <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="login_username"></div>
         <div class="col-md-6"><label class="form-label">Password</label><div class="pw-input-wrap"><input class="form-control" type="password" name="login_password" id="new_login_password"><button type="button" class="pw-toggle" data-target="new_login_password" aria-label="Show password" title="Show/Hide Password">👁</button></div></div>
         <div class="col-md-6"><label class="form-label">Client (optional)</label><select class="form-select" name="client_id"><option value="0">None</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $prefillClientId===(int)$c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
@@ -148,7 +148,11 @@ $rows = $list->fetchAll();
 
   <div class="table-responsive">
     <table class="table table-dark table-striped align-middle">
+<<<<<<< codex/add-account-settings-page-to-navbar-exlhi8
+      <thead><tr><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Production URL</th><th>Notes</th><th></th></tr></thead>
+=======
       <thead><tr><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Login URL</th><th>Notes</th><th></th></tr></thead>
+>>>>>>> main
       <tbody>
       <?php foreach($rows as $r): ?>
         <tr>

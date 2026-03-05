@@ -382,7 +382,7 @@ SQL;
           <hr>
           <h6 class="mb-2">Website Login (optional)</h6>
           <div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div>
-          <div class="mb-3"><label class="form-label">Login URL</label><input class="form-control" name="wl_login_url" placeholder="https://example.com/wp-admin"></div>
+          <div class="mb-3"><label class="form-label">Production URL</label><input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div>
           <div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div>
           <div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div>
           <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea></div>
