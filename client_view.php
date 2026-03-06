@@ -83,8 +83,29 @@ function client_view_has_live_url_col(PDO $pdo): bool {
     return false;
   }
 }
+function client_view_has_website_details_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'website_details_json'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function client_view_is_valid_url(string $value): bool {
+  if ($value === '') {
+    return true;
+  }
+  if (!filter_var($value, FILTER_VALIDATE_URL)) {
+    return false;
+  }
+  $scheme = strtolower((string)parse_url($value, PHP_URL_SCHEME));
+  return in_array($scheme, ['http', 'https'], true);
+}
 if (!client_view_has_live_url_col($pdo)) {
   try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+if (!client_view_has_website_details_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN website_details_json LONGTEXT NULL AFTER notes"); } catch (Throwable $e) {}
 }
 try {
   $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
@@ -123,31 +144,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $name = trim($_POST['name'] ?? '');
   $type_id = (int)($_POST['type_id'] ?? 0);
   $status_id = (int)($_POST['status_id'] ?? 0);
-  $liveWebsiteUrl = trim((string)($_POST['live_website_url'] ?? ''));
-  $wlSiteName = trim((string)($_POST['wl_site_name'] ?? ''));
-  $wlLoginUrl = trim((string)($_POST['wl_login_url'] ?? ''));
-  $wlUsername = trim((string)($_POST['wl_login_username'] ?? ''));
-  $wlPassword = (string)($_POST['wl_login_password'] ?? '');
+  $dueDate = $_POST['due_date'] ?: null;
   $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
+
+  $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
+  $currentLiveUrl = trim((string)($_POST['current_live_url'] ?? ''));
+  $currentLiveLoginUrl = trim((string)($_POST['current_live_login_url'] ?? ''));
+  $currentLiveUsername = trim((string)($_POST['current_live_username'] ?? ''));
+  $currentLivePassword = (string)($_POST['current_live_password'] ?? '');
+
+  $productionName = trim((string)($_POST['production_name'] ?? ''));
+  $productionUrl = trim((string)($_POST['production_url'] ?? ''));
+  $productionLoginUrl = trim((string)($_POST['production_login_url'] ?? ''));
+  $productionUsername = trim((string)($_POST['production_username'] ?? ''));
+  $productionPassword = (string)($_POST['production_password'] ?? '');
 
   if ($name === '') {
     flash_set('error', 'Project name required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
-  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $_POST['due_date'] ?: null, $liveWebsiteUrl ?: null, null, now(), now()]);
+  if ($productionName === '' || $productionUrl === '' || $productionLoginUrl === '' || $productionUsername === '' || $productionPassword === '') {
+    flash_set('error', 'Production Website fields are required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  if (!client_view_is_valid_url($currentLiveUrl) || !client_view_is_valid_url($currentLiveLoginUrl) || !client_view_is_valid_url($productionUrl) || !client_view_is_valid_url($productionLoginUrl)) {
+    flash_set('error', 'Please enter valid website URLs (http/https).');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $websiteDetails = [
+    'currentLiveWebsite' => [
+      'name' => $currentLiveName ?: null,
+      'url' => $currentLiveUrl ?: null,
+      'loginUrl' => $currentLiveLoginUrl ?: null,
+      'username' => $currentLiveUsername ?: null,
+      'password' => $currentLivePassword !== '' ? $currentLivePassword : null,
+    ],
+    'productionWebsite' => [
+      'name' => $productionName,
+      'url' => $productionUrl,
+      'loginUrl' => $productionLoginUrl,
+      'username' => $productionUsername,
+      'password' => $productionPassword,
+    ],
+  ];
+
+  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
 
   $newProjectId = (int)$pdo->lastInsertId();
-  if ($wlSiteName !== '' || $wlUsername !== '' || $wlPassword !== '' || $wlLoginUrl !== '') {
-    $siteName = $wlSiteName !== '' ? $wlSiteName : $name;
+
+  $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    ->execute([$ws, $id, $newProjectId, $productionName, $productionUrl, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+
+  if ($currentLiveLoginUrl !== '' && $currentLiveUsername !== '' && $currentLivePassword !== '') {
+    $currentSiteName = $currentLiveName !== '' ? $currentLiveName : ($name . ' (Current Live Website)');
     $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $newProjectId, $siteName, $liveWebsiteUrl ?: null, $wlLoginUrl ?: null, $wlUsername ?: null, $wlPassword ?: null, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+      ->execute([$ws, $id, $newProjectId, $currentSiteName, $currentLiveUrl ?: null, $currentLiveLoginUrl, $currentLiveUsername, $currentLivePassword, 'Current Live Website', (int)($user['id'] ?? 0), now(), now()]);
   }
 
   flash_set('success', 'Project created.');
   redirect("client_view.php?id=$id&tab=$tab");
 }
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_doc'])) {
   require_post();
@@ -429,22 +490,6 @@ function initials_from_names(string $names): string {
     <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#editClient">Edit Client</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
 
-  <?php if ($can_manage): ?>
-    <div class="px-3 pb-2 d-flex gap-2 flex-wrap">
-      <form method="post" enctype="multipart/form-data" class="d-flex gap-2">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="upload_client_logo" value="1">
-        <input class="form-control form-control-sm" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif" required>
-        <button class="btn btn-sm btn-outline-light">Upload Logo</button>
-      </form>
-      <form method="post" onsubmit="return confirm('Remove client logo?');">
-        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <input type="hidden" name="remove_client_logo" value="1">
-        <button class="btn btn-sm btn-outline-danger">Remove Logo</button>
-      </form>
-    </div>
-  <?php endif; ?>
-
   <nav class="client-tabs">
     <a class="client-tab <?=$tab === 'overview' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=overview">Overview</a>
     <a class="client-tab <?=$tab === 'projects' ? 'active' : ''?>" href="client_view.php?id=<?=h($id)?>&tab=projects">Projects</a>
@@ -522,7 +567,103 @@ function initials_from_names(string $names): string {
 </section>
 
 <?php if ($can_manage): ?>
-<div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div><div class="mb-3"><label class="form-label">Current Live Website URL (optional)</label><input class="form-control" name="live_website_url" placeholder="https://example.com"></div><hr><h6 class="mb-2">Website Login (optional)</h6><div class="mb-3"><label class="form-label">Website Name</label><input class="form-control" name="wl_site_name" placeholder="Main website"></div><div class="mb-3"><label class="form-label">Production URL</label><input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div><div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="wl_login_username"></div><div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="wl_login_password"></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2"></textarea></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
+<div class="modal fade" id="addProject" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content card p-3">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Add Project</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="create_project" value="1">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Project Name</label>
+              <input class="form-control" name="name" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Type</label>
+              <select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Due Date (optional)</label>
+              <input class="form-control" type="date" name="due_date">
+            </div>
+          </div>
+
+          <div class="mt-4 p-3 rounded border border-secondary-subtle">
+            <h6 class="mb-2">Current Live Website (Optional)</h6>
+            <div class="small text-muted mb-3">All fields are optional and independent.</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Current Live Website (if any) Name</label>
+                <input class="form-control" name="current_live_name" placeholder="Main website">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Current Live Website URL</label>
+                <input class="form-control" type="url" name="current_live_url" placeholder="https://example.com">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Login URL</label>
+                <input class="form-control" type="url" name="current_live_login_url" placeholder="https://example.com/wp-admin">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">User name</label>
+                <input class="form-control" name="current_live_username">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Password</label>
+                <input class="form-control" type="password" name="current_live_password">
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 p-3 rounded border border-warning-subtle">
+            <h6 class="mb-2">Production Website (Required)</h6>
+            <div class="small text-muted mb-3">All fields in this section are required.</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Website name</label>
+                <input class="form-control" name="production_name" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">URL</label>
+                <input class="form-control" type="url" name="production_url" placeholder="https://example.com" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Login URL</label>
+                <input class="form-control" type="url" name="production_login_url" placeholder="https://example.com/wp-admin" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">User</label>
+                <input class="form-control" name="production_username" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Password</label>
+                <input class="form-control" type="password" name="production_password" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-yellow" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
 
