@@ -417,7 +417,7 @@ function initials_from_names(string $names): string {
   .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
-  .client-logo-img, .client-logo-fallback { width:46px; height:46px; border-radius:12px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
+  .client-logo-img, .client-logo-fallback { width:72px; height:72px; border-radius:16px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
   .client-logo-fallback { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#f8d978,#9d9d9d); color:#181818; font-weight:700; }
   .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #f4cd5c; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
   .client-name { font-size: 2rem; margin: 0; font-weight: 500; }
