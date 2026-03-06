@@ -83,8 +83,29 @@ function client_view_has_live_url_col(PDO $pdo): bool {
     return false;
   }
 }
+function client_view_has_website_details_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'website_details_json'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function client_view_is_valid_url(string $value): bool {
+  if ($value === '') {
+    return true;
+  }
+  if (!filter_var($value, FILTER_VALIDATE_URL)) {
+    return false;
+  }
+  $scheme = strtolower((string)parse_url($value, PHP_URL_SCHEME));
+  return in_array($scheme, ['http', 'https'], true);
+}
 if (!client_view_has_live_url_col($pdo)) {
   try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+if (!client_view_has_website_details_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN website_details_json LONGTEXT NULL AFTER notes"); } catch (Throwable $e) {}
 }
 try {
   $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
@@ -123,31 +144,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $name = trim($_POST['name'] ?? '');
   $type_id = (int)($_POST['type_id'] ?? 0);
   $status_id = (int)($_POST['status_id'] ?? 0);
-  $liveWebsiteUrl = trim((string)($_POST['live_website_url'] ?? ''));
-  $wlSiteName = trim((string)($_POST['wl_site_name'] ?? ''));
-  $wlLoginUrl = trim((string)($_POST['wl_login_url'] ?? ''));
-  $wlUsername = trim((string)($_POST['wl_login_username'] ?? ''));
-  $wlPassword = (string)($_POST['wl_login_password'] ?? '');
+  $dueDate = $_POST['due_date'] ?: null;
   $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
+
+  $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
+  $currentLiveUrl = trim((string)($_POST['current_live_url'] ?? ''));
+  $currentLiveLoginUrl = trim((string)($_POST['current_live_login_url'] ?? ''));
+  $currentLiveUsername = trim((string)($_POST['current_live_username'] ?? ''));
+  $currentLivePassword = (string)($_POST['current_live_password'] ?? '');
+
+  $productionName = trim((string)($_POST['production_name'] ?? ''));
+  $productionUrl = trim((string)($_POST['production_url'] ?? ''));
+  $productionLoginUrl = trim((string)($_POST['production_login_url'] ?? ''));
+  $productionUsername = trim((string)($_POST['production_username'] ?? ''));
+  $productionPassword = (string)($_POST['production_password'] ?? '');
 
   if ($name === '') {
     flash_set('error', 'Project name required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
-  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $_POST['due_date'] ?: null, $liveWebsiteUrl ?: null, null, now(), now()]);
+  if ($productionName === '' || $productionUrl === '' || $productionLoginUrl === '' || $productionUsername === '' || $productionPassword === '') {
+    flash_set('error', 'Production Website fields are required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  if (!client_view_is_valid_url($currentLiveUrl) || !client_view_is_valid_url($currentLiveLoginUrl) || !client_view_is_valid_url($productionUrl) || !client_view_is_valid_url($productionLoginUrl)) {
+    flash_set('error', 'Please enter valid website URLs (http/https).');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $websiteDetails = [
+    'currentLiveWebsite' => [
+      'name' => $currentLiveName ?: null,
+      'url' => $currentLiveUrl ?: null,
+      'loginUrl' => $currentLiveLoginUrl ?: null,
+      'username' => $currentLiveUsername ?: null,
+      'password' => $currentLivePassword !== '' ? $currentLivePassword : null,
+    ],
+    'productionWebsite' => [
+      'name' => $productionName,
+      'url' => $productionUrl,
+      'loginUrl' => $productionLoginUrl,
+      'username' => $productionUsername,
+      'password' => $productionPassword,
+    ],
+  ];
+
+  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
 
   $newProjectId = (int)$pdo->lastInsertId();
-  if ($wlSiteName !== '' || $wlUsername !== '' || $wlPassword !== '' || $wlLoginUrl !== '') {
-    $siteName = $wlSiteName !== '' ? $wlSiteName : $name;
+
+  $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    ->execute([$ws, $id, $newProjectId, $productionName, $productionUrl, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+
+  if ($currentLiveLoginUrl !== '' && $currentLiveUsername !== '' && $currentLivePassword !== '') {
+    $currentSiteName = $currentLiveName !== '' ? $currentLiveName : ($name . ' (Current Live Website)');
     $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $newProjectId, $siteName, $liveWebsiteUrl ?: null, $wlLoginUrl ?: null, $wlUsername ?: null, $wlPassword ?: null, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+      ->execute([$ws, $id, $newProjectId, $currentSiteName, $currentLiveUrl ?: null, $currentLiveLoginUrl, $currentLiveUsername, $currentLivePassword, 'Current Live Website', (int)($user['id'] ?? 0), now(), now()]);
   }
 
   flash_set('success', 'Project created.');
   redirect("client_view.php?id=$id&tab=$tab");
 }
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_doc'])) {
   require_post();
@@ -534,34 +595,65 @@ function initials_from_names(string $names): string {
               <label class="form-label">Due Date (optional)</label>
               <input class="form-control" type="date" name="due_date">
             </div>
-            <div class="col-md-8">
-              <label class="form-label">Current Live Website URL (optional)</label>
-              <input class="form-control" name="live_website_url" placeholder="https://example.com">
+          </div>
+
+          <div class="mt-4 p-3 rounded border border-secondary-subtle">
+            <h6 class="mb-2">Current Live Website (Optional)</h6>
+            <div class="small text-muted mb-3">All fields are optional and independent.</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Current Live Website (if any) Name</label>
+                <input class="form-control" name="current_live_name" placeholder="Main website">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Current Live Website URL</label>
+                <input class="form-control" type="url" name="current_live_url" placeholder="https://example.com">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Login URL</label>
+                <input class="form-control" type="url" name="current_live_login_url" placeholder="https://example.com/wp-admin">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">User name</label>
+                <input class="form-control" name="current_live_username">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Password</label>
+                <input class="form-control" type="password" name="current_live_password">
+              </div>
             </div>
           </div>
-          <hr>
-          <h6 class="mb-2">Website Login (optional)</h6>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label">Website Name</label>
-              <input class="form-control" name="wl_site_name" placeholder="Main website">
+
+          <div class="mt-3 p-3 rounded border border-warning-subtle">
+            <h6 class="mb-2">Production Website (Required)</h6>
+            <div class="small text-muted mb-3">All fields in this section are required.</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Website name</label>
+                <input class="form-control" name="production_name" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">URL</label>
+                <input class="form-control" type="url" name="production_url" placeholder="https://example.com" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Login URL</label>
+                <input class="form-control" type="url" name="production_login_url" placeholder="https://example.com/wp-admin" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">User</label>
+                <input class="form-control" name="production_username" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Password</label>
+                <input class="form-control" type="password" name="production_password" required>
+              </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Production URL</label>
-              <input class="form-control" name="wl_login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Username</label>
-              <input class="form-control" name="wl_login_username">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Password</label>
-              <input class="form-control" type="password" name="wl_login_password">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Notes</label>
-              <textarea class="form-control" name="wl_notes" rows="2"></textarea>
-            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea>
           </div>
         </div>
         <div class="modal-footer border-0">
