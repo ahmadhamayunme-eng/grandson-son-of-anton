@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $user = auth_user();
 $userId = (int)($user['id'] ?? 0);
@@ -38,13 +40,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $name = trim($_POST['name'] ?? '');
   $notes = trim($_POST['notes'] ?? '');
+  $billingModel = trim((string)($_POST['billing_model'] ?? ''));
+  $billingCycle = trim((string)($_POST['billing_cycle'] ?? ''));
+  $retainerAmount = ($_POST['retainer_amount'] ?? '') !== '' ? (float)$_POST['retainer_amount'] : null;
+  $hourlyRate = ($_POST['hourly_rate'] ?? '') !== '' ? (float)$_POST['hourly_rate'] : null;
   if ($name === '') {
     flash_set('error', 'Client name required.');
     redirect('clients.php');
   }
+  if (!in_array($billingModel, ['monthly_retainer', 'hourly', 'fixed_project', 'hybrid'], true)) {
+    flash_set('error', 'Billing model is required.');
+    redirect('clients.php');
+  }
 
-  $pdo->prepare('INSERT INTO clients (workspace_id,name,notes,created_at,updated_at) VALUES (?,?,?,?,?)')
-      ->execute([$ws, $name, $notes ?: null, now(), now()]);
+  $pdo->prepare('INSERT INTO clients (workspace_id,name,notes,billing_model,billing_cycle,retainer_amount,hourly_rate,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $name, $notes ?: null, $billingModel, $billingCycle ?: null, $retainerAmount, $hourlyRate, now(), now()]);
   $newClientId = (int)$pdo->lastInsertId();
 
   if (isset($_FILES['logo']) && is_array($_FILES['logo']) && (int)($_FILES['logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
@@ -312,6 +322,25 @@ function client_status_class(string $status): string {
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <div class="modal-body">
           <div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="name" required></div>
+          <div class="mb-3"><label class="form-label">Billing Model</label>
+            <select class="form-select" name="billing_model" id="create_billing_model" required>
+              <option value="">Select Billing Model</option>
+              <option value="monthly_retainer">Monthly Retainer</option>
+              <option value="hourly">Hourly</option>
+              <option value="fixed_project">Fixed Project</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div class="row g-2" id="create_billing_fields">
+            <div class="col-md-6"><label class="form-label">Billing Cycle</label>
+              <select class="form-select" name="billing_cycle" id="create_billing_cycle">
+                <option value="monthly">Monthly</option>
+                <option value="every_15_days">Every 15 Days</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="create_retainer_wrap"><label class="form-label">Retainer Amount</label><input class="form-control" name="retainer_amount" type="number" min="0" step="0.01"></div>
+            <div class="col-md-6" id="create_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="hourly_rate" type="number" min="0" step="0.01"></div>
+          </div>
           <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
           <div class="mb-3"><label class="form-label">Business Logo (optional)</label><input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></div>
         </div>
@@ -324,5 +353,24 @@ function client_status_class(string $status): string {
   </div>
 </div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model = document.getElementById('create_billing_model');
+  const cycle = document.getElementById('create_billing_cycle');
+  const retainer = document.getElementById('create_retainer_wrap');
+  const hourly = document.getElementById('create_hourly_wrap');
+  if (!model) return;
+  function sync(){
+    const v = model.value;
+    retainer.style.display = v === 'monthly_retainer' ? '' : 'none';
+    hourly.style.display = (v === 'hourly' || v === 'hybrid') ? '' : 'none';
+    cycle.parentElement.style.display = (v === 'monthly_retainer' || v === 'hourly') ? '' : 'none';
+    if (v === 'monthly_retainer') cycle.value = 'monthly';
+  }
+  model.addEventListener('change', sync);
+  sync();
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
@@ -31,13 +33,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_client'])) {
 
   $newName = trim((string)($_POST['client_name'] ?? ''));
   $newNotes = trim((string)($_POST['client_notes'] ?? ''));
+  $billingModel = trim((string)($_POST['billing_model'] ?? ''));
+  $billingCycle = trim((string)($_POST['billing_cycle'] ?? ''));
+  $retainerAmount = ($_POST['retainer_amount'] ?? '') !== '' ? (float)$_POST['retainer_amount'] : null;
+  $hourlyRate = ($_POST['hourly_rate'] ?? '') !== '' ? (float)$_POST['hourly_rate'] : null;
   if ($newName === '') {
     flash_set('error', 'Client name is required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
-  $pdo->prepare('UPDATE clients SET name=?, notes=?, updated_at=? WHERE id=? AND workspace_id=?')
-      ->execute([$newName, $newNotes ?: null, now(), $id, $ws]);
+  if (!in_array($billingModel, ['monthly_retainer', 'hourly', 'fixed_project', 'hybrid'], true)) {
+    flash_set('error', 'Billing model is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $pdo->prepare('UPDATE clients SET name=?, notes=?, billing_model=?, billing_cycle=?, retainer_amount=?, hourly_rate=?, updated_at=? WHERE id=? AND workspace_id=?')
+      ->execute([$newName, $newNotes ?: null, $billingModel, $billingCycle ?: null, $retainerAmount, $hourlyRate, now(), $id, $ws]);
 
   if ((string)($_POST['remove_client_logo'] ?? '') === '1') {
     foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
@@ -145,6 +156,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $type_id = (int)($_POST['type_id'] ?? 0);
   $status_id = (int)($_POST['status_id'] ?? 0);
   $dueDate = $_POST['due_date'] ?: null;
+  $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+  $projectPrice = ($_POST['project_price'] ?? '') !== '' ? (float)$_POST['project_price'] : null;
+  $paymentTerms = trim((string)($_POST['payment_terms'] ?? ''));
+  $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
   $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
 
   $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
@@ -161,6 +176,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
 
   if ($name === '') {
     flash_set('error', 'Project name required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
+    flash_set('error', 'Project pricing model is required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
@@ -191,8 +211,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
     ],
   ];
 
-  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,pricing_model,project_price,payment_terms,hourly_rate,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
 
   $newProjectId = (int)$pdo->lastInsertId();
 
@@ -397,7 +417,7 @@ function initials_from_names(string $names): string {
   .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
-  .client-logo-img, .client-logo-fallback { width:46px; height:46px; border-radius:12px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
+  .client-logo-img, .client-logo-fallback { width:72px; height:72px; border-radius:16px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
   .client-logo-fallback { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#f8d978,#9d9d9d); color:#181818; font-weight:700; }
   .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #f4cd5c; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
   .client-name { font-size: 2rem; margin: 0; font-weight: 500; }
@@ -665,9 +685,22 @@ function initials_from_names(string $names): string {
   </div>
 </div>
 
-<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
+<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Billing Model</label><select class="form-select" name="billing_model" id="edit_billing_model" required><option value="monthly_retainer" <?= (($client['billing_model'] ?? '')==='monthly_retainer') ? 'selected' : '' ?>>Monthly Retainer</option><option value="hourly" <?= (($client['billing_model'] ?? '')==='hourly') ? 'selected' : '' ?>>Hourly</option><option value="fixed_project" <?= (($client['billing_model'] ?? '')==='fixed_project') ? 'selected' : '' ?>>Fixed Project</option><option value="hybrid" <?= (($client['billing_model'] ?? '')==='hybrid') ? 'selected' : '' ?>>Hybrid</option></select></div><div class="row g-2"><div class="col-md-6" id="edit_cycle_wrap"><label class="form-label">Billing Cycle</label><select class="form-select" name="billing_cycle" id="edit_billing_cycle"><option value="monthly" <?= (($client['billing_cycle'] ?? '')==='monthly') ? 'selected' : '' ?>>Monthly</option><option value="every_15_days" <?= (($client['billing_cycle'] ?? '')==='every_15_days') ? 'selected' : '' ?>>Every 15 Days</option></select></div><div class="col-md-6" id="edit_retainer_wrap"><label class="form-label">Retainer Amount</label><input class="form-control" name="retainer_amount" type="number" min="0" step="0.01" value="<?=h((string)($client['retainer_amount'] ?? ''))?>"></div><div class="col-md-6" id="edit_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="hourly_rate" type="number" min="0" step="0.01" value="<?=h((string)($client['hourly_rate'] ?? ''))?>"></div></div><div class="mb-3 mt-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
+<script>(function(){const model=document.getElementById('edit_billing_model');const cycleWrap=document.getElementById('edit_cycle_wrap');const cycle=document.getElementById('edit_billing_cycle');const ret=document.getElementById('edit_retainer_wrap');const hour=document.getElementById('edit_hourly_wrap');if(!model)return;function sync(){const v=model.value;ret.style.display=v==='monthly_retainer'?'':'none';hour.style.display=(v==='hourly'||v==='hybrid')?'':'none';cycleWrap.style.display=(v==='monthly_retainer'||v==='hourly')?'':'none';if(v==='monthly_retainer')cycle.value='monthly';}model.addEventListener('change',sync);sync();})();</script>
 
 <div class="modal fade" id="addDoc" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Create Doc</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_doc" value="1"><div class="modal-body"><div class="row g-3"><div class="col-md-8"><label class="form-label">Title</label><input class="form-control" name="doc_title" required></div><div class="col-md-4"><label class="form-label">Project</label><select class="form-select" name="doc_project_id" required><?php foreach($clientProjects as $cp): ?><option value="<?=h($cp['id'])?>"><?=h($cp['name'])?></option><?php endforeach; ?></select></div><div class="col-12"><label class="form-label">Content</label><textarea class="form-control" name="doc_content" rows="9" placeholder="Write document..."></textarea></div></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create Doc</button></div></form></div></div></div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model=document.getElementById('cv_project_pricing_model');
+  const fixed=document.getElementById('cv_project_price_wrap');
+  const terms=document.getElementById('cv_project_terms_wrap');
+  const hourly=document.getElementById('cv_project_hourly_wrap');
+  if(!model) return;
+  function sync(){const v=model.value;fixed.style.display=v==='fixed_price'?'':'none';terms.style.display=v==='fixed_price'?'':'none';hourly.style.display=v==='hourly'?'':'none';}
+  model.addEventListener('change',sync);sync();
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

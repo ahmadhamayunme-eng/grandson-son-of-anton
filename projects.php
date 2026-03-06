@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
@@ -158,6 +160,10 @@ try {
     $typeId = (int)($_POST['type_id'] ?? 0);
     $statusId = (int)($_POST['status_id'] ?? 0);
     $dueDate = trim((string)($_POST['due_date'] ?? ''));
+    $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+    $projectPrice = ($_POST['project_price'] ?? '') !== '' ? (float)$_POST['project_price'] : null;
+    $paymentTerms = trim((string)($_POST['payment_terms'] ?? ''));
+    $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
     $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
 
     $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
@@ -174,6 +180,11 @@ try {
 
     if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
       flash_set('error', 'Project name, client, type and status are required.');
+      redirect('projects.php');
+    }
+
+    if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
+      flash_set('error', 'Project pricing model is required.');
       redirect('projects.php');
     }
 
@@ -204,8 +215,8 @@ try {
       ],
     ];
 
-    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, pricing_model, project_price, payment_terms, hourly_rate, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
 
     $newProjectId = (int)$pdo->lastInsertId();
 
@@ -439,6 +450,10 @@ SQL;
             <div class="col-md-2"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
             <div class="col-md-2"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
             <div class="col-md-4"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div>
+            <div class="col-md-4"><label class="form-label">Project Pricing Model</label><select class="form-select" name="pricing_model" id="project_pricing_model" required><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
+            <div class="col-md-4" id="project_price_wrap"><label class="form-label">Project Price</label><input class="form-control" name="project_price" type="number" min="0" step="0.01"></div>
+            <div class="col-md-4" id="project_terms_wrap"><label class="form-label">Payment Terms</label><select class="form-select" name="payment_terms"><option value="full_upfront">Full Upfront</option><option value="50_50">50/50</option><option value="milestones">Milestones</option></select></div>
+            <div class="col-md-4" id="project_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="project_hourly_rate" type="number" min="0" step="0.01"></div>
           </div>
 
           <div class="mt-4 p-3 rounded border border-secondary-subtle">
@@ -473,5 +488,23 @@ SQL;
   </div>
 </div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model=document.getElementById('project_pricing_model');
+  const fixed=document.getElementById('project_price_wrap');
+  const terms=document.getElementById('project_terms_wrap');
+  const hourly=document.getElementById('project_hourly_wrap');
+  if(!model) return;
+  function sync(){
+    const v=model.value;
+    fixed.style.display=v==='fixed_price'?'':'none';
+    terms.style.display=v==='fixed_price'?'':'none';
+    hourly.style.display=v==='hourly'?'':'none';
+  }
+  model.addEventListener('change',sync);
+  sync();
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

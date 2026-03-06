@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
+require_once __DIR__ . '/lib/finance.php';
 auth_require_perm('finance.view');
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $u = auth_user();
 
@@ -44,6 +46,20 @@ $rows = $pdo->prepare("SELECT fe.*, p.name AS project_name, c.name AS client_nam
   ORDER BY fe.expense_date DESC, fe.id DESC LIMIT 300");
 $rows->execute([$ws]);
 $rows = $rows->fetchAll();
+
+$profitRows = $pdo->prepare("SELECT p.id, p.name AS project_name, c.name AS client_name,
+  COALESCE(SUM(DISTINCT fr.received_amount),0) AS revenue_received,
+  COALESCE(SUM(DISTINCT fe.amount),0) AS expense_total
+  FROM projects p
+  JOIN clients c ON c.id=p.client_id
+  LEFT JOIN finance_receivables fr ON fr.project_id=p.id AND fr.workspace_id=p.workspace_id
+  LEFT JOIN finance_expenses fe ON fe.project_id=p.id AND fe.workspace_id=p.workspace_id
+  WHERE p.workspace_id=?
+  GROUP BY p.id, p.name, c.name
+  ORDER BY p.id DESC LIMIT 120");
+$profitRows->execute([$ws]);
+$profitRows = $profitRows->fetchAll();
+
 ?>
 <style>
   .exp-shell{border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
@@ -107,6 +123,24 @@ $rows = $rows->fetchAll();
         </tbody>
       </table>
     </div>
+
+    <div class="exp-table mt-3">
+      <table>
+        <thead><tr><th>Project</th><th>Revenue Received</th><th>Expenses</th><th>Profit</th></tr></thead>
+        <tbody>
+        <?php foreach($profitRows as $pr): $profitVal=((float)$pr['revenue_received']-(float)$pr['expense_total']); ?>
+          <tr>
+            <td><?=h($pr['client_name'].' — '.$pr['project_name'])?></td>
+            <td>$<?=number_format((float)$pr['revenue_received'],2)?></td>
+            <td>$<?=number_format((float)$pr['expense_total'],2)?></td>
+            <td class="<?= $profitVal < 0 ? 'amt' : '' ?>">$<?=number_format($profitVal,2)?></td>
+          </tr>
+        <?php endforeach; ?>
+        <?php if(!$profitRows): ?><tr><td colspan="4" class="text-muted">No project revenue/expense comparisons yet.</td></tr><?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+
   </div>
 </div>
 
