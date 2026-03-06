@@ -10,11 +10,11 @@ $expenses = (float)($tot['expenses'] ?? 0);
 $salaries = (float)($tot['salaries'] ?? 0);
 $overheads = (float)($tot['overheads'] ?? 0);
 $profit = (float)($tot['profit'] ?? 0);
-$outstanding = max(0, ($expenses + $salaries + $overheads) - $payments);
+$outstanding = (float)($tot['total_unreceived'] ?? 0);
 
 $recent_unreceived=[];
 try {
-  $stmt=db()->prepare("SELECT id,invoice_no,client_name,amount,due_date,status FROM unreceived_payments WHERE workspace_id=? ORDER BY id DESC LIMIT 6");
+  $stmt=db()->prepare("SELECT fr.id, fr.invoice_no, fr.invoice_type, fr.status, fr.due_date, (fr.expected_amount-fr.received_amount) AS balance_due, c.name AS client_name, p.name AS project_name FROM finance_receivables fr LEFT JOIN clients c ON c.id=fr.client_id LEFT JOIN projects p ON p.id=fr.project_id WHERE fr.workspace_id=? AND fr.status IN ('pending','partial') ORDER BY fr.due_date ASC LIMIT 6");
   $stmt->execute([$ws]);
   $recent_unreceived=$stmt->fetchAll();
 } catch (Throwable $e) {
@@ -82,10 +82,10 @@ try {
     </div>
 
     <div class="row g-3">
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Income</div><div class="metric-value">$<?=number_format($payments,0)?><span class="metric-trend trend-up">↗ 2.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Profit</div><div class="metric-value">$<?=number_format($profit,0)?><span class="metric-trend trend-up">↗ 1.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Expenses</div><div class="metric-value">$<?=number_format($expenses+$salaries+$overheads,0)?><span class="metric-trend trend-down">↘ 4.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Outstanding</div><div class="metric-value" style="color:#f6d469">$<?=number_format($outstanding,0)?><span class="metric-trend trend-warn">↗ 2.0%</span></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Received Payments</div><div class="metric-value">$<?=number_format($payments,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Profit</div><div class="metric-value">$<?=number_format($profit,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Expenses</div><div class="metric-value">$<?=number_format($expenses+$salaries+$overheads,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Unreceived / Unpaid</div><div class="metric-value" style="color:#f6d469">$<?=number_format($outstanding,0)?></div></div></div>
     </div>
 
     <div class="fin-grid">
@@ -95,10 +95,9 @@ try {
           <div class="row">
             <div class="col-md-5">
               <ul class="list-unstyled legend mt-3">
-                <li><span class="dot" style="background:#f6d469"></span>Client A</li>
-                <li><span class="dot" style="background:#f0bf46"></span>Client B</li>
-                <li><span class="dot" style="background:#d17a3f"></span>Client C</li>
-                <li><span class="dot" style="background:#617c76"></span>Client D</li>
+                <li><span class="dot" style="background:#f6d469"></span>Retainer: $<?=number_format((float)($tot['retainer_revenue'] ?? 0),2)?></li>
+                <li><span class="dot" style="background:#f0bf46"></span>Hourly: $<?=number_format((float)($tot['hourly_revenue'] ?? 0),2)?></li>
+                <li><span class="dot" style="background:#d17a3f"></span>Fixed Project: $<?=number_format((float)($tot['fixed_revenue'] ?? 0),2)?></li>
               </ul>
             </div>
             <div class="col-md-7">
@@ -128,19 +127,20 @@ try {
 
     <div class="fin-table mt-3">
       <table>
-        <thead><tr><th>Task / Invoice</th><th>Invoice</th><th>Status</th><th>Amount</th><th></th></tr></thead>
+        <thead><tr><th>Client / Project</th><th>Invoice</th><th>Type</th><th>Status</th><th>Amount Due</th><th></th></tr></thead>
         <tbody>
           <?php foreach($recent_unreceived as $r): ?>
             <tr>
-              <td><?=h($r['client_name'])?></td>
+              <td><?=h(($r['client_name'] ?? '-') . (!empty($r['project_name']) ? (' — ' . $r['project_name']) : ''))?></td>
               <td><?=h($r['invoice_no'] ?: ('INV-'.str_pad((string)$r['id'],4,'0',STR_PAD_LEFT)))?></td>
+              <td><?=h($r['invoice_type'] ?? 'project_fixed')?></td>
               <td class="<?= (stripos((string)$r['status'],'overdue')!==false) ? 'overdue' : '' ?>"><?=h($r['status'] ?: 'Pending')?></td>
-              <td><span class="amount-badge"><?=number_format((float)$r['amount'],2)?></span></td>
+              <td><span class="amount-badge"><?=number_format((float)$r['balance_due'],2)?></span></td>
               <td class="text-end"><a class="btn btn-sm btn-outline-light" href="unreceived_payments.php">View</a></td>
             </tr>
           <?php endforeach; ?>
           <?php if(!$recent_unreceived): ?>
-            <tr><td colspan="5" class="text-muted">No pending invoices. Great work.</td></tr>
+            <tr><td colspan="6" class="text-muted">No pending invoices. Great work.</td></tr>
           <?php endif; ?>
         </tbody>
       </table>

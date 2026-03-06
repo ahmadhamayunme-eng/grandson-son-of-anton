@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
+require_once __DIR__ . '/lib/finance.php';
 auth_require_perm('finance.view');
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $u = auth_user();
 
@@ -12,6 +14,9 @@ $clients = $clients->fetchAll();
 $projects = $pdo->prepare("SELECT p.id,p.name,c.name AS client_name FROM projects p JOIN clients c ON c.id=p.client_id WHERE p.workspace_id=? ORDER BY p.id DESC");
 $projects->execute([$ws]);
 $projects = $projects->fetchAll();
+$invoicesStmt = $pdo->prepare("SELECT fr.id, fr.invoice_no, fr.invoice_type, c.name AS client_name, p.name AS project_name FROM finance_receivables fr LEFT JOIN clients c ON c.id=fr.client_id LEFT JOIN projects p ON p.id=fr.project_id WHERE fr.workspace_id=? ORDER BY fr.id DESC LIMIT 300");
+$invoicesStmt->execute([$ws]);
+$invoices = $invoicesStmt->fetchAll();
 
 $action = $_POST['action'] ?? null;
 $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
@@ -24,10 +29,17 @@ if ($action === 'create') {
   $method = trim($_POST['method'] ?? '');
   $reference = trim($_POST['reference'] ?? '');
   $notes = trim($_POST['notes'] ?? '');
+  $invoiceId = ($_POST['invoice_id'] ?? '') !== '' ? (int)$_POST['invoice_id'] : null;
+  if ($invoiceId) {
+    $inv = $pdo->prepare("SELECT id, client_id, project_id FROM finance_receivables WHERE id=? AND workspace_id=?");
+    $inv->execute([$invoiceId, $ws]);
+    $iv = $inv->fetch();
+    if ($iv) { $client_id = $iv['client_id'] ?: $client_id; $project_id = $iv['project_id'] ?: $project_id; }
+  }
 
-  $pdo->prepare("INSERT INTO finance_payments (workspace_id,client_id,project_id,amount,received_date,method,reference,notes,created_by,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,NOW())")
-    ->execute([$ws,$client_id,$project_id,$amount,$received_date,$method?:null,$reference?:null,$notes?:null,(int)$u['id']]);
+  $pdo->prepare("INSERT INTO finance_payments (workspace_id,client_id,project_id,receivable_id,invoice_id,amount,received_date,method,reference,notes,created_by,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())")
+    ->execute([$ws,$client_id,$project_id,$invoiceId,$invoiceId,$amount,$received_date,$method?:null,$reference?:null,$notes?:null,(int)$u['id']]);
   activity_log('finance_payment', (int)$pdo->lastInsertId(), 'create', 'Payment added');
   flash_set('success','Payment saved');
   redirect(basename(__FILE__));
@@ -40,10 +52,11 @@ if ($action === 'delete' && $id>0) {
   redirect(basename(__FILE__));
 }
 
-$rows = $pdo->prepare("SELECT fp.*, c.name AS client_name, p.name AS project_name
+$rows = $pdo->prepare("SELECT fp.*, c.name AS client_name, p.name AS project_name, fr.invoice_no, fr.invoice_type
   FROM finance_payments fp
   LEFT JOIN clients c ON c.id=fp.client_id
   LEFT JOIN projects p ON p.id=fp.project_id
+  LEFT JOIN finance_receivables fr ON fr.id = COALESCE(fp.receivable_id, fp.invoice_id)
   WHERE fp.workspace_id=?
   ORDER BY fp.received_date DESC, fp.id DESC LIMIT 300");
 $rows->execute([$ws]);
@@ -87,6 +100,7 @@ $rows = $rows->fetchAll();
           <input type="hidden" name="action" value="create">
           <div class="col-md-3"><label class="form-label">Client</label><select class="form-select" name="client_id"><option value="">-- optional --</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
           <div class="col-md-3"><label class="form-label">Project</label><select class="form-select" name="project_id"><option value="">-- optional --</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>"><?= h($p['client_name'].' — '.$p['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-3"><label class="form-label">Invoice</label><select class="form-select" name="invoice_id"><option value="">-- optional --</option><?php foreach($invoices as $iv): ?><option value="<?= (int)$iv['id'] ?>"><?= h(($iv['invoice_no'] ?: ('INV-'.$iv['id'])) . " • " . strtoupper((string)$iv['invoice_type']) . " • " . ($iv['client_name'] ?: '-')) ?></option><?php endforeach; ?></select></div>
           <div class="col-md-2"><label class="form-label">Amount</label><input class="form-control" name="amount" type="number" step="0.01" required></div>
           <div class="col-md-2"><label class="form-label">Date</label><input class="form-control" name="received_date" type="date" value="<?= date('Y-m-d') ?>" required></div>
           <div class="col-md-2"><label class="form-label">Method</label><input class="form-control" name="method" placeholder="Bank/Stripe/Cash"></div>
