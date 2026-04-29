@@ -139,7 +139,6 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
 <div class="stype-shell">
   <div class="stype-head"><div><h1 class="stype-title">Project Types</h1></div><div class="stype-kpi"><div class="n"><?= count($rows) ?></div></div></div>
   <div class="stype-grid">
-    <div class="stype-card"><div class="stype-card-title">Add Status</div><form method="post" class="row g-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><div class="col-12"><input class="form-control" name="name" required></div><div class="col-12"><button class="btn btn-yellow w-100">Add</button></div></form></div>
     <div class="stype-card">
       <div class="stype-card-title">Add Type</div>
       <form method="post" class="row g-2">
