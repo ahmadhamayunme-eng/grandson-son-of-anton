@@ -10,28 +10,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($action === 'delete') {
     $id = (int)($_POST['id'] ?? 0);
-    if ($id <= 0) { flash_set('error', 'Invalid project status selected.'); redirect('settings_project_statuses.php'); }
+    if ($id <= 0) { flash_set('error', 'Invalid project type selected.'); redirect('settings_project_statuses.php'); }
     try {
       $st = $pdo->prepare('DELETE FROM project_statuses WHERE workspace_id = ? AND id = ?');
       $st->execute([$ws, $id]);
       flash_set('success', $st->rowCount() ? 'Project status deleted permanently.' : 'Project status not found.');
-    } catch (Throwable $e) {
-      flash_set('error', 'Unable to delete this project status. It may still be in use.');
-    }
+    } catch (Throwable $e) { flash_set('error', 'Unable to delete this project type. It may still be used by projects.'); }
     redirect('settings_project_statuses.php');
   }
 
   if ($action === 'bulk_delete') {
     $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
-    if (!$ids) { flash_set('error', 'Select at least one project status to delete.'); redirect('settings_project_statuses.php'); }
+    if (!$ids) { flash_set('error', 'Select at least one project type to delete.'); redirect('settings_project_statuses.php'); }
     $marks = implode(',', array_fill(0, count($ids), '?'));
     try {
       $st = $pdo->prepare("DELETE FROM project_statuses WHERE workspace_id = ? AND id IN ($marks)");
       $st->execute(array_merge([$ws], $ids));
-      flash_set('success', $st->rowCount() . ' project status(s) deleted permanently.');
-    } catch (Throwable $e) {
-      flash_set('error', 'Some selected project status values could not be deleted because they are in use.');
-    }
+      flash_set('success', $st->rowCount() . ' statuses deleted permanently.');
+    } catch (Throwable $e) { flash_set('error', 'Some selected project types could not be deleted because they are in use.'); }
+    redirect('settings_project_statuses.php');
+  }
+
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0); $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid type name required.'); redirect('settings_project_statuses.php'); }
+    $st = $pdo->prepare('UPDATE project_statuses SET name=?, updated_at=? WHERE workspace_id=? AND id=?');
+    $st->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Project status updated.');
+    redirect('settings_project_statuses.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No project types supplied for reordering.'); redirect('settings_project_statuses.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE project_statuses SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id=(int)$idRaw; if($id>0){ $st->execute([$i++, now(), $ws, $id]); } }
+      $pdo->commit(); flash_set('success','Sort order updated.');
+    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); flash_set('error','Unable to update sort order.'); }
     redirect('settings_project_statuses.php');
   }
 
@@ -64,8 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_project_statuses.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM project_statuses WHERE workspace_id=$ws")->fetch()['n'];
-  $pdo->prepare("INSERT INTO project_statuses (workspace_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,?)")
-      ->execute([$ws, $name, $sort, now(), now()]);
+  $pdo->prepare("INSERT INTO project_statuses (workspace_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,?)")->execute([$ws, $name, $sort, now(), now()]);
   flash_set('success', 'Added.');
   redirect('settings_project_statuses.php');
 }

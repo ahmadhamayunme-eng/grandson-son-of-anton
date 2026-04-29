@@ -15,9 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $st = $pdo->prepare('DELETE FROM project_types WHERE workspace_id = ? AND id = ?');
       $st->execute([$ws, $id]);
       flash_set('success', $st->rowCount() ? 'Project type deleted permanently.' : 'Project type not found.');
-    } catch (Throwable $e) {
-      flash_set('error', 'Unable to delete this project type. It may still be used by projects.');
-    }
+    } catch (Throwable $e) { flash_set('error', 'Unable to delete this project type. It may still be used by projects.'); }
     redirect('settings_project_types.php');
   }
 
@@ -29,9 +27,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $st = $pdo->prepare("DELETE FROM project_types WHERE workspace_id = ? AND id IN ($marks)");
       $st->execute(array_merge([$ws], $ids));
       flash_set('success', $st->rowCount() . ' project type(s) deleted permanently.');
-    } catch (Throwable $e) {
-      flash_set('error', 'Some selected project types could not be deleted because they are in use.');
-    }
+    } catch (Throwable $e) { flash_set('error', 'Some selected project types could not be deleted because they are in use.'); }
+    redirect('settings_project_types.php');
+  }
+
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0); $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid type name required.'); redirect('settings_project_types.php'); }
+    $st = $pdo->prepare('UPDATE project_types SET name=?, updated_at=? WHERE workspace_id=? AND id=?');
+    $st->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Project type updated.');
+    redirect('settings_project_types.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No project types supplied for reordering.'); redirect('settings_project_types.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE project_types SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id=(int)$idRaw; if($id>0){ $st->execute([$i++, now(), $ws, $id]); } }
+      $pdo->commit(); flash_set('success','Sort order updated.');
+    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); flash_set('error','Unable to update sort order.'); }
     redirect('settings_project_types.php');
   }
 
@@ -64,8 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_project_types.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM project_types WHERE workspace_id=$ws")->fetch()['n'];
-  $pdo->prepare("INSERT INTO project_types (workspace_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,?)")
-      ->execute([$ws, $name, $sort, now(), now()]);
+  $pdo->prepare("INSERT INTO project_types (workspace_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,?)")->execute([$ws, $name, $sort, now(), now()]);
   flash_set('success', 'Added.');
   redirect('settings_project_types.php');
 }
@@ -93,15 +110,9 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
 </style>
 
 <div class="stype-shell">
-  <div class="stype-head">
-    <div>
-      <h1 class="stype-title">Project Types</h1>
-      <div class="stype-sub">Define type options used in project creation forms.</div>
-    </div>
-    <div class="stype-kpi"><div class="n"><?= count($rows) ?></div><div class="l">Total Types</div></div>
-  </div>
-
+  <div class="stype-head"><div><h1 class="stype-title">Project Types</h1></div><div class="stype-kpi"><div class="n"><?= count($rows) ?></div></div></div>
   <div class="stype-grid">
+    <div class="stype-card"><div class="stype-card-title">Add Status</div><form method="post" class="row g-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><div class="col-12"><input class="form-control" name="name" required></div><div class="col-12"><button class="btn btn-yellow w-100">Add</button></div></form></div>
     <div class="stype-card">
       <div class="stype-card-title">Add Type</div>
       <form method="post" class="row g-2">
