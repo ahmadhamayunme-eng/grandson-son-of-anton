@@ -131,6 +131,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('settings_task_statuses.php');
   }
 
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0);
+    $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid task status name required.'); redirect('settings_task_statuses.php'); }
+    $pdo->prepare('UPDATE task_statuses SET name=?, updated_at=? WHERE workspace_id=? AND id=?')->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Task status updated.');
+    redirect('settings_task_statuses.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No task statuses selected for sorting.'); redirect('settings_task_statuses.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE task_statuses SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id = (int)$idRaw; if ($id > 0) $st->execute([$i++, now(), $ws, $id]); }
+      $pdo->commit();
+      flash_set('success', 'Task status order updated.');
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      flash_set('error', 'Unable to update task status sort order.');
+    }
+    redirect('settings_task_statuses.php');
+  }
+
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_task_statuses.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM task_statuses WHERE workspace_id=$ws")->fetch()['n'];
