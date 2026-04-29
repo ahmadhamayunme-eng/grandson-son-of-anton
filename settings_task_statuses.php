@@ -35,6 +35,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('settings_task_statuses.php');
   }
 
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0);
+    $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid task status name required.'); redirect('settings_task_statuses.php'); }
+    $pdo->prepare('UPDATE task_statuses SET name=?, updated_at=? WHERE workspace_id=? AND id=?')->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Task status updated.');
+    redirect('settings_task_statuses.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No task statuses selected for sorting.'); redirect('settings_task_statuses.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE task_statuses SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id = (int)$idRaw; if ($id > 0) $st->execute([$i++, now(), $ws, $id]); }
+      $pdo->commit();
+      flash_set('success', 'Task status order updated.');
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      flash_set('error', 'Unable to update task status sort order.');
+    }
+    redirect('settings_task_statuses.php');
+  }
+
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_task_statuses.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM task_statuses WHERE workspace_id=$ws")->fetch()['n'];
@@ -47,60 +73,68 @@ $rows = $pdo->query("SELECT * FROM task_statuses WHERE workspace_id=$ws ORDER BY
 ?>
 
 <style>
-  .sts-shell{border:1px solid rgba(255,255,255,.1);border-radius:18px;background:linear-gradient(180deg,#111111,#090909);padding:1.15rem;box-shadow:0 24px 60px rgba(0,0,0,.4)}
-  .sts-head{display:flex;justify-content:space-between;align-items:end;gap:.7rem;margin-bottom:1rem}
-  .sts-title{margin:0;font-size:2rem;font-weight:700}
-  .sts-sub{color:rgba(232,232,232,.68);font-size:.92rem}
-  .sts-kpi{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03);padding:.45rem .65rem;text-align:center;min-width:120px}
-  .sts-kpi .n{font-weight:700;font-size:1.25rem;line-height:1}
-  .sts-kpi .l{font-size:.78rem;color:rgba(232,232,232,.68)}
-  .sts-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:.8rem}
-  .sts-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
-  .sts-card-title{font-weight:600;margin-bottom:.55rem}
-  .sts-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
-  .sts-table table{width:100%;border-collapse:collapse}
-  .sts-table th,.sts-table td{padding:.7rem .72rem;border-bottom:1px solid rgba(255,255,255,.07)}
-  .sts-table th{background:rgba(255,255,255,.03);color:rgba(228,228,228,.82);font-size:.85rem;font-weight:600}
-  .sts-table tr:last-child td{border-bottom:0}
-  @media (max-width: 1100px){.sts-grid{grid-template-columns:1fr}}
+  .stype-shell{border:1px solid rgba(255,255,255,.1);border-radius:18px;background:linear-gradient(180deg,#111111,#090909);padding:1.15rem;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  .stype-head{display:flex;justify-content:space-between;align-items:end;gap:.7rem;margin-bottom:1rem}
+  .stype-title{margin:0;font-size:2rem;font-weight:700}
+  .stype-sub{color:rgba(232,232,232,.68);font-size:.92rem}
+  .stype-kpi{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03);padding:.45rem .65rem;text-align:center;min-width:100px}
+  .stype-kpi .n{font-weight:700;font-size:1.25rem;line-height:1}
+  .stype-kpi .l{font-size:.78rem;color:rgba(232,232,232,.68)}
+  .stype-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:.8rem}
+  .stype-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
+  .stype-card-title{font-weight:600;margin-bottom:.55rem}
+  .stype-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
+  .stype-table table{width:100%;border-collapse:collapse}
+  .stype-table th,.stype-table td{padding:.7rem .72rem;border-bottom:1px solid rgba(255,255,255,.07)}
+  .stype-table th{background:rgba(255,255,255,.03);color:rgba(228,228,228,.82);font-size:.85rem;font-weight:600}
+  .stype-table tr:last-child td{border-bottom:0}
+  .drag-handle{cursor:grab}
+  @media (max-width: 1100px){.stype-grid{grid-template-columns:1fr}}
 </style>
 
-<div class="sts-shell">
-  <div class="sts-head">
+<div class="stype-shell">
+  <div class="stype-head">
     <div>
-      <h1 class="sts-title">Task Statuses</h1>
-      <div class="sts-sub">Define task statuses used by assignees and dashboard views.</div>
+      <h1 class="stype-title">Task Statuses</h1>
+      <div class="stype-sub">Define task statuses used by assignees and dashboard views.</div>
     </div>
-    <div class="sts-kpi"><div class="n"><?= count($rows) ?></div><div class="l">Total Statuses</div></div>
+    <div class="stype-kpi"><div class="n"><?= count($rows) ?></div><div class="l">Total Statuses</div></div>
   </div>
 
-  <div class="sts-grid">
-    <div class="sts-card">
-      <div class="sts-card-title">Add Status</div>
+  <div class="stype-grid">
+    <div class="stype-card">
+      <div class="stype-card-title">Add Status</div>
       <form method="post" class="row g-2">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-        <div class="col-12"><input class="form-control" name="name" placeholder="e.g. To Do" required></div>
+        <div class="col-12"><input class="form-control" name="name" placeholder="e.g. Website Redesign" required></div>
         <div class="col-12"><button class="btn btn-yellow w-100">Add Task Status</button></div>
       </form>
     </div>
 
-    <div class="sts-card">
-      <div class="sts-card-title d-flex justify-content-between align-items-center">Current Statuses<button type="submit" form="bulkDeleteStatuses" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected task statuses. Are you sure?');">Delete Selected</button></div>
-      <div class="sts-table">
-        <form method="post" id="bulkDeleteStatuses">
-          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-          <input type="hidden" name="action" value="bulk_delete">
-        </form>
+    <div class="stype-card">
+      <div class="stype-card-title d-flex justify-content-between align-items-center">Current Statuses
+        <span>
+          <button type="submit" form="bulkDeleteTypes" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected task statuses. Are you sure?');">Delete Selected</button>
+          <button type="submit" form="reorderTypes" class="btn btn-sm btn-outline-warning">Save Order</button>
+        </span>
+      </div>
+      <div class="stype-table">
+        <form method="post" id="bulkDeleteTypes"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="bulk_delete"></form>
+        <form method="post" id="reorderTypes"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="reorder"></form>
         <table>
-          <thead><tr><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.status-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
-          <tbody>
-            <?php foreach($rows as $r): ?><tr><td><input class="status-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteStatuses"></td><td class="fw-semibold"><?=h($r['name'])?></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this status. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
-            <?php if(!$rows): ?><tr><td colspan="4" class="text-muted">No statuses yet.</td></tr><?php endif; ?>
+          <thead><tr><th style="width:56px;">Move</th><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.status-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
+          <tbody id="sortableRows">
+            <?php foreach($rows as $r): ?><tr draggable="true" data-id="<?= (int)$r['id'] ?>"><td class="drag-handle">↕</td><td><input class="status-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteTypes"></td><td><form method="post" class="d-flex gap-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><input class="form-control form-control-sm" name="name" value="<?=h($r['name'])?>" required><button class="btn btn-sm btn-outline-secondary">Save</button></form></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this task status. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
+            <?php if(!$rows): ?><tr><td colspan="5" class="text-muted">No statuses yet.</td></tr><?php endif; ?>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
-
+<script>
+(function(){const tbody=document.getElementById('sortableRows'); if(!tbody) return; let drag=null;
+function sync(){document.querySelectorAll('#reorderTypes input[name="order[]"]').forEach(el=>el.remove());tbody.querySelectorAll('tr[data-id]').forEach(tr=>{const i=document.createElement('input');i.type='hidden';i.name='order[]';i.value=tr.dataset.id;i.form=document.getElementById('reorderTypes');});}
+tbody.querySelectorAll('tr[data-id]').forEach(tr=>{tr.addEventListener('dragstart',()=>{drag=tr;});tr.addEventListener('dragover',e=>e.preventDefault());tr.addEventListener('drop',e=>{e.preventDefault();if(!drag||drag===tr)return;const r=tr.getBoundingClientRect();tbody.insertBefore(drag,e.clientY>r.top+r.height/2?tr.nextSibling:tr);sync();});});sync();})();
+</script>
 <?php require_once __DIR__ . '/layout_end.php'; ?>
