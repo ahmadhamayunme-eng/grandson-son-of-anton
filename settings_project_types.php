@@ -79,6 +79,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('settings_project_types.php');
   }
 
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0);
+    $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid project type name required.'); redirect('settings_project_types.php'); }
+    $pdo->prepare('UPDATE project_types SET name=?, updated_at=? WHERE workspace_id=? AND id=?')->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Project type updated.');
+    redirect('settings_project_types.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No project types selected for sorting.'); redirect('settings_project_types.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE project_types SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id = (int)$idRaw; if ($id > 0) $st->execute([$i++, now(), $ws, $id]); }
+      $pdo->commit();
+      flash_set('success', 'Project type order updated.');
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      flash_set('error', 'Unable to update project type sort order.');
+    }
+    redirect('settings_project_types.php');
+  }
+
   $name = trim($_POST['name'] ?? '');
   if ($name === '') { flash_set('error', 'Name required.'); redirect('settings_project_types.php'); }
   $sort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM project_types WHERE workspace_id=$ws")->fetch()['n'];
@@ -106,6 +132,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
   .stype-table th{background:rgba(255,255,255,.03);color:rgba(228,228,228,.82);font-size:.85rem;font-weight:600}
   .stype-table tr:last-child td{border-bottom:0}
   .drag-handle{cursor:grab}
+  .type-name-input{min-width:220px;width:100%;}
   @media (max-width: 1100px){.stype-grid{grid-template-columns:1fr}}
 </style>
 
@@ -135,7 +162,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
         <table>
           <thead><tr><th style="width:56px;">Move</th><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.type-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="sortableRows">
-            <?php foreach($rows as $r): ?><tr draggable="true" data-id="<?= (int)$r['id'] ?>"><td class="drag-handle">↕</td><td><input class="type-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteTypes"></td><td><form method="post" class="d-flex gap-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><input class="form-control form-control-sm" name="name" value="<?=h($r['name'])?>" required><button class="btn btn-sm btn-outline-secondary">Save</button></form></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this project type. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
+            <?php foreach($rows as $r): ?><tr draggable="true" data-id="<?= (int)$r['id'] ?>"><td class="drag-handle">↕</td><td><input class="type-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteTypes"></td><td><form method="post" class="d-flex gap-2 align-items-center"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><input class="form-control form-control-sm type-name-input" name="name" value="<?=h($r['name'])?>" required><button class="btn btn-sm btn-outline-secondary">Save</button></form></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this project type. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
             <?php if(!$rows): ?><tr><td colspan="5" class="text-muted">No types yet.</td></tr><?php endif; ?>
           </tbody>
         </table>
