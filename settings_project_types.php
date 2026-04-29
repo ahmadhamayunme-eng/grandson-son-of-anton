@@ -14,9 +14,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
       $st = $pdo->prepare('DELETE FROM project_types WHERE workspace_id = ? AND id = ?');
       $st->execute([$ws, $id]);
-      flash_set('success', $st->rowCount() ? 'Project type deleted permanently.' : 'Project type not found.');
+      flash_set('success', $st->rowCount() ? 'Project status deleted permanently.' : 'Project status not found.');
     } catch (Throwable $e) {
-      flash_set('error', 'Unable to delete this project type. It may still be used by projects.');
+      flash_set('error', 'Unable to delete this project type. It may still be in use.');
     }
     redirect('settings_project_types.php');
   }
@@ -30,7 +30,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $st->execute(array_merge([$ws], $ids));
       flash_set('success', $st->rowCount() . ' project type(s) deleted permanently.');
     } catch (Throwable $e) {
-      flash_set('error', 'Some selected project types could not be deleted because they are in use.');
+      flash_set('error', 'Some selected project type values could not be deleted because they are in use.');
+    }
+    redirect('settings_project_types.php');
+  }
+
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0);
+    $name = trim($_POST['name'] ?? '');
+    if ($id <= 0 || $name === '') { flash_set('error', 'Valid project type name required.'); redirect('settings_project_types.php'); }
+    $pdo->prepare('UPDATE project_types SET name=?, updated_at=? WHERE workspace_id=? AND id=?')->execute([$name, now(), $ws, $id]);
+    flash_set('success', 'Project status updated.');
+    redirect('settings_project_types.php');
+  }
+
+  if ($action === 'reorder') {
+    $order = (array)($_POST['order'] ?? []);
+    if (!$order) { flash_set('error', 'No project typees selected for sorting.'); redirect('settings_project_types.php'); }
+    $pdo->beginTransaction();
+    try {
+      $st = $pdo->prepare('UPDATE project_types SET sort_order=?, updated_at=? WHERE workspace_id=? AND id=?');
+      $i = 1;
+      foreach ($order as $idRaw) { $id = (int)$idRaw; if ($id > 0) $st->execute([$i++, now(), $ws, $id]); }
+      $pdo->commit();
+      flash_set('success', 'Project status order updated.');
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      flash_set('error', 'Unable to update project type sort order.');
     }
     redirect('settings_project_types.php');
   }
@@ -54,7 +80,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
   .stype-kpi{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03);padding:.45rem .65rem;text-align:center;min-width:100px}
   .stype-kpi .n{font-weight:700;font-size:1.25rem;line-height:1}
   .stype-kpi .l{font-size:.78rem;color:rgba(232,232,232,.68)}
-  .stype-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:.8rem}
+  .stype-grid{display:grid;grid-template-columns:1fr;gap:.8rem}
   .stype-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
   .stype-card-title{font-weight:600;margin-bottom:.55rem}
   .stype-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
@@ -62,6 +88,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
   .stype-table th,.stype-table td{padding:.7rem .72rem;border-bottom:1px solid rgba(255,255,255,.07)}
   .stype-table th{background:rgba(255,255,255,.03);color:rgba(228,228,228,.82);font-size:.85rem;font-weight:600}
   .stype-table tr:last-child td{border-bottom:0}
+  .drag-handle{cursor:grab}
   @media (max-width: 1100px){.stype-grid{grid-template-columns:1fr}}
 </style>
 
@@ -86,23 +113,28 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
 
     <div class="stype-card">
       <div class="stype-card-title d-flex justify-content-between align-items-center">Current Types
-        <button type="submit" form="bulkDeleteTypes" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected project types. Are you sure?');">Delete Selected</button>
+        <span>
+          <button type="submit" form="bulkDeleteTypes" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected project types. Are you sure?');">Delete Selected</button>
+          <button type="submit" form="reorderTypes" class="btn btn-sm btn-outline-warning">Save Order</button>
+        </span>
       </div>
       <div class="stype-table">
-        <form method="post" id="bulkDeleteTypes">
-          <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-          <input type="hidden" name="action" value="bulk_delete">
-        </form>
+        <form method="post" id="bulkDeleteTypes"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="bulk_delete"></form>
+        <form method="post" id="reorderTypes"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="reorder"></form>
         <table>
-          <thead><tr><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.type-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
-          <tbody>
-            <?php foreach($rows as $r): ?><tr><td><input class="type-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteTypes"></td><td class="fw-semibold"><?=h($r['name'])?></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this project type. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
-            <?php if(!$rows): ?><tr><td colspan="4" class="text-muted">No types yet.</td></tr><?php endif; ?>
+          <thead><tr><th style="width:56px;">Move</th><th style="width:44px;"><input type="checkbox" onclick="document.querySelectorAll('.type-check').forEach(cb=>cb.checked=this.checked)"></th><th>Name</th><th class="text-muted">Sort</th><th class="text-end">Actions</th></tr></thead>
+          <tbody id="sortableRows">
+            <?php foreach($rows as $r): ?><tr draggable="true" data-id="<?= (int)$r['id'] ?>"><td class="drag-handle">↕</td><td><input class="type-check" type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulkDeleteTypes"></td><td><form method="post" class="d-flex gap-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><input class="form-control form-control-sm" name="name" value="<?=h($r['name'])?>" required><button class="btn btn-sm btn-outline-secondary">Save</button></form></td><td class="text-muted"><?=h($r['sort_order'])?></td><td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this project type. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach; ?>
+            <?php if(!$rows): ?><tr><td colspan="5" class="text-muted">No types yet.</td></tr><?php endif; ?>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
-
+<script>
+(function(){const tbody=document.getElementById('sortableRows'); if(!tbody) return; let drag=null;
+function sync(){document.querySelectorAll('#reorderTypes input[name="order[]"]').forEach(el=>el.remove());tbody.querySelectorAll('tr[data-id]').forEach(tr=>{const i=document.createElement('input');i.type='hidden';i.name='order[]';i.value=tr.dataset.id;i.form=document.getElementById('reorderTypes');});}
+tbody.querySelectorAll('tr[data-id]').forEach(tr=>{tr.addEventListener('dragstart',()=>{drag=tr;});tr.addEventListener('dragover',e=>e.preventDefault());tr.addEventListener('drop',e=>{e.preventDefault();if(!drag||drag===tr)return;const r=tr.getBoundingClientRect();tbody.insertBefore(drag,e.clientY>r.top+r.height/2?tr.nextSibling:tr);sync();});});sync();})();
+</script>
 <?php require_once __DIR__ . '/layout_end.php'; ?>
