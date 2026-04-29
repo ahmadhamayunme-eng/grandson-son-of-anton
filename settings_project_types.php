@@ -124,7 +124,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
   .stype-kpi{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03);padding:.45rem .65rem;text-align:center;min-width:100px}
   .stype-kpi .n{font-weight:700;font-size:1.25rem;line-height:1}
   .stype-kpi .l{font-size:.78rem;color:rgba(232,232,232,.68)}
-  .stype-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:.8rem}
+  .stype-grid{display:grid;grid-template-columns:1fr;gap:.8rem}
   .stype-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
   .stype-card-title{font-weight:600;margin-bottom:.55rem}
   .stype-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
@@ -152,7 +152,7 @@ $rows = $pdo->query("SELECT * FROM project_types WHERE workspace_id=$ws ORDER BY
     <div class="stype-card">
       <div class="stype-card-title d-flex justify-content-between align-items-center">Current Types
         <span>
-          <button type="submit" form="bulkDeleteTypes" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected project typees. Are you sure?');">Delete Selected</button>
+          <button type="submit" form="bulkDeleteTypes" class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected project types. Are you sure?');">Delete Selected</button>
           <button type="submit" form="reorderTypes" class="btn btn-sm btn-outline-warning">Save Order</button>
         </span>
       </div>
