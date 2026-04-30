@@ -67,7 +67,7 @@ function docs_query(array $extra=[]){
   .docs-bar{display:grid;grid-template-columns:1fr 220px;gap:.65rem;margin-bottom:.95rem}
   .docs-search{display:flex;align-items:center;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
   .docs-search input{flex:1;background:transparent;border:0;color:#e7e7e7;padding:.62rem .7rem;outline:none}
-  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03);color:#e7e7e7;padding:.62rem .7rem}
+  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#fff;color:#000;padding:.62rem .7rem}
   .docs-panel{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(255,255,255,.02)}
   .docs-tabs{display:flex;gap:.2rem;padding:.65rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .docs-tab{padding:.4rem .7rem;border-radius:8px;color:rgba(223,223,223,.74);text-decoration:none;border:1px solid transparent}
