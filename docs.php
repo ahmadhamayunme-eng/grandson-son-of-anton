@@ -67,7 +67,7 @@ function docs_query(array $extra=[]){
   .docs-bar{display:grid;grid-template-columns:1fr 220px;gap:.65rem;margin-bottom:.95rem}
   .docs-search{display:flex;align-items:center;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
   .docs-search input{flex:1;background:transparent;border:0;color:#e7e7e7;padding:.62rem .7rem;outline:none}
-  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03);color:#e7e7e7;padding:.62rem .7rem}
+  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#fff;color:#000;padding:.62rem .7rem}
   .docs-panel{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(255,255,255,.02)}
   .docs-tabs{display:flex;gap:.2rem;padding:.65rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .docs-tab{padding:.4rem .7rem;border-radius:8px;color:rgba(223,223,223,.74);text-decoration:none;border:1px solid transparent}
@@ -75,6 +75,8 @@ function docs_query(array $extra=[]){
   .docs-folders{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.7rem;padding:.9rem .8rem}
   .docs-folder{border:1px solid rgba(255,255,255,.11);border-radius:10px;padding:.7rem;background:rgba(255,255,255,.03)}
   .docs-folder .count{color:rgba(214,214,214,.72);font-size:.83rem}
+  .docs-folder-add{display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:700;cursor:pointer}
+  .docs-folder-add:hover{border-color:rgba(248,217,120,.45);background:rgba(248,217,120,.08);color:#f8d978}
   .docs-table-wrap{padding:.8rem}
   .docs-table{width:100%;border-collapse:collapse}
   .docs-table th,.docs-table td{padding:.65rem .6rem;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -121,7 +123,9 @@ function docs_query(array $extra=[]){
           <div class="count"><?= (int)$f['count'] ?> docs</div>
         </div>
       <?php endforeach; ?>
-      <div class="docs-folder d-flex align-items-center justify-content-center fw-semibold">＋</div>
+      <?php if($can_manage): ?>
+        <button type="button" class="docs-folder docs-folder-add" data-bs-toggle="modal" data-bs-target="#addDoc" aria-label="Add Doc">＋</button>
+      <?php endif; ?>
     </div>
 
     <div class="docs-table-wrap">
