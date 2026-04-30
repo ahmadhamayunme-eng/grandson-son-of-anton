@@ -264,7 +264,7 @@ try {
 ?>
 
 <style>
-  .pv-shell{border:1px solid rgba(255,255,255,.08);border-radius:18px;background:linear-gradient(160deg,rgba(13,14,22,.97),rgba(10,11,18,.96));box-shadow:0 24px 60px rgba(0,0,0,.45);padding:16px}
+  .pv-shell{border:1px solid rgba(255,255,255,.08);border-radius:18px;background:linear-gradient(160deg,rgba(15,15,15,.97),rgba(10,10,10,.96));box-shadow:0 24px 60px rgba(0,0,0,.45);padding:16px}
   .pv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
   .pv-title{margin:0;font-size:2rem;font-weight:600}
   .pv-sub{color:rgba(255,255,255,.7);display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px}

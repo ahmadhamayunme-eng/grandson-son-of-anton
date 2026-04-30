@@ -414,7 +414,7 @@ function initials_from_names(string $names): string {
 ?>
 
 <style>
-  .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
+  .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(16, 16, 16, .96), rgba(10, 10, 10, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
   .client-logo-img, .client-logo-fallback { width:72px; height:72px; border-radius:16px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
@@ -428,7 +428,7 @@ function initials_from_names(string $names): string {
 
   .overview-grid { display: grid; grid-template-columns: 1.06fr .94fr; gap: 16px; padding: 18px; }
   .stack { display: grid; gap: 14px; }
-  .glass-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); overflow: hidden; }
+  .glass-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); overflow: hidden; }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
   .card-title { margin: 0; font-size: 1.35rem; font-weight: 600; }
   .tiny-cta { color: rgba(255, 255, 255, .78); text-decoration: none; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; padding: 2px 8px; font-size: .88rem; }
@@ -459,12 +459,12 @@ function initials_from_names(string $names): string {
   .docs-shell { padding: 16px 18px 18px; }
   .docs-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 12px; }
   .docs-search-wrap { position: relative; }
-  .docs-search { width: 100%; background: linear-gradient(90deg, rgba(31, 32, 43, 0.95), rgba(23, 24, 35, 0.93)); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #f2f2f4; padding: 10px 40px 10px 38px; }
+  .docs-search { width: 100%; background: linear-gradient(90deg, rgba(28, 28, 28, 0.95), rgba(20, 20, 20, 0.93)); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #f2f2f4; padding: 10px 40px 10px 38px; }
   .docs-search:focus { outline: none; border-color: rgba(255, 212, 83, 0.55); box-shadow: 0 0 0 3px rgba(255,212,83,.13); }
   .docs-search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
   .docs-search-go { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); border: 0; background: rgba(255,255,255,.08); color: rgba(255,255,255,.78); border-radius: 6px; width: 28px; height: 28px; }
   .docs-btn { border: 1px solid rgba(237, 200, 78, .6); background: linear-gradient(180deg, #f4d36a, #ebc84d); color: #2f2710; border-radius: 10px; font-weight: 700; padding: 9px 14px; }
-  .docs-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); overflow: hidden; }
+  .docs-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); overflow: hidden; }
   .docs-table { width: 100%; border-collapse: collapse; }
   .docs-table th, .docs-table td { border-top: 1px solid rgba(255,255,255,.07); padding: 12px 14px; vertical-align: middle; }
   .docs-table th { color: rgba(255,255,255,.64); font-weight: 600; font-size: .85rem; text-transform: uppercase; }
@@ -477,7 +477,7 @@ function initials_from_names(string $names): string {
   .docs-foot a { color: rgba(255,255,255,.76); text-decoration: none; margin-right: 10px; }
 
   .project-grid { padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  .project-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); padding: 14px; }
+  .project-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); padding: 14px; }
   .project-title { margin: 0; font-size: 1.55rem; font-weight: 600; }
   .project-pill { margin-top: 8px; display: inline-flex; align-items: center; border-radius: 8px; padding: 3px 10px; font-size: .86rem; font-weight: 600; }
   .project-pill.is-progress { color: #79d795; background: rgba(61, 154, 91, .24); border: 1px solid rgba(80, 186, 113, .4); }
