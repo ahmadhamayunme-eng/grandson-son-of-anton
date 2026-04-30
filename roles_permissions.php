@@ -25,8 +25,65 @@ $perms = $pdo->query("SELECT id,perm_key,label FROM permissions ORDER BY perm_ke
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require_post();
   csrf_verify();
+
+  $action = (string)($_POST['action'] ?? 'save_permissions');
+
+  if ($action === 'add_role') {
+    $name = trim((string)($_POST['name'] ?? ''));
+    if ($name === '') {
+      flash_set('error', 'Role name is required.');
+      redirect(basename(__FILE__));
+    }
+    $exists = $pdo->prepare('SELECT id FROM roles WHERE LOWER(name)=LOWER(?) LIMIT 1');
+    $exists->execute([$name]);
+    if ($exists->fetch()) {
+      flash_set('error', 'A role with this name already exists.');
+      redirect(basename(__FILE__));
+    }
+    $pdo->prepare('INSERT INTO roles (name) VALUES (?)')->execute([$name]);
+    $newRoleId = (int)$pdo->lastInsertId();
+    flash_set('success', 'Role added.');
+    redirect(basename(__FILE__) . '?role_id=' . $newRoleId);
+  }
+
+  if ($action === 'edit_role') {
+    $roleId = (int)($_POST['role_id'] ?? 0);
+    $name = trim((string)($_POST['name'] ?? ''));
+    if ($roleId <= 0 || $name === '') {
+      flash_set('error', 'Role and new name are required.');
+      redirect(basename(__FILE__));
+    }
+    $exists = $pdo->prepare('SELECT id FROM roles WHERE LOWER(name)=LOWER(?) AND id<>? LIMIT 1');
+    $exists->execute([$name, $roleId]);
+    if ($exists->fetch()) {
+      flash_set('error', 'Another role already has this name.');
+      redirect(basename(__FILE__) . '?role_id=' . $roleId);
+    }
+    $pdo->prepare('UPDATE roles SET name=? WHERE id=?')->execute([$name, $roleId]);
+    flash_set('success', 'Role updated.');
+    redirect(basename(__FILE__) . '?role_id=' . $roleId);
+  }
+
+  if ($action === 'delete_role') {
+    $roleId = (int)($_POST['role_id'] ?? 0);
+    if ($roleId <= 0) {
+      flash_set('error', 'Invalid role selected.');
+      redirect(basename(__FILE__));
+    }
+    $inUse = $pdo->prepare('SELECT COUNT(*) FROM users WHERE role_id=?');
+    $inUse->execute([$roleId]);
+    if ((int)$inUse->fetchColumn() > 0) {
+      flash_set('error', 'Role cannot be deleted because it is assigned to one or more users.');
+      redirect(basename(__FILE__) . '?role_id=' . $roleId);
+    }
+    $pdo->prepare('DELETE FROM role_permissions WHERE role_id=?')->execute([$roleId]);
+    $pdo->prepare('DELETE FROM roles WHERE id=?')->execute([$roleId]);
+    flash_set('success', 'Role deleted.');
+    redirect(basename(__FILE__));
+  }
+
   $role_id = (int)($_POST['role_id'] ?? 0);
-  if ($role_id > 0) {
+  if ($action === 'save_permissions' && $role_id > 0) {
     foreach ($perms as $perm) {
       $key = 'perm_' . $perm['id'];
       $allowed = isset($_POST[$key]) ? 1 : 0;
@@ -39,6 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $role_id = (int)($_GET['role_id'] ?? ($roles[0]['id'] ?? 0));
+$selectedRole = null;
+foreach ($roles as $roleRow) {
+  if ((int)$roleRow['id'] === $role_id) {
+    $selectedRole = $roleRow;
+    break;
+  }
+}
 $allowedMap = [];
 if ($role_id > 0) {
   $st = $pdo->prepare("SELECT permission_id,is_allowed FROM role_permissions WHERE role_id=?");
@@ -69,6 +133,7 @@ $totalPerms = count($perms);
   .rp-card-title{font-size:1.02rem;font-weight:600;margin-bottom:.6rem}
   .role-list{display:flex;flex-direction:column;gap:.35rem}
   .role-link{display:block;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:rgba(255,255,255,.02);padding:.55rem .65rem;text-decoration:none;color:#e7e7e7}
+  .role-actions{display:flex;flex-direction:column;gap:.5rem;margin-top:.8rem}
   .role-link:hover{background:rgba(255,255,255,.05);color:#fff}
   .role-link.active{border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12);color:#ffcc00}
   .perm-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
@@ -102,6 +167,35 @@ $totalPerms = count($perms);
           <a class="role-link <?= $role_id === (int)$r['id'] ? 'active' : '' ?>" href="?role_id=<?= (int)$r['id'] ?>"><?= h($r['name']) ?></a>
         <?php endforeach; ?>
       </div>
+      <div class="role-actions">
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+          <input type="hidden" name="action" value="add_role">
+          <label class="form-label small mb-1">Add New Role</label>
+          <div class="d-flex gap-2">
+            <input class="form-control" name="name" placeholder="Role name">
+            <button class="btn btn-yellow btn-sm">Add</button>
+          </div>
+        </form>
+        <?php if ($role_id > 0): ?>
+          <form method="post">
+            <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+            <input type="hidden" name="action" value="edit_role">
+            <input type="hidden" name="role_id" value="<?= (int)$role_id ?>">
+            <label class="form-label small mb-1">Edit Selected Role</label>
+            <div class="d-flex gap-2">
+              <input class="form-control" name="name" value="<?= h((string)($selectedRole['name'] ?? '')) ?>">
+              <button class="btn btn-outline-light btn-sm">Save</button>
+            </div>
+          </form>
+          <form method="post" onsubmit="return confirm('Delete this role permanently?');">
+            <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+            <input type="hidden" name="action" value="delete_role">
+            <input type="hidden" name="role_id" value="<?= (int)$role_id ?>">
+            <button class="btn btn-outline-danger btn-sm w-100">Delete Selected Role</button>
+          </form>
+        <?php endif; ?>
+      </div>
     </div>
 
     <div class="rp-card">
@@ -111,6 +205,7 @@ $totalPerms = count($perms);
       <?php else: ?>
         <form method="post">
           <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+          <input type="hidden" name="action" value="save_permissions">
           <input type="hidden" name="role_id" value="<?= (int)$role_id ?>">
           <div class="perm-table">
             <table>
