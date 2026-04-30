@@ -15,7 +15,7 @@ if (!in_array($role, ['CEO','Manager','Super Admin'], true)) { http_response_cod
   .set-card:hover{border-color:rgba(246,212,105,.32);background:linear-gradient(170deg,rgba(246,212,105,.09),rgba(255,255,255,.03));transform:translateY(-1px)}
   .set-card-title{font-size:1.1rem;font-weight:600;color:#ececf0;margin-bottom:.25rem}
   .set-card-sub{color:rgba(232,232,232,.68);font-size:.88rem}
-  .set-card-action{margin-top:.7rem;font-size:.84rem;color:#f6d469}
+  .set-card-action{margin-top:.7rem;font-size:.84rem;color:#ffcc00}
   @media (max-width: 992px){.set-grid{grid-template-columns:1fr}}
 </style>
 

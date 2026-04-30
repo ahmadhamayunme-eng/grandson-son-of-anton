@@ -166,7 +166,7 @@ function client_status_class(string $status): string {
   .clients-title { font-size: 2rem; font-weight: 600; margin: 0 0 14px; }
   .clients-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 14px; }
   .clients-search-wrap { position: relative; }
-  .clients-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
+  .clients-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .clients-search {
     width: 100%; background: linear-gradient(90deg, rgba(28, 28, 28, 0.95), rgba(20, 20, 20, 0.93));
     border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 10px; color: #f2f2f4;
@@ -187,7 +187,7 @@ function client_status_class(string $status): string {
   }
   .clients-tabs { display: flex; gap: 24px; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
   .clients-tab { display: inline-block; color: rgba(255,255,255,0.74); text-decoration: none; padding: 11px 0; font-weight: 500; border-bottom: 2px solid transparent; }
-  .clients-tab.active { color: #f2cb5f; border-color: #f2cb5f; }
+  .clients-tab.active { color: #ffcc00; border-color: #ffcc00; }
   .clients-meta-row {
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); color: rgba(255,255,255,0.62); font-size: .88rem;
@@ -197,7 +197,7 @@ function client_status_class(string $status): string {
   .clients-table th { font-size: .86rem; color: rgba(255, 255, 255, 0.62); font-weight: 600; background: rgba(255, 255, 255, 0.02); }
   .clients-table td { color: rgba(237,237,241,0.9); }
   .clients-logo {
-    width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,212,83,.6); color: #f3ce62;
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,212,83,.6); color: #ffcc00;
     display: inline-flex; align-items: center; justify-content: center; margin-right: 9px; font-size: .9rem;
   }
   .clients-name { color: #f5f5f6; text-decoration: none; font-weight: 600; }
@@ -206,9 +206,9 @@ function client_status_class(string $status): string {
     display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: .74rem;
     border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255,255,255,.07); color: #ddd;
   }
-  .chip.tag { background: rgba(255, 212, 83, 0.14); border-color: rgba(255, 212, 83, 0.34); color: #f3d471; }
+  .chip.tag { background: rgba(255, 212, 83, 0.14); border-color: rgba(255, 212, 83, 0.34); color: #ffcc00; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; display: inline-block; }
-  .is-active .status-dot { background: #f2cb5f; }
+  .is-active .status-dot { background: #ffcc00; }
   .is-completed .status-dot { background: #67d091; }
   .is-paused .status-dot { background: #9aa0ad; }
   .clients-footer {
@@ -216,7 +216,7 @@ function client_status_class(string $status): string {
     padding: 12px 16px; color: rgba(255,255,255,.6); font-size: .92rem;
   }
   .clients-footer a { color: rgba(255,255,255,.78); text-decoration: none; margin: 0 8px; }
-  .clients-footer a:hover { color: #f5d36e; }
+  .clients-footer a:hover { color: #ffcc00; }
 
   @media (max-width: 1040px) {
     .clients-toolbar { grid-template-columns: 1fr; }

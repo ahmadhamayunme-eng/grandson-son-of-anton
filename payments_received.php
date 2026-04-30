@@ -74,7 +74,7 @@ $rows = $rows->fetchAll();
   .pay-table th,.pay-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .pay-table th{background:rgba(255,255,255,.03);color:#fff;font-weight:600}
   .amt-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(87,200,143,.15);border:1px solid rgba(87,200,143,.35);color:#9de8bf}
-  .method-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(246,212,105,.12);border:1px solid rgba(246,212,105,.35);color:#f6d469}
+  .method-chip{display:inline-block;padding:.28rem .58rem;border-radius:8px;background:rgba(246,212,105,.12);border:1px solid rgba(246,212,105,.35);color:#ffcc00}
   .form-label{color:#fff !important}
   .text-muted{color:#fff !important;opacity:.9}
   details summary{color:#fff}

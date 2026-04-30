@@ -40,7 +40,7 @@ $outstanding = max(0, $expenses - $income);
   .metric-card{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:linear-gradient(150deg, rgba(255,255,255,.05), rgba(255,255,255,.02));padding:1rem .95rem}
   .metric-label{font-size:1.02rem;color:rgba(235,235,235,.78);margin-bottom:.35rem}
   .metric-value{font-size:3rem;line-height:1.1}
-  .metric-value.gold{color:#f6d469}
+  .metric-value.gold{color:#ffcc00}
   .reports-chart-wrap{margin-top:1rem;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;background:linear-gradient(180deg,#0e0e0e,#111)}
   .reports-chart-head{padding:.85rem 1rem;border-bottom:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;align-items:center}
   .reports-chart-area{height:360px;display:flex;align-items:center;justify-content:center;color:rgba(230,230,230,.7);font-size:2rem;text-align:center;padding:1rem}

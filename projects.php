@@ -335,7 +335,7 @@ SQL;
   .projects-title { margin: 0; font-size: 2rem; font-weight: 600; }
   .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; gap: 10px; margin-bottom: 12px; }
   .tool-search-wrap { position: relative; }
-  .tool-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
+  .tool-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .tool-search { width: 100%; padding: 10px 12px 10px 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.03); color: #f2f2f5; }
   .tool-select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04); color: #eceef5; min-width: 132px; }
   .tool-select:focus, .tool-search:focus { outline: none; border-color: rgba(255,212,83,.5); box-shadow: 0 0 0 3px rgba(255,212,83,.12); }

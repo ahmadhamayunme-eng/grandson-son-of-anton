@@ -115,7 +115,7 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,23,23,.92), rgba(14,14,14,.9)); padding: 14px 16px; min-height: 98px; }
   .kpi-label { color: rgba(236,236,236,.72); font-size: .9rem; margin-bottom: 4px; }
   .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
-  .kpi-icon { color: #f6d469; margin-right: 8px; }
+  .kpi-icon { color: #ffcc00; margin-right: 8px; }
   .kpi-red .kpi-icon { color: #f3797e; }
   .kpi-green .kpi-icon { color: #55cb90; }
   .kpi-change { font-size: .95rem; margin-left: 6px; }
@@ -128,7 +128,7 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .task-title, .project-title { color: #f0f0f3; text-decoration: none; font-weight: 500; font-size: 1.15rem; }
   .task-meta, .project-meta { color: rgba(236,236,240,.62); font-size: .92rem; }
   .chip { border-radius: 999px; padding: 3px 10px; font-size: .78rem; border: 1px solid transparent; align-self: center; }
-  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #f6d469; }
+  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #ffcc00; }
   .chip-green { background: rgba(85,203,144,.14); border-color: rgba(85,203,144,.3); color: #7ae7af; }
   .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
   .chip-purple { background: rgba(175,175,175,.16); border-color: rgba(175,175,175,.32); color: #d0d0d0; }
@@ -136,7 +136,7 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
   .chart-legend { display: flex; justify-content: space-between; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,236,.72); font-size: .9rem; }
   .chart-legend-left { display: flex; gap: 16px; }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; }
-  .legend-yellow { background: #f6d469; }
+  .legend-yellow { background: #ffcc00; }
   .legend-purple { background: #a1a1a1; }
   .finance-box { padding: 14px 16px; }
   .finance-line { border-bottom: 1px solid rgba(255,255,255,.08); padding: 11px 0; }
@@ -182,7 +182,7 @@ $changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMon
             <line x1="0" y1="145" x2="560" y2="145" stroke="rgba(255,255,255,.08)" />
             <line x1="0" y1="100" x2="560" y2="100" stroke="rgba(255,255,255,.08)" />
             <line x1="0" y1="55" x2="560" y2="55" stroke="rgba(255,255,255,.08)" />
-            <polyline fill="none" stroke="#f6d469" stroke-width="4" points="<?=h($taskPoints)?>" />
+            <polyline fill="none" stroke="#ffcc00" stroke-width="4" points="<?=h($taskPoints)?>" />
             <polyline fill="none" stroke="#a3a3a3" stroke-width="4" points="<?=h($clientPoints)?>" />
           </svg>
         </div>

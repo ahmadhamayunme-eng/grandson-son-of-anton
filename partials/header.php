@@ -20,7 +20,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
       --line: rgba(255,255,255,.08);
       --text: #ececf0;
       --muted: rgba(232,232,232,.62);
-      --yellow: #f6d469;
+      --yellow: #ffcc00;
       --purple: #8e8e8e;
       --green: #57c88f;
       --red: #f36f75;
@@ -47,7 +47,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
     .nav-link:hover, .nav-link.active { color: var(--yellow); background: linear-gradient(90deg, rgba(246,212,105,.16), rgba(246,212,105,.04)); }
     .card { background:#121212; border:1px solid var(--line); border-radius:14px; }
     .btn-yellow { background:var(--yellow); border-color:var(--yellow); color:#0f0f11; font-weight:600; }
-    .btn-yellow:hover { background:#ffe18a; border-color:#ffe18a; color:#101012; }
+    .btn-yellow:hover { background:#ffcc00; border-color:#ffcc00; color:#101012; }
     .badge-soft { background: rgba(246,212,105,.15); border:1px solid rgba(246,212,105,.28); color:var(--yellow); }
     a { color: var(--yellow); }
     .table { --bs-table-bg: transparent; --bs-table-color: #ececf0; }

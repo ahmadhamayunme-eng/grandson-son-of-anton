@@ -271,14 +271,14 @@ try {
   .pv-status{display:inline-flex;padding:3px 10px;border-radius:8px;font-weight:600;background:rgba(61,154,91,.24);border:1px solid rgba(80,186,113,.4);color:#79d795}
   .pv-tabs{display:flex;gap:22px;padding:0 2px 9px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px}
   .pv-tab{color:rgba(255,255,255,.75);text-decoration:none;padding:7px 0;border-bottom:2px solid transparent}
-  .pv-tab.active{color:#f5d66c;border-color:#f5d66c}
+  .pv-tab.active{color:#ffcc00;border-color:#ffcc00}
   .glass{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(30,30,30,.7),rgba(20,20,20,.62));overflow:hidden}
   .card-h{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
   .card-h h3{margin:0;font-size:1.35rem}
   .pv-grid{display:grid;grid-template-columns:1fr 1.45fr;gap:14px}
   .ov-body{padding:12px 14px}
   .prog{height:10px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin:6px 0 7px}
-  .prog > span{display:block;height:100%;background:linear-gradient(90deg,#f3d46d,#8c7b3a)}
+  .prog > span{display:block;height:100%;background:linear-gradient(90deg,#ffcc00,#8c7b3a)}
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;color:rgba(255,255,255,.78)}
   .list{list-style:none;margin:0;padding:0}.list li{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid rgba(255,255,255,.07)}
   .list .sub,.sub{font-size:.9rem;color:rgba(255,255,255,.6)}
