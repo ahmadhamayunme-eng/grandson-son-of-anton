@@ -159,7 +159,7 @@ function client_status_class(string $status): string {
   .clients-shell {
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;
-    background: linear-gradient(130deg, rgba(14, 15, 22, 0.96), rgba(9, 10, 15, 0.96));
+    background: linear-gradient(130deg, rgba(16, 16, 16, 0.96), rgba(10, 10, 10, 0.96));
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     padding: 18px;
   }
@@ -168,7 +168,7 @@ function client_status_class(string $status): string {
   .clients-search-wrap { position: relative; }
   .clients-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
   .clients-search {
-    width: 100%; background: linear-gradient(90deg, rgba(31, 32, 43, 0.95), rgba(23, 24, 35, 0.93));
+    width: 100%; background: linear-gradient(90deg, rgba(28, 28, 28, 0.95), rgba(20, 20, 20, 0.93));
     border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 10px; color: #f2f2f4;
     padding: 10px 12px 10px 40px;
   }
@@ -293,7 +293,7 @@ function client_status_class(string $status): string {
               <td><?= (int)$c['project_count'] ?></td>
               <td class="text-muted"><?=h(client_last_active_label($c['last_active']))?></td>
               <td class="text-center"><?php if ($can_manage): ?><input class="client-check" type="checkbox" name="ids[]" value="<?= (int)$c['id'] ?>" form="bulkDeleteClients"><?php endif; ?></td>
-              <td class="text-end d-flex justify-content-end gap-2"><a class="text-decoration-none" href="client_view.php?id=<?=$c['id']?>">›</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
+              <td class="text-end d-flex justify-content-end gap-2"><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
