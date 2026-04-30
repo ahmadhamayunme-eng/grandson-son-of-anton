@@ -132,6 +132,8 @@ $totalPerms = count($perms);
   .rp-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
   .rp-card-title{font-size:1.02rem;font-weight:600;margin-bottom:.6rem}
   .role-list{display:flex;flex-direction:column;gap:.35rem}
+  .role-item{display:flex;align-items:center;gap:.45rem}
+  .role-edit-btn{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:8px;padding:.35rem .5rem;line-height:1}
   .role-link{display:block;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:rgba(255,255,255,.02);padding:.55rem .65rem;text-decoration:none;color:#e7e7e7}
   .role-actions{display:flex;flex-direction:column;gap:.5rem;margin-top:.8rem}
   .role-link:hover{background:rgba(255,255,255,.05);color:#fff}
@@ -164,7 +166,19 @@ $totalPerms = count($perms);
       <div class="rp-card-title">Roles</div>
       <div class="role-list">
         <?php foreach ($roles as $r): ?>
-          <a class="role-link <?= $role_id === (int)$r['id'] ? 'active' : '' ?>" href="?role_id=<?= (int)$r['id'] ?>"><?= h($r['name']) ?></a>
+          <div class="role-item">
+            <button
+              type="button"
+              class="role-edit-btn"
+              data-bs-toggle="modal"
+              data-bs-target="#editRoleModal"
+              data-role-id="<?= (int)$r['id'] ?>"
+              data-role-name="<?= h($r['name']) ?>"
+              aria-label="Edit <?= h($r['name']) ?>"
+              title="Edit role"
+            >✏️</button>
+            <a class="role-link <?= $role_id === (int)$r['id'] ? 'active' : '' ?>" href="?role_id=<?= (int)$r['id'] ?>"><?= h($r['name']) ?></a>
+          </div>
         <?php endforeach; ?>
       </div>
       <div class="role-actions">
@@ -178,16 +192,6 @@ $totalPerms = count($perms);
           </div>
         </form>
         <?php if ($role_id > 0): ?>
-          <form method="post">
-            <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
-            <input type="hidden" name="action" value="edit_role">
-            <input type="hidden" name="role_id" value="<?= (int)$role_id ?>">
-            <label class="form-label small mb-1">Edit Selected Role</label>
-            <div class="d-flex gap-2">
-              <input class="form-control" name="name" value="<?= h((string)($selectedRole['name'] ?? '')) ?>">
-              <button class="btn btn-outline-light btn-sm">Save</button>
-            </div>
-          </form>
           <form method="post" onsubmit="return confirm('Delete this role permanently?');">
             <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
             <input type="hidden" name="action" value="delete_role">
@@ -232,5 +236,42 @@ $totalPerms = count($perms);
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="editRoleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border border-secondary">
+      <form method="post">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Role</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+          <input type="hidden" name="action" value="edit_role">
+          <input type="hidden" name="role_id" id="modal_role_id" value="">
+          <label class="form-label">Role Name</label>
+          <input class="form-control" name="name" id="modal_role_name" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-yellow">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.role-edit-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var id = btn.getAttribute('data-role-id') || '';
+    var name = btn.getAttribute('data-role-name') || '';
+    var idInput = document.getElementById('modal_role_id');
+    var nameInput = document.getElementById('modal_role_name');
+    if (idInput) idInput.value = id;
+    if (nameInput) nameInput.value = name;
+  });
+});
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
