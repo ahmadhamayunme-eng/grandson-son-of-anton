@@ -75,6 +75,8 @@ function docs_query(array $extra=[]){
   .docs-folders{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.7rem;padding:.9rem .8rem}
   .docs-folder{border:1px solid rgba(255,255,255,.11);border-radius:10px;padding:.7rem;background:rgba(255,255,255,.03)}
   .docs-folder .count{color:rgba(214,214,214,.72);font-size:.83rem}
+  .docs-folder-add{display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:700;cursor:pointer}
+  .docs-folder-add:hover{border-color:rgba(248,217,120,.45);background:rgba(248,217,120,.08);color:#f8d978}
   .docs-table-wrap{padding:.8rem}
   .docs-table{width:100%;border-collapse:collapse}
   .docs-table th,.docs-table td{padding:.65rem .6rem;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -121,7 +123,9 @@ function docs_query(array $extra=[]){
           <div class="count"><?= (int)$f['count'] ?> docs</div>
         </div>
       <?php endforeach; ?>
-      <div class="docs-folder d-flex align-items-center justify-content-center fw-semibold">＋</div>
+      <?php if($can_manage): ?>
+        <button type="button" class="docs-folder docs-folder-add" data-bs-toggle="modal" data-bs-target="#addDoc" aria-label="Add Doc">＋</button>
+      <?php endif; ?>
     </div>
 
     <div class="docs-table-wrap">
