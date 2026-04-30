@@ -31,6 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
   $action = (string)($_POST['action'] ?? 'create');
 
+  if ($action === 'bulk_delete' && $canManage) {
+    $ids = $_POST['ids'] ?? [];
+    if (!is_array($ids)) {
+      $ids = [];
+    }
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static function($id){
+      return $id > 0;
+    })));
+    if (!$ids) {
+      flash_set('error', 'Select at least one login to delete.');
+      redirect('website_logins.php');
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $params = array_merge([$ws], $ids);
+    $st = $pdo->prepare("DELETE FROM website_logins WHERE workspace_id=? AND id IN ($placeholders)");
+    $st->execute($params);
+    flash_set('success', $st->rowCount() . ' website login(s) deleted permanently.');
+    redirect('website_logins.php');
+  }
+
   if ($action === 'delete') {
     $id = (int)($_POST['id'] ?? 0);
     if ($id > 0) {
@@ -73,16 +93,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
 
-  $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-    ->execute([$ws, $clientId ?: null, $projectId ?: null, $siteName, $websiteUrl ?: null, $loginUrl ?: null, $username ?: null, $password ?: null, $notes ?: null, (int)($user['id'] ?? 0), now(), now()]);
-  flash_set('success', 'Website login saved.');
+  if ($action === 'update') {
+    $id = (int)($_POST['id'] ?? 0);
+    if ($id <= 0) {
+      flash_set('error', 'Invalid login selected for update.');
+      redirect('website_logins.php');
+    }
+    $existingSt = $pdo->prepare('SELECT login_password FROM website_logins WHERE id=? AND workspace_id=? LIMIT 1');
+    $existingSt->execute([$id, $ws]);
+    $existing = $existingSt->fetch();
+    if (!$existing) {
+      flash_set('error', 'Website login not found.');
+      redirect('website_logins.php');
+    }
+    $finalPassword = trim($password) === '' ? (string)($existing['login_password'] ?? '') : $password;
+    $pdo->prepare('UPDATE website_logins SET client_id=?, project_id=?, site_name=?, website_url=?, login_url=?, login_username=?, login_password=?, notes=?, updated_at=? WHERE id=? AND workspace_id=?')
+      ->execute([$clientId ?: null, $projectId ?: null, $siteName, $websiteUrl ?: null, $loginUrl ?: null, $username ?: null, $finalPassword ?: null, $notes ?: null, now(), $id, $ws]);
+    flash_set('success', 'Website login updated.');
+    redirect('website_logins.php');
+  } else {
+    $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $clientId ?: null, $projectId ?: null, $siteName, $websiteUrl ?: null, $loginUrl ?: null, $username ?: null, $password ?: null, $notes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+    flash_set('success', 'Website login saved.');
+  }
   redirect('website_logins.php');
 }
 
 $q = trim((string)($_GET['q'] ?? ''));
 $prefillClientId = (int)($_GET['client_id'] ?? 0);
 $prefillProjectId = (int)($_GET['project_id'] ?? 0);
+$editId = (int)($_GET['edit_id'] ?? 0);
+$editRow = null;
 
 $clients = $pdo->prepare('SELECT id,name FROM clients WHERE workspace_id=? ORDER BY name');
 $clients->execute([$ws]);
@@ -100,6 +142,11 @@ $list = $pdo->prepare("SELECT wl.*, c.name AS client_name, p.name AS project_nam
   ORDER BY wl.updated_at DESC, wl.id DESC");
 $list->execute([$ws, $like, $like, $like]);
 $rows = $list->fetchAll();
+if ($editId > 0) {
+  $st = $pdo->prepare('SELECT * FROM website_logins WHERE id=? AND workspace_id=? LIMIT 1');
+  $st->execute([$editId, $ws]);
+  $editRow = $st->fetch() ?: null;
+}
 ?>
 
 <style>
@@ -126,43 +173,58 @@ $rows = $list->fetchAll();
   </form>
 
   <div class="card p-3 mb-3">
-    <h5>Add Website Login</h5>
+    <h5><?= $editRow ? 'Edit Website Login' : 'Add Website Login' ?></h5>
     <form method="post">
       <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
-      <input type="hidden" name="action" value="create">
+      <input type="hidden" name="action" value="<?= $editRow ? 'update' : 'create' ?>">
+      <?php if ($editRow): ?><input type="hidden" name="id" value="<?= (int)$editRow['id'] ?>"><?php endif; ?>
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">Website Name</label><input class="form-control" name="site_name" required></div>
-        <div class="col-md-6"><label class="form-label">Website URL</label><input class="form-control" name="website_url" placeholder="https://example.com"></div>
-        <div class="col-md-6"><label class="form-label">Production URL</label><input class="form-control" name="login_url" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div>
-        <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="login_username"></div>
+        <div class="col-md-6"><label class="form-label">Website Name</label><input class="form-control" name="site_name" value="<?= h((string)($editRow['site_name'] ?? '')) ?>" required></div>
+        <div class="col-md-6"><label class="form-label">Website URL</label><input class="form-control" name="website_url" value="<?= h((string)($editRow['website_url'] ?? '')) ?>" placeholder="https://example.com"></div>
+        <div class="col-md-6"><label class="form-label">Production URL</label><input class="form-control" name="login_url" value="<?= h((string)($editRow['login_url'] ?? '')) ?>" placeholder="https://staging.example.com or https://new.example.com/wp-admin"></div>
+        <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="login_username" value="<?= h((string)($editRow['login_username'] ?? '')) ?>"></div>
         <div class="col-md-6"><label class="form-label">Password</label><div class="pw-input-wrap"><input class="form-control" type="password" name="login_password" id="new_login_password"><button type="button" class="pw-toggle" data-target="new_login_password" aria-label="Show password" title="Show/Hide Password">👁</button></div></div>
-        <div class="col-md-6"><label class="form-label">Client (optional)</label><select class="form-select" name="client_id"><option value="0">None</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $prefillClientId===(int)$c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
-        <div class="col-md-12"><label class="form-label">Project (optional)</label><select class="form-select" name="project_id"><option value="0">None</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>" <?= $prefillProjectId===(int)$p['id'] ? 'selected' : '' ?>><?= h($p['name']) ?> — <?= h($p['client_name']) ?></option><?php endforeach; ?></select></div>
-        <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3" placeholder="2FA notes / owner contact etc."></textarea></div>
+        <div class="col-md-6"><label class="form-label">Client (optional)</label><select class="form-select" name="client_id"><option value="0">None</option><?php foreach($clients as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (($editRow ? (int)$editRow['client_id'] : $prefillClientId)===(int)$c['id']) ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
+        <div class="col-md-12"><label class="form-label">Project (optional)</label><select class="form-select" name="project_id"><option value="0">None</option><?php foreach($projects as $p): ?><option value="<?= (int)$p['id'] ?>" <?= (($editRow ? (int)$editRow['project_id'] : $prefillProjectId)===(int)$p['id']) ? 'selected' : '' ?>><?= h($p['name']) ?> — <?= h($p['client_name']) ?></option><?php endforeach; ?></select></div>
+        <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3" placeholder="2FA notes / owner contact etc."><?= h((string)($editRow['notes'] ?? '')) ?></textarea></div>
       </div>
-      <button class="btn btn-yellow mt-3">Save Website Login</button>
+      <button class="btn btn-yellow mt-3"><?= $editRow ? 'Update Website Login' : 'Save Website Login' ?></button>
+      <?php if ($editRow): ?><a href="website_logins.php" class="btn btn-outline-light mt-3 ms-2">Cancel Edit</a><?php endif; ?>
     </form>
   </div>
 
+  <?php if ($canManage): ?>
+  <form method="post" onsubmit="return confirm('Delete selected logins permanently?');" class="mb-2">
+    <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+    <input type="hidden" name="action" value="bulk_delete">
+  <?php endif; ?>
   <div class="table-responsive">
     <table class="table table-dark table-striped align-middle">
-      <thead><tr><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Production URL</th><th>Notes</th><th></th></tr></thead>
+      <thead><tr><?php if ($canManage): ?><th><input type="checkbox" id="bulk_select_all" aria-label="Select all"></th><?php endif; ?><th>Website</th><th>Client / Project</th><th>Username</th><th>Password</th><th>Production URL</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>
       <?php foreach($rows as $r): ?>
         <tr>
+          <?php if ($canManage): ?><td><input type="checkbox" class="bulk-row" name="ids[]" value="<?= (int)$r['id'] ?>" aria-label="Select row"></td><?php endif; ?>
           <td><div class="fw-semibold"><?= h($r['site_name']) ?></div><div class="small text-muted"><?= h($r['website_url'] ?: '—') ?></div></td>
           <td><div><?= h($r['client_name'] ?: '—') ?></div><div class="small text-muted"><?= h($r['project_name'] ?: '—') ?></div></td>
           <td><?= h($r['login_username'] ?: '—') ?></td>
           <td class="pw"><span class="pw-mask">••••••••</span><span class="pw-real d-none"><?= h($r['login_password'] ?: '') ?></span> <button type="button" class="btn btn-sm btn-outline-light reveal-btn">Reveal</button></td>
           <td><?php if (!empty($r['login_url'])): ?><a href="<?= h($r['login_url']) ?>" target="_blank" rel="noopener">Open</a><?php else: ?>—<?php endif; ?></td>
           <td><?= nl2br(h($r['notes'] ?: '—')) ?></td>
-          <td><?php if ($canManage): ?><form method="post" onsubmit="return confirm('Delete this login permanently?');"><input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
+          <td>
+            <a class="btn btn-sm btn-outline-light" href="website_logins.php?edit_id=<?= (int)$r['id'] ?>">Edit</a>
+            <?php if ($canManage): ?><form method="post" class="d-inline" onsubmit="return confirm('Delete this login permanently?');"><input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?>
+          </td>
         </tr>
       <?php endforeach; ?>
-      <?php if(!$rows): ?><tr><td colspan="7" class="text-muted">No website logins yet.</td></tr><?php endif; ?>
+      <?php if(!$rows): ?><tr><td colspan="<?= $canManage ? '8' : '7' ?>" class="text-muted">No website logins yet.</td></tr><?php endif; ?>
       </tbody>
     </table>
   </div>
+  <?php if ($canManage): ?>
+    <button class="btn btn-outline-danger btn-sm">Delete Selected</button>
+  </form>
+  <?php endif; ?>
 </div>
 
 <script>
@@ -189,6 +251,15 @@ document.querySelectorAll('.reveal-btn').forEach(function(btn){
     btn.textContent = show ? 'Hide' : 'Reveal';
   });
 });
+
+var bulkSelectAll = document.getElementById('bulk_select_all');
+if (bulkSelectAll) {
+  bulkSelectAll.addEventListener('change', function(){
+    document.querySelectorAll('.bulk-row').forEach(function(cb){
+      cb.checked = bulkSelectAll.checked;
+    });
+  });
+}
 </script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
