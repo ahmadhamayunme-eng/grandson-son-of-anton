@@ -4,6 +4,8 @@ require_once __DIR__ . '/layout.php';
 $u = auth_user();
 $pdo = db();
 $userId = (int)($u['id'] ?? 0);
+$avatarDir = __DIR__ . '/uploads/profile_pictures';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
   $action = (string)($_POST['action'] ?? 'change_password');
