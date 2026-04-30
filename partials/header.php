@@ -50,7 +50,9 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
     .badge-soft { background: rgba(246,212,105,.15); border:1px solid rgba(246,212,105,.28); color:var(--yellow); }
     a { color: var(--yellow); }
     .table { --bs-table-bg: transparent; --bs-table-color: #ececf0; }
-    .form-control, .form-select { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
+    .form-control { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
+    .form-select { background:#fff; border:1px solid rgba(255,255,255,.12); color:#000; }
+    select option { background:#fff; color:#000; }
     .form-control:focus, .form-select:focus { border-color: rgba(246,212,105,.6); box-shadow: 0 0 0 .2rem rgba(246,212,105,.15); }
     .text-muted { color: var(--muted) !important; }
     .small-help { font-size:.9rem; color: var(--muted); }
