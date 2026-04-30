@@ -16,7 +16,7 @@ if ($task_id>0) {
 ?>
 <style>
   .log-author{display:flex;align-items:center;gap:.45rem}
-  .log-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#151515;font-size:.62rem;font-weight:700;border:1px solid rgba(255,255,255,.3);object-fit:cover;overflow:hidden}
+  .log-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#ffcc00,#9d9d9d);color:#151515;font-size:.62rem;font-weight:700;border:1px solid rgba(255,255,255,.3);object-fit:cover;overflow:hidden}
 </style>
 <h2 class="mb-3">Task Activity Log</h2>
 

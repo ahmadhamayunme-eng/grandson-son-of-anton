@@ -34,13 +34,13 @@ try {
   .metric-label{font-size:.92rem;color:rgba(225,225,225,.68);text-transform:uppercase;letter-spacing:.02em}
   .metric-value{font-size:2.7rem;line-height:1.12;margin-top:.3rem}
   .metric-trend{font-size:.95rem;margin-left:.35rem}
-  .trend-up{color:#70d39a}.trend-warn{color:#f6d469}.trend-down{color:#ff8f70}
+  .trend-up{color:#70d39a}.trend-warn{color:#ffcc00}.trend-down{color:#ff8f70}
   .fin-grid{display:grid;grid-template-columns:1fr 1.25fr;gap:1rem;margin-top:1rem}
   .panel{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));overflow:hidden}
   .panel-head{padding:.85rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);font-size:1.9rem;font-weight:500}
   .panel-body{padding:.95rem 1rem}
   .donut-wrap{height:315px;display:flex;align-items:center;justify-content:center;position:relative}
-  .donut{width:250px;height:250px;border-radius:50%;background:conic-gradient(#f6d469 0 45%, #f0bf46 45% 70%, #d17a3f 70% 84%, #617c76 84% 100%);position:relative}
+  .donut{width:250px;height:250px;border-radius:50%;background:conic-gradient(#ffcc00 0 45%, #f0bf46 45% 70%, #d17a3f 70% 84%, #617c76 84% 100%);position:relative}
   .donut:after{content:'';position:absolute;inset:24%;background:#101010;border-radius:50%;border:1px solid rgba(255,255,255,.08)}
   .donut-center{position:absolute;text-align:center;z-index:2}
   .donut-center .small{color:rgba(220,220,220,.68)}
@@ -57,7 +57,7 @@ try {
   .fin-table table{width:100%;border-collapse:collapse}
   .fin-table th,.fin-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .fin-table th{background:rgba(255,255,255,.03);color:rgba(226,226,226,.82);font-weight:600}
-  .amount-badge{display:inline-block;padding:.3rem .55rem;border-radius:8px;background:rgba(246,212,105,.16);border:1px solid rgba(246,212,105,.35);color:#f6d469}
+  .amount-badge{display:inline-block;padding:.3rem .55rem;border-radius:8px;background:rgba(246,212,105,.16);border:1px solid rgba(246,212,105,.35);color:#ffcc00}
   .overdue{color:#ff8f70}
   @media (max-width: 1200px){.fin-grid{grid-template-columns:1fr}}
 </style>
@@ -85,7 +85,7 @@ try {
       <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Received Payments</div><div class="metric-value">$<?=number_format($payments,0)?></div></div></div>
       <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Profit</div><div class="metric-value">$<?=number_format($profit,0)?></div></div></div>
       <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Expenses</div><div class="metric-value">$<?=number_format($expenses+$salaries+$overheads,0)?></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Unreceived / Unpaid</div><div class="metric-value" style="color:#f6d469">$<?=number_format($outstanding,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Unreceived / Unpaid</div><div class="metric-value" style="color:#ffcc00">$<?=number_format($outstanding,0)?></div></div></div>
     </div>
 
     <div class="fin-grid">
@@ -95,7 +95,7 @@ try {
           <div class="row">
             <div class="col-md-5">
               <ul class="list-unstyled legend mt-3">
-                <li><span class="dot" style="background:#f6d469"></span>Retainer: $<?=number_format((float)($tot['retainer_revenue'] ?? 0),2)?></li>
+                <li><span class="dot" style="background:#ffcc00"></span>Retainer: $<?=number_format((float)($tot['retainer_revenue'] ?? 0),2)?></li>
                 <li><span class="dot" style="background:#f0bf46"></span>Hourly: $<?=number_format((float)($tot['hourly_revenue'] ?? 0),2)?></li>
                 <li><span class="dot" style="background:#d17a3f"></span>Fixed Project: $<?=number_format((float)($tot['fixed_revenue'] ?? 0),2)?></li>
               </ul>
@@ -116,8 +116,8 @@ try {
           <div class="chart-box">
             <div class="chart-grid"></div>
             <svg class="line" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polyline points="0,78 18,72 36,58 54,53 72,30 90,27" fill="none" stroke="#f6d469" stroke-width="1.2" />
-              <circle cx="0" cy="78" r="1.8" fill="#f6d469"/><circle cx="18" cy="72" r="1.8" fill="#f6d469"/><circle cx="36" cy="58" r="1.8" fill="#f6d469"/><circle cx="54" cy="53" r="1.8" fill="#f6d469"/><circle cx="72" cy="30" r="1.8" fill="#f6d469"/><circle cx="90" cy="27" r="1.8" fill="#f6d469"/>
+              <polyline points="0,78 18,72 36,58 54,53 72,30 90,27" fill="none" stroke="#ffcc00" stroke-width="1.2" />
+              <circle cx="0" cy="78" r="1.8" fill="#ffcc00"/><circle cx="18" cy="72" r="1.8" fill="#ffcc00"/><circle cx="36" cy="58" r="1.8" fill="#ffcc00"/><circle cx="54" cy="53" r="1.8" fill="#ffcc00"/><circle cx="72" cy="30" r="1.8" fill="#ffcc00"/><circle cx="90" cy="27" r="1.8" fill="#ffcc00"/>
             </svg>
             <div class="chart-bars"><div class="bar bar1"></div><div class="bar bar2"></div><div class="bar bar3"></div><div class="bar bar4"></div><div class="bar bar5"></div><div class="bar bar6"></div></div>
           </div>

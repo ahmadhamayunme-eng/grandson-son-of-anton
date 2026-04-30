@@ -63,25 +63,27 @@ function docs_query(array $extra=[]){
   .docs-top{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.95rem}
   .docs-title{font-size:2rem;font-weight:700}
   .docs-actions{display:flex;align-items:center;gap:.5rem}
-  .docs-bubble{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(130deg,#f8d978,#8a8a8a);color:#151515;font-weight:700;font-size:.67rem;border:1px solid rgba(255,255,255,.35);margin-left:-8px}
+  .docs-bubble{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(130deg,#ffcc00,#8a8a8a);color:#151515;font-weight:700;font-size:.67rem;border:1px solid rgba(255,255,255,.35);margin-left:-8px}
   .docs-bar{display:grid;grid-template-columns:1fr 220px;gap:.65rem;margin-bottom:.95rem}
   .docs-search{display:flex;align-items:center;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
   .docs-search input{flex:1;background:transparent;border:0;color:#e7e7e7;padding:.62rem .7rem;outline:none}
-  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03);color:#e7e7e7;padding:.62rem .7rem}
+  .docs-filter{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#fff;color:#000;padding:.62rem .7rem}
   .docs-panel{border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(255,255,255,.02)}
   .docs-tabs{display:flex;gap:.2rem;padding:.65rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .docs-tab{padding:.4rem .7rem;border-radius:8px;color:rgba(223,223,223,.74);text-decoration:none;border:1px solid transparent}
-  .docs-tab.active{color:#f8d978;border-color:rgba(248,217,120,.36);background:rgba(248,217,120,.1)}
+  .docs-tab.active{color:#ffcc00;border-color:rgba(248,217,120,.36);background:rgba(248,217,120,.1)}
   .docs-folders{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.7rem;padding:.9rem .8rem}
   .docs-folder{border:1px solid rgba(255,255,255,.11);border-radius:10px;padding:.7rem;background:rgba(255,255,255,.03)}
   .docs-folder .count{color:rgba(214,214,214,.72);font-size:.83rem}
+  .docs-folder-add{display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:700;cursor:pointer}
+  .docs-folder-add:hover{border-color:rgba(248,217,120,.45);background:rgba(248,217,120,.08);color:#ffcc00}
   .docs-table-wrap{padding:.8rem}
   .docs-table{width:100%;border-collapse:collapse}
   .docs-table th,.docs-table td{padding:.65rem .6rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .docs-table th{font-weight:600;color:rgba(214,214,214,.82);background:rgba(255,255,255,.03);text-align:left}
   .docs-muted{color:rgba(203,203,203,.72)}
   .docs-person{display:flex;align-items:center;gap:.45rem}
-  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#171717;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35);object-fit:cover;overflow:hidden}
+  .docs-avatar{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#ffcc00,#9d9d9d);color:#171717;font-size:.66rem;font-weight:700;border:1px solid rgba(255,255,255,.35);object-fit:cover;overflow:hidden}
   @media (max-width: 992px){.docs-bar{grid-template-columns:1fr}.docs-folders{grid-template-columns:1fr 1fr}}
 </style>
 
@@ -121,7 +123,9 @@ function docs_query(array $extra=[]){
           <div class="count"><?= (int)$f['count'] ?> docs</div>
         </div>
       <?php endforeach; ?>
-      <div class="docs-folder d-flex align-items-center justify-content-center fw-semibold">＋</div>
+      <?php if($can_manage): ?>
+        <button type="button" class="docs-folder docs-folder-add" data-bs-toggle="modal" data-bs-target="#addDoc" aria-label="Add Doc">＋</button>
+      <?php endif; ?>
     </div>
 
     <div class="docs-table-wrap">

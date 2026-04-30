@@ -99,7 +99,7 @@ try {
           <tr>
             <td><?= h($r['category']) ?></td>
             <td><?= h($r['notes'] ?: $r['category']) ?></td>
-            <td style="color:#f6d469;font-weight:600">$<?= number_format((float)$r['amount'], 2) ?></td>
+            <td style="color:#ffcc00;font-weight:600">$<?= number_format((float)$r['amount'], 2) ?></td>
             <td><?= h($r['overhead_month']) ?></td>
             <td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('Delete this overhead record?');"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td>
           </tr>

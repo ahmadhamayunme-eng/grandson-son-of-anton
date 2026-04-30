@@ -70,7 +70,7 @@ $totalPerms = count($perms);
   .role-list{display:flex;flex-direction:column;gap:.35rem}
   .role-link{display:block;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:rgba(255,255,255,.02);padding:.55rem .65rem;text-decoration:none;color:#e7e7e7}
   .role-link:hover{background:rgba(255,255,255,.05);color:#fff}
-  .role-link.active{border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12);color:#f6d469}
+  .role-link.active{border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12);color:#ffcc00}
   .perm-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
   .perm-table table{width:100%;border-collapse:collapse}
   .perm-table th,.perm-table td{padding:.68rem .72rem;border-bottom:1px solid rgba(255,255,255,.07)}

@@ -30,8 +30,8 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
   .sidebar-dot-item { color: rgba(236,236,236,.72); display: block; text-decoration: none; border-radius: 10px; padding: 8px 12px 8px 28px; position: relative; margin-bottom: 2px; }
   .sidebar-dot-item::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: rgba(240,240,240,.85); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); }
   .sidebar-dot-item:hover { background: rgba(255,255,255,.04); color: #fff; }
-  .sidebar-dot-item.active { background: rgba(246,212,105,.12); color: #f6d469; }
-  .sidebar-dot-item.active::before { background: #f6d469; }
+  .sidebar-dot-item.active { background: rgba(246,212,105,.12); color: #ffcc00; }
+  .sidebar-dot-item.active::before { background: #ffcc00; }
   .sidebar-footer { margin-top: auto; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); padding: 10px; display: flex; gap: 10px; align-items: center; }
   .sidebar-avatar { width: 36px; height: 36px; border-radius: 999px; background: linear-gradient(135deg, #3a3a3a, #1f1f1f); color: #fff; font-weight: 600; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.2); flex: none; overflow:hidden; }
   .sidebar-avatar-img { width:100%; height:100%; object-fit:cover; display:block; }
