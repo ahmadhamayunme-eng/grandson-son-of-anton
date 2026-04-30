@@ -35,7 +35,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
         linear-gradient(180deg, #030303 0%, #090909 100%);
     }
     .sidebar {
-      width: 286px;
+      width: 320px;
       min-height: 100vh;
       background: linear-gradient(180deg, rgba(16,16,16,.95), rgba(10,10,10,.98));
       border-right: 1px solid var(--line);
@@ -58,7 +58,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
     .small-help { font-size:.9rem; color: var(--muted); }
     main.flex-grow-1 { background: transparent; }
     @media (max-width: 1100px) {
-      .sidebar { width: 250px; }
+      .sidebar { width: 280px; }
       .brand { font-size: 1.75rem; }
     }
   </style>
