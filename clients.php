@@ -293,7 +293,7 @@ function client_status_class(string $status): string {
               <td><?= (int)$c['project_count'] ?></td>
               <td class="text-muted"><?=h(client_last_active_label($c['last_active']))?></td>
               <td class="text-center"><?php if ($can_manage): ?><input class="client-check" type="checkbox" name="ids[]" value="<?= (int)$c['id'] ?>" form="bulkDeleteClients"><?php endif; ?></td>
-              <td class="text-end d-flex justify-content-end gap-2"><a class="text-decoration-none" href="client_view.php?id=<?=$c['id']?>">›</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
+              <td class="text-end d-flex justify-content-end gap-2"><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
