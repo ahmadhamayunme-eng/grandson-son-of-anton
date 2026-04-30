@@ -272,7 +272,7 @@ try {
   .pv-tabs{display:flex;gap:22px;padding:0 2px 9px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px}
   .pv-tab{color:rgba(255,255,255,.75);text-decoration:none;padding:7px 0;border-bottom:2px solid transparent}
   .pv-tab.active{color:#f5d66c;border-color:#f5d66c}
-  .glass{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(26,27,38,.7),rgba(18,19,27,.62));overflow:hidden}
+  .glass{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(30,30,30,.7),rgba(20,20,20,.62));overflow:hidden}
   .card-h{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
   .card-h h3{margin:0;font-size:1.35rem}
   .pv-grid{display:grid;grid-template-columns:1fr 1.45fr;gap:14px}
@@ -284,7 +284,7 @@ try {
   .list .sub,.sub{font-size:.9rem;color:rgba(255,255,255,.6)}
   .pill{display:inline-flex;padding:2px 9px;border-radius:8px;font-size:.82rem;font-weight:600;border:1px solid rgba(255,255,255,.18)}
   .is-blocked{background:rgba(161,131,47,.24);color:#f0d071}.is-progress{background:rgba(101,78,157,.26);color:#c9b4ff}.is-done{background:rgba(62,141,98,.24);color:#82d79f}.is-todo{background:rgba(68,97,137,.24);color:#8eb7f2}
-  .phase-wrap{display:grid;gap:12px}.phase{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(26,27,38,.7),rgba(18,19,27,.62));overflow:hidden}
+  .phase-wrap{display:grid;gap:12px}.phase{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(30,30,30,.7),rgba(20,20,20,.62));overflow:hidden}
   .phase h4{margin:0}.pv-table{width:100%;border-collapse:collapse;table-layout:fixed}.pv-table th,.pv-table td{padding:9px 12px;border-top:1px solid rgba(255,255,255,.07);vertical-align:middle}.pv-table th{color:rgba(255,255,255,.65);font-size:.82rem;text-transform:uppercase}
   .pv-table .col-task{width:38%}.pv-table .col-status{width:17%}.pv-table .col-assignees{width:24%}.pv-table .col-due{width:9%;text-align:center}.pv-table .col-actions{width:12%;text-align:center}
   .task-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;word-break:break-word}
