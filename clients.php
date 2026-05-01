@@ -239,6 +239,11 @@ function client_status_class(string $status): string {
       <span class="clients-search-icon">⌕</span>
       <input class="clients-search" name="q" value="<?=h($q)?>" placeholder="Search clients..." autocomplete="off">
     </div>
+    <select class="tool-select" name="per_page" onchange="this.form.submit()">
+      <?php foreach ($perPageOptions as $option): ?>
+        <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+      <?php endforeach; ?>
+    </select>
     <?php if ($can_manage): ?>
       <button type="button" class="clients-new-btn" data-bs-toggle="modal" data-bs-target="#addClient">＋ New Client</button>
     <?php endif; ?>
