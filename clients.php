@@ -82,7 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $q = trim($_GET['q'] ?? '');
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 12;
+$perPageOptions = [10, 20, 30, 40, 50];
+$perPage = (int)($_GET['per_page'] ?? 10);
+if (!in_array($perPage, $perPageOptions, true)) {
+  $perPage = 10;
+}
 $offset = ($page - 1) * $perPage;
 $like = '%' . $q . '%';
 
@@ -178,6 +182,7 @@ function client_status_class(string $status): string {
     border-radius: 10px; color: #efeff2; font-weight: 600; padding: 10px 14px; text-decoration: none;
   }
   .clients-new-btn:hover { color: #fff; border-color: rgba(255, 212, 83, 0.35); }
+  .tool-select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04); color: #eceef5; min-width: 132px; }
 
   .clients-card {
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -233,6 +238,11 @@ function client_status_class(string $status): string {
       <span class="clients-search-icon">⌕</span>
       <input class="clients-search" name="q" value="<?=h($q)?>" placeholder="Search clients..." autocomplete="off">
     </div>
+    <select class="tool-select" name="per_page" onchange="this.form.submit()">
+      <?php foreach ($perPageOptions as $option): ?>
+        <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+      <?php endforeach; ?>
+    </select>
     <?php if ($can_manage): ?>
       <button type="button" class="clients-new-btn" data-bs-toggle="modal" data-bs-target="#addClient">＋ New Client</button>
     <?php endif; ?>
@@ -302,8 +312,8 @@ function client_status_class(string $status): string {
 
     <footer class="clients-footer">
       <div>
-        <?php if ($page > 1): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-        <?php if ($page < $totalPages): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+        <?php if ($page > 1): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;per_page=<?=$perPage?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+        <?php if ($page < $totalPages): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;per_page=<?=$perPage?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
       </div>
       <div>Page <?=$page?> of <?=$totalPages?></div>
     </footer>

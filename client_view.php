@@ -364,7 +364,11 @@ $projectTypeTags = array_keys($projectTypeTags);
 
 $docQ = trim((string)($_GET['dq'] ?? ''));
 $docPage = max(1, (int)($_GET['dp'] ?? 1));
-$docPerPage = 10;
+$docPerPageOptions = [10, 20, 30, 40, 50];
+$docPerPage = (int)($_GET['dpp'] ?? 10);
+if (!in_array($docPerPage, $docPerPageOptions, true)) {
+  $docPerPage = 10;
+}
 $docOffset = ($docPage - 1) * $docPerPage;
 $docLike = '%' . $docQ . '%';
 
@@ -571,6 +575,11 @@ function initials_from_names(string $names): string {
           <input class="docs-search" name="dq" value="<?=h($docQ)?>" placeholder="Search docs by title or project..." autocomplete="off">
           <button class="docs-search-go" type="submit">↵</button>
         </div>
+        <select class="form-select" name="dpp" onchange="this.form.submit()">
+          <?php foreach ($docPerPageOptions as $option): ?>
+            <option value="<?=$option?>" <?=$docPerPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+          <?php endforeach; ?>
+        </select>
         <?php if ($can_manage): ?><button class="docs-btn" type="button" data-bs-toggle="modal" data-bs-target="#addDoc">Create Doc</button><?php endif; ?>
       </form>
       <div class="docs-card">
@@ -594,8 +603,8 @@ function initials_from_names(string $names): string {
         </table>
         <div class="docs-foot">
           <div>
-            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
           </div>
           <div>Page <?=$docPage?> of <?=$docsTotalPages?></div>
         </div>
