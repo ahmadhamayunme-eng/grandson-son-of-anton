@@ -230,6 +230,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
 }
 
 
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_project'])) {
+  require_post();
+  csrf_verify();
+
+  if (!$can_manage) {
+    flash_set('error', 'No permission.');
+    redirect("client_view.php?id=$id&tab=projects");
+  }
+
+  $deleteId = (int)($_POST['project_id'] ?? 0);
+  if ($deleteId <= 0) {
+    flash_set('error', 'Invalid project selected.');
+    redirect("client_view.php?id=$id&tab=projects");
+  }
+
+  $st = $pdo->prepare('DELETE FROM projects WHERE workspace_id = ? AND client_id = ? AND id = ?');
+  $st->execute([$ws, $id, $deleteId]);
+
+  flash_set('success', $st->rowCount() ? 'Project deleted permanently.' : 'Project not found.');
+  redirect("client_view.php?id=$id&tab=projects");
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_doc'])) {
   require_post();
   csrf_verify();
@@ -341,7 +364,11 @@ $projectTypeTags = array_keys($projectTypeTags);
 
 $docQ = trim((string)($_GET['dq'] ?? ''));
 $docPage = max(1, (int)($_GET['dp'] ?? 1));
-$docPerPage = 10;
+$docPerPageOptions = [10, 20, 30, 40, 50];
+$docPerPage = (int)($_GET['dpp'] ?? 10);
+if (!in_array($docPerPage, $docPerPageOptions, true)) {
+  $docPerPage = 10;
+}
 $docOffset = ($docPage - 1) * $docPerPage;
 $docLike = '%' . $docQ . '%';
 
@@ -494,7 +521,9 @@ function initials_from_names(string $names): string {
   .meta-label { color: rgba(255,255,255,.55); font-size: .76rem; text-transform: uppercase; letter-spacing: .5px; }
   .meta-value { margin-top: 2px; color: #e9ecf4; font-weight: 600; }
   .project-note { margin: 11px 0 12px; color: rgba(235, 238, 245, .78); min-height: 48px; }
+  .project-actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
   .project-open { display: block; text-align: center; text-decoration: none; background: linear-gradient(180deg, #ffcc00, #ffcc00); color: #2f2710; font-weight: 700; padding: 9px 10px; border-radius: 8px; }
+  .project-delete-btn { white-space: nowrap; }
 
   .client-empty { padding: 24px 20px; color: rgba(255,255,255,.65); text-align: center; }
   @media (max-width: 1180px) { .overview-grid, .project-grid { grid-template-columns: 1fr; } .client-head { flex-direction: column; align-items: stretch; } .docs-toolbar { grid-template-columns: 1fr; } }
@@ -523,9 +552,9 @@ function initials_from_names(string $names): string {
         <section class="glass-card">
           <div class="card-head"><h2 class="card-title">Projects</h2></div>
           <?php if (!$projects): ?><div class="client-empty">No projects yet for this client.</div><?php else: ?>
-            <table class="projects-table"><thead><tr><th>Project</th><th>Lead</th><th>Last Activity</th></tr></thead><tbody>
+            <table class="projects-table"><thead><tr><th>Project</th><th>Lead</th><th>Last Activity</th><?php if ($can_manage): ?><th></th><?php endif; ?></tr></thead><tbody>
             <?php foreach ($projects as $p): $statusClass = project_status_class((string)$p['status_name']); $leadName = trim((string)explode(',', (string)($p['assignees'] ?? ''))[0]); if ($leadName === '') { $leadName = 'Unassigned'; } ?>
-              <tr><td><a class="line-label" href="project_view.php?id=<?=h($p['id'])?>"><?=h($p['name'])?></a><div class="line-sub"><span class="status-badge <?=h($statusClass)?>"><?=h($p['status_name'])?></span></div></td><td><?=h($leadName)?></td><td><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></td></tr>
+              <tr><td><a class="line-label" href="project_view.php?id=<?=h($p['id'])?>"><?=h($p['name'])?></a><div class="line-sub"><span class="status-badge <?=h($statusClass)?>"><?=h($p['status_name'])?></span></div></td><td><?=h($leadName)?></td><td><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></td><?php if ($can_manage): ?><td class="text-end"><form method="post" onsubmit="return confirm('This will permanently delete this project and all linked tasks/docs/phases. Are you sure?');" style="display:inline"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_project" value="1"><input type="hidden" name="project_id" value="<?= (int)$p['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td><?php endif; ?></tr>
             <?php endforeach; ?>
             </tbody></table>
           <?php endif; ?>
@@ -546,6 +575,11 @@ function initials_from_names(string $names): string {
           <input class="docs-search" name="dq" value="<?=h($docQ)?>" placeholder="Search docs by title or project..." autocomplete="off">
           <button class="docs-search-go" type="submit">↵</button>
         </div>
+        <select class="form-select" name="dpp" onchange="this.form.submit()">
+          <?php foreach ($docPerPageOptions as $option): ?>
+            <option value="<?=$option?>" <?=$docPerPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+          <?php endforeach; ?>
+        </select>
         <?php if ($can_manage): ?><button class="docs-btn" type="button" data-bs-toggle="modal" data-bs-target="#addDoc">Create Doc</button><?php endif; ?>
       </form>
       <div class="docs-card">
@@ -569,8 +603,8 @@ function initials_from_names(string $names): string {
         </table>
         <div class="docs-foot">
           <div>
-            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
           </div>
           <div>Page <?=$docPage?> of <?=$docsTotalPages?></div>
         </div>
@@ -580,7 +614,7 @@ function initials_from_names(string $names): string {
     <div class="project-grid">
       <?php if (!$projects): ?><div class="client-empty">No projects yet for this client.</div>
       <?php else: foreach ($projects as $p): $statusClass = project_status_class((string)$p['status_name']); $assignees = trim((string)($p['assignees'] ?? '')); $leadName = $assignees !== '' ? trim((string)explode(',', $assignees)[0]) : 'Unassigned'; $note = trim((string)($p['notes'] ?? '')); if ($note === '') { $note = trim((string)($p['type_name'] ?? 'General project')) . ' project for ' . $client['name'] . '.'; } ?>
-        <article class="project-card"><h2 class="project-title"><?=h($p['name'])?></h2><span class="project-pill <?=h($statusClass)?>"><?=h($p['status_name'])?></span><div class="project-owner"><div class="owner-chip"><span class="owner-avatar"><?=h(initials_from_names($assignees))?></span><div><div class="owner-name"><?=h($leadName)?></div><div class="owner-sub"><?=h($p['type_name'])?></div></div></div><div class="project-kpis"><span><?= (int)$p['task_count'] ?> Tasks</span><span><?= (int)$p['doc_count'] ?> Docs</span></div></div><div class="project-meta"><div><div class="meta-label">Last activity</div><div class="meta-value"><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></div></div><div><div class="meta-label">Active tasks</div><div class="meta-value"><?= (int)$p['active_task_count'] ?> active</div></div></div><p class="project-note"><?=h($note)?></p><a class="project-open" href="project_view.php?id=<?=h($p['id'])?>">View Project</a></article>
+        <article class="project-card"><h2 class="project-title"><?=h($p['name'])?></h2><span class="project-pill <?=h($statusClass)?>"><?=h($p['status_name'])?></span><div class="project-owner"><div class="owner-chip"><span class="owner-avatar"><?=h(initials_from_names($assignees))?></span><div><div class="owner-name"><?=h($leadName)?></div><div class="owner-sub"><?=h($p['type_name'])?></div></div></div><div class="project-kpis"><span><?= (int)$p['task_count'] ?> Tasks</span><span><?= (int)$p['doc_count'] ?> Docs</span></div></div><div class="project-meta"><div><div class="meta-label">Last activity</div><div class="meta-value"><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></div></div><div><div class="meta-label">Active tasks</div><div class="meta-value"><?= (int)$p['active_task_count'] ?> active</div></div></div><p class="project-note"><?=h($note)?></p><div class="project-actions"><a class="project-open" href="project_view.php?id=<?=h($p['id'])?>">View Project</a><?php if ($can_manage): ?><form method="post" onsubmit="return confirm('This will permanently delete this project and all linked tasks/docs/phases. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_project" value="1"><input type="hidden" name="project_id" value="<?= (int)$p['id'] ?>"><button class="btn btn-sm btn-outline-danger project-delete-btn" type="submit">Delete</button></form><?php endif; ?></div></article>
       <?php endforeach; endif; ?>
     </div>
   <?php endif; ?>

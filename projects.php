@@ -79,7 +79,11 @@ $q = trim((string)($_GET['q'] ?? ''));
 $statusFilter = (int)($_GET['status_id'] ?? 0);
 $sort = strtolower(trim((string)($_GET['sort'] ?? 'activity')));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 12;
+  $perPageOptions = [10, 20, 30, 40, 50];
+  $perPage = (int)($_GET['per_page'] ?? 10);
+  if (!in_array($perPage, $perPageOptions, true)) {
+    $perPage = 10;
+  }
 $offset = ($page - 1) * $perPage;
 
 function project_badge_class(string $status): string {
@@ -333,7 +337,7 @@ SQL;
   .projects-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(150deg, rgba(13,13,13,.97), rgba(10,10,10,.96)); box-shadow: 0 24px 58px rgba(0,0,0,.42); padding: 16px; }
   .projects-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
   .projects-title { margin: 0; font-size: 2rem; font-weight: 600; }
-  .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; gap: 10px; margin-bottom: 12px; }
+  .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto auto; gap: 10px; margin-bottom: 12px; }
   .tool-search-wrap { position: relative; }
   .tool-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .tool-search { width: 100%; padding: 10px 12px 10px 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.03); color: #f2f2f5; }
@@ -387,6 +391,11 @@ SQL;
       <option value="name" <?=$sort === 'name' ? 'selected' : ''?>>Project Name</option>
       <option value="status" <?=$sort === 'status' ? 'selected' : ''?>>Status</option>
     </select>
+    <select class="tool-select" name="per_page" onchange="this.form.submit()">
+      <?php foreach ($perPageOptions as $option): ?>
+        <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+      <?php endforeach; ?>
+    </select>
   </form>
 
   <?php if($canManage): ?><form method="post" id="bulkDeleteProjects" class="mb-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="bulk_delete_projects" value="1"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected projects and all linked tasks/docs/phases. Are you sure?');">Delete Selected</button></form><?php endif; ?>
@@ -427,8 +436,8 @@ SQL;
 
     <footer class="foot">
       <div>
-        <?php if ($page > 1): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-        <?php if ($page < $totalPages): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+        <?php if ($page > 1): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&per_page=<?=$perPage?>&page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+        <?php if ($page < $totalPages): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&per_page=<?=$perPage?>&page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
       </div>
       <div>Showing <?=count($projects)?> of <?=$totalRows?></div>
     </footer>
