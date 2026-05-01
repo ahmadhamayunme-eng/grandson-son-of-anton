@@ -91,7 +91,7 @@ include __DIR__ . '/partials/header.php';
     line-height: 1;
   }
 
-  .login-input::placeholder { color: #a5a5a5; }
+  .login-input::placeholder { color: #fff; opacity: 1; }
   .login-input:-webkit-autofill,
   .login-input:-webkit-autofill:hover,
   .login-input:-webkit-autofill:focus,

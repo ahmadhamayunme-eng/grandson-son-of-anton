@@ -52,6 +52,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
     a { color: var(--yellow); }
     .table { --bs-table-bg: transparent; --bs-table-color: #ececf0; }
     .form-control { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
+    input::placeholder, textarea::placeholder, .form-control::placeholder { color: rgba(255,255,255,.95) !important; opacity: 1; }
     .form-select { background:#fff; border:1px solid rgba(255,255,255,.12); color:#000; }
     select option { background:#fff; color:#000; }
     .form-control:focus, .form-select:focus { border-color: rgba(246,212,105,.6); box-shadow: 0 0 0 .2rem rgba(246,212,105,.15); }
