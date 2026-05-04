@@ -170,17 +170,12 @@ try {
     $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
     $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
 
-    $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
-    $currentLiveUrl = trim((string)($_POST['current_live_url'] ?? ''));
-    $currentLiveLoginUrl = trim((string)($_POST['current_live_login_url'] ?? ''));
-    $currentLiveUsername = trim((string)($_POST['current_live_username'] ?? ''));
-    $currentLivePassword = (string)($_POST['current_live_password'] ?? '');
-
-    $productionName = trim((string)($_POST['production_name'] ?? ''));
-    $productionUrl = trim((string)($_POST['production_url'] ?? ''));
-    $productionLoginUrl = trim((string)($_POST['production_login_url'] ?? ''));
-    $productionUsername = trim((string)($_POST['production_username'] ?? ''));
-    $productionPassword = (string)($_POST['production_password'] ?? '');
+    $loginTypes = (array)($_POST['login_type'] ?? []);
+    $loginNames = (array)($_POST['login_name'] ?? []);
+    $loginUrls = (array)($_POST['login_url'] ?? []);
+    $loginLoginUrls = (array)($_POST['login_login_url'] ?? []);
+    $loginUsernames = (array)($_POST['login_username'] ?? []);
+    $loginPasswords = (array)($_POST['login_password'] ?? []);
 
     if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
       flash_set('error', 'Project name, client, type and status are required.');
@@ -192,45 +187,50 @@ try {
       redirect('projects.php');
     }
 
-    if ($productionName === '' || $productionUrl === '' || $productionLoginUrl === '' || $productionUsername === '' || $productionPassword === '') {
-      flash_set('error', 'Production Website fields are required.');
+    $loginRows = [];
+    $rowCount = max(count($loginTypes), count($loginNames), count($loginUrls), count($loginLoginUrls), count($loginUsernames), count($loginPasswords));
+    for ($i = 0; $i < $rowCount; $i++) {
+      $row = [
+        'type' => trim((string)($loginTypes[$i] ?? '')),
+        'name' => trim((string)($loginNames[$i] ?? '')),
+        'url' => trim((string)($loginUrls[$i] ?? '')),
+        'login_url' => trim((string)($loginLoginUrls[$i] ?? '')),
+        'username' => trim((string)($loginUsernames[$i] ?? '')),
+        'password' => (string)($loginPasswords[$i] ?? ''),
+      ];
+      $allBlank = $row['type'] === '' && $row['name'] === '' && $row['url'] === '' && $row['login_url'] === '' && $row['username'] === '' && $row['password'] === '';
+      if ($allBlank) {
+        continue;
+      }
+      if ($row['type'] === '' || $row['name'] === '' || $row['url'] === '' || $row['login_url'] === '' || $row['username'] === '' || $row['password'] === '') {
+        flash_set('error', 'Each login entry must include type, name, URL, login URL, username and password.');
+        redirect('projects.php');
+      }
+      $loginRows[] = $row;
+    }
+
+    if (!$loginRows) {
+      flash_set('error', 'At least one website login entry is required.');
       redirect('projects.php');
     }
 
-    if (!projects_is_valid_url($currentLiveUrl) || !projects_is_valid_url($currentLiveLoginUrl) || !projects_is_valid_url($productionUrl) || !projects_is_valid_url($productionLoginUrl)) {
-      flash_set('error', 'Please enter valid website URLs (http/https).');
-      redirect('projects.php');
+    foreach ($loginRows as $loginRow) {
+      if (!projects_is_valid_url($loginRow['url']) || !projects_is_valid_url($loginRow['login_url'])) {
+        flash_set('error', 'Please enter valid website URLs (http/https).');
+        redirect('projects.php');
+      }
     }
 
-    $websiteDetails = [
-      'currentLiveWebsite' => [
-        'name' => $currentLiveName ?: null,
-        'url' => $currentLiveUrl ?: null,
-        'loginUrl' => $currentLiveLoginUrl ?: null,
-        'username' => $currentLiveUsername ?: null,
-        'password' => $currentLivePassword !== '' ? $currentLivePassword : null,
-      ],
-      'productionWebsite' => [
-        'name' => $productionName,
-        'url' => $productionUrl,
-        'loginUrl' => $productionLoginUrl,
-        'username' => $productionUsername,
-        'password' => $productionPassword,
-      ],
-    ];
+    $websiteDetails = ['loginEntries' => $loginRows];
 
     $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, pricing_model, project_price, payment_terms, hourly_rate, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $loginRows[0]['url'] ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
 
     $newProjectId = (int)$pdo->lastInsertId();
 
-    $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $clientId, $newProjectId, $productionName, $productionUrl, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
-
-    if ($currentLiveLoginUrl !== '' && $currentLiveUsername !== '' && $currentLivePassword !== '') {
-      $currentSiteName = $currentLiveName !== '' ? $currentLiveName : ($name . ' (Current Live Website)');
+    foreach ($loginRows as $index => $loginRow) {
       $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $newProjectId, $currentSiteName, $currentLiveUrl ?: null, $currentLiveLoginUrl, $currentLiveUsername, $currentLivePassword, 'Current Live Website', (int)($user['id'] ?? 0), now(), now()]);
+        ->execute([$ws, $clientId, $newProjectId, $loginRow['name'], $loginRow['url'], $loginRow['login_url'], $loginRow['username'], $loginRow['password'], $index === 0 ? ($wlNotes ?: $loginRow['type']) : $loginRow['type'], (int)($user['id'] ?? 0), now(), now()]);
     }
 
     flash_set('success', 'Project created.');
@@ -465,28 +465,20 @@ SQL;
             <div class="col-md-4" id="project_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="project_hourly_rate" type="number" min="0" step="0.01"></div>
           </div>
 
-          <div class="mt-4 p-3 rounded border border-secondary-subtle">
-            <h6 class="mb-2">Current Live Website (Optional)</h6>
-            <div class="small text-muted mb-3">All fields are optional and independent.</div>
-            <div class="row g-3">
-              <div class="col-md-6"><label class="form-label">Current Live Website (if any) Name</label><input class="form-control" name="current_live_name" placeholder="Main website"></div>
-              <div class="col-md-6"><label class="form-label">Current Live Website URL</label><input class="form-control" type="url" name="current_live_url" placeholder="https://example.com"></div>
-              <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" type="url" name="current_live_login_url" placeholder="https://example.com/wp-admin"></div>
-              <div class="col-md-3"><label class="form-label">User name</label><input class="form-control" name="current_live_username"></div>
-              <div class="col-md-3"><label class="form-label">Password</label><input class="form-control" type="password" name="current_live_password"></div>
+          <div class="mt-4 p-3 rounded border border-warning-subtle">
+            <h6 class="mb-2">Website Logins</h6>
+            <div class="small text-muted mb-3">Add one or more login entries. Every field in each used entry is required.</div>
+            <div id="login-repeater">
+              <div class="row g-3 login-entry mb-2">
+                <div class="col-md-4"><label class="form-label">Login Type</label><input class="form-control" name="login_type[]" placeholder="Current, Production, Hosting" required></div>
+                <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="login_name[]" placeholder="Main website" required></div>
+                <div class="col-md-4"><label class="form-label">URL</label><input class="form-control" type="url" name="login_url[]" placeholder="https://example.com" required></div>
+                <div class="col-md-4"><label class="form-label">Login URL</label><input class="form-control" type="url" name="login_login_url[]" placeholder="https://example.com/wp-admin" required></div>
+                <div class="col-md-2"><label class="form-label">Username</label><input class="form-control" name="login_username[]" required></div>
+                <div class="col-md-2"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password[]" required></div>
+              </div>
             </div>
-          </div>
-
-          <div class="mt-3 p-3 rounded border border-warning-subtle">
-            <h6 class="mb-2">Production Website (Required)</h6>
-            <div class="small text-muted mb-3">All fields in this section are required.</div>
-            <div class="row g-3">
-              <div class="col-md-6"><label class="form-label">Website name</label><input class="form-control" name="production_name" required></div>
-              <div class="col-md-6"><label class="form-label">URL</label><input class="form-control" type="url" name="production_url" placeholder="https://example.com" required></div>
-              <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" type="url" name="production_login_url" placeholder="https://example.com/wp-admin" required></div>
-              <div class="col-md-3"><label class="form-label">User</label><input class="form-control" name="production_username" required></div>
-              <div class="col-md-3"><label class="form-label">Password</label><input class="form-control" type="password" name="production_password" required></div>
-            </div>
+            <button type="button" class="btn btn-sm btn-outline-light mt-2" id="add-login-entry">Add more login</button>
           </div>
 
           <div class="mt-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea></div>
@@ -513,6 +505,18 @@ SQL;
   }
   model.addEventListener('change',sync);
   sync();
+
+  const repeater=document.getElementById('login-repeater');
+  const addBtn=document.getElementById('add-login-entry');
+  if(repeater && addBtn){
+    addBtn.addEventListener('click',function(){
+      const first=repeater.querySelector('.login-entry');
+      if(!first) return;
+      const clone=first.cloneNode(true);
+      clone.querySelectorAll('input').forEach((input)=>{ input.value=''; });
+      repeater.appendChild(clone);
+    });
+  }
 })();
 </script>
 
