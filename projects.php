@@ -182,18 +182,26 @@ try {
     $productionUsername = trim((string)($_POST['production_username'] ?? ''));
     $productionPassword = (string)($_POST['production_password'] ?? '');
 
-    if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
-      flash_set('error', 'Project name, client, type and status are required.');
+    if ($name === '') {
+      $name = 'Untitled Project';
+    }
+    if ($clientId <= 0 && !empty($clients)) {
+      $clientId = (int)$clients[0]['id'];
+    }
+    if ($typeId <= 0 && !empty($types)) {
+      $typeId = (int)$types[0]['id'];
+    }
+    if ($statusId <= 0 && !empty($statusOptions)) {
+      $statusId = (int)$statusOptions[0]['id'];
+    }
+
+    if ($clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
+      flash_set('error', 'Please set up at least one client, project type, and project status before creating a project.');
       redirect('projects.php');
     }
 
     if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
       flash_set('error', 'Project pricing model is required.');
-      redirect('projects.php');
-    }
-
-    if ($productionName === '' || $productionUrl === '' || $productionLoginUrl === '' || $productionUsername === '' || $productionPassword === '') {
-      flash_set('error', 'Production Website fields are required.');
       redirect('projects.php');
     }
 
@@ -211,11 +219,11 @@ try {
         'password' => $currentLivePassword !== '' ? $currentLivePassword : null,
       ],
       'productionWebsite' => [
-        'name' => $productionName,
-        'url' => $productionUrl,
-        'loginUrl' => $productionLoginUrl,
-        'username' => $productionUsername,
-        'password' => $productionPassword,
+        'name' => $productionName ?: null,
+        'url' => $productionUrl ?: null,
+        'loginUrl' => $productionLoginUrl ?: null,
+        'username' => $productionUsername ?: null,
+        'password' => $productionPassword !== '' ? $productionPassword : null,
       ],
     ];
 
@@ -224,8 +232,11 @@ try {
 
     $newProjectId = (int)$pdo->lastInsertId();
 
-    $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $clientId, $newProjectId, $productionName, $productionUrl, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+    if ($productionLoginUrl !== '' && $productionUsername !== '' && $productionPassword !== '') {
+      $productionSiteName = $productionName !== '' ? $productionName : ($name . ' (Production Website)');
+      $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $newProjectId, $productionSiteName, $productionUrl ?: null, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+    }
 
     if ($currentLiveLoginUrl !== '' && $currentLiveUsername !== '' && $currentLivePassword !== '') {
       $currentSiteName = $currentLiveName !== '' ? $currentLiveName : ($name . ' (Current Live Website)');
@@ -454,12 +465,12 @@ SQL;
         <input type="hidden" name="create_project" value="1">
         <div class="modal-body">
           <div class="row g-3">
-            <div class="col-md-4"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div>
-            <div class="col-md-4"><label class="form-label">Client</label><select class="form-select" name="client_id" required><?php foreach($clients as $client): ?><option value="<?=h($client['id'])?>"><?=h($client['name'])?></option><?php endforeach; ?></select></div>
-            <div class="col-md-2"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
-            <div class="col-md-2"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-4"><label class="form-label">Project Name</label><input class="form-control" name="name" placeholder="Untitled Project"></div>
+            <div class="col-md-4"><label class="form-label">Client</label><select class="form-select" name="client_id"><?php foreach($clients as $client): ?><option value="<?=h($client['id'])?>"><?=h($client['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-2"><label class="form-label">Type</label><select class="form-select" name="type_id"><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-2"><label class="form-label">Status</label><select class="form-select" name="status_id"><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
             <div class="col-md-4"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div>
-            <div class="col-md-4"><label class="form-label">Project Pricing Model</label><select class="form-select" name="pricing_model" id="project_pricing_model" required><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
+            <div class="col-md-4"><label class="form-label">Project Pricing Model</label><select class="form-select" name="pricing_model" id="project_pricing_model"><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
             <div class="col-md-4" id="project_price_wrap"><label class="form-label">Project Price</label><input class="form-control" name="project_price" type="number" min="0" step="0.01"></div>
             <div class="col-md-4" id="project_terms_wrap"><label class="form-label">Payment Terms</label><select class="form-select" name="payment_terms"><option value="full_upfront">Full Upfront</option><option value="50_50">50/50</option><option value="milestones">Milestones</option></select></div>
             <div class="col-md-4" id="project_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="project_hourly_rate" type="number" min="0" step="0.01"></div>
@@ -478,14 +489,14 @@ SQL;
           </div>
 
           <div class="mt-3 p-3 rounded border border-warning-subtle">
-            <h6 class="mb-2">Production Website (Required)</h6>
-            <div class="small text-muted mb-3">All fields in this section are required.</div>
+            <h6 class="mb-2">Production Website (Optional)</h6>
+            <div class="small text-muted mb-3">All fields in this section are optional.</div>
             <div class="row g-3">
-              <div class="col-md-6"><label class="form-label">Website name</label><input class="form-control" name="production_name" required></div>
-              <div class="col-md-6"><label class="form-label">URL</label><input class="form-control" type="url" name="production_url" placeholder="https://example.com" required></div>
-              <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" type="url" name="production_login_url" placeholder="https://example.com/wp-admin" required></div>
-              <div class="col-md-3"><label class="form-label">User</label><input class="form-control" name="production_username" required></div>
-              <div class="col-md-3"><label class="form-label">Password</label><input class="form-control" type="password" name="production_password" required></div>
+              <div class="col-md-6"><label class="form-label">Website name</label><input class="form-control" name="production_name"></div>
+              <div class="col-md-6"><label class="form-label">URL</label><input class="form-control" type="url" name="production_url" placeholder="https://example.com"></div>
+              <div class="col-md-6"><label class="form-label">Login URL</label><input class="form-control" type="url" name="production_login_url" placeholder="https://example.com/wp-admin"></div>
+              <div class="col-md-3"><label class="form-label">User</label><input class="form-control" name="production_username"></div>
+              <div class="col-md-3"><label class="form-label">Password</label><input class="form-control" type="password" name="production_password"></div>
             </div>
           </div>
 
