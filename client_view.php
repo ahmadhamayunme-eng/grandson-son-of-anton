@@ -660,8 +660,8 @@ function initials_from_names(string $names): string {
                 <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="login_name[]" placeholder="Main website" required></div>
                 <div class="col-md-4"><label class="form-label">URL</label><input class="form-control" type="url" name="login_url[]" placeholder="https://example.com" required></div>
                 <div class="col-md-4"><label class="form-label">Login URL</label><input class="form-control" type="url" name="login_login_url[]" placeholder="https://example.com/wp-admin" required></div>
-                <div class="col-md-2"><label class="form-label">Username</label><input class="form-control" name="login_username[]" required></div>
-                <div class="col-md-2"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password[]" required></div>
+                <div class="col-md-4"><label class="form-label">Username</label><input class="form-control" name="login_username[]" required></div>
+                <div class="col-md-4"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password[]" required></div>
               </div>
             </div>
             <button type="button" class="btn btn-sm btn-outline-light mt-2" id="cv-add-login-entry">Add more login</button>
