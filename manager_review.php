@@ -32,7 +32,7 @@ $client_count=count($unique_clients);
   .queue-title{font-size:1.25rem;font-weight:600}
   .queue-meta{color:rgba(220,220,220,.72);font-size:.92rem}
   .queue-right{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
-  .status-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(246,212,105,.45);background:rgba(246,212,105,.12);color:#f6d469;font-size:.8rem}
+  .status-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(246,212,105,.45);background:rgba(246,212,105,.12);color:#ffcc00;font-size:.8rem}
   .assignee-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5e5e5;font-size:.8rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
 </style>

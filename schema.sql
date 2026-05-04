@@ -378,3 +378,52 @@ CREATE TABLE IF NOT EXISTS finance_overheads (
   CONSTRAINT fk_fo_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   CONSTRAINT fk_fo_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Website login vault (client/project scoped)
+CREATE TABLE IF NOT EXISTS website_logins (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  workspace_id INT NOT NULL,
+  client_id INT NULL,
+  project_id INT NULL,
+  site_name VARCHAR(190) NOT NULL,
+  website_url VARCHAR(255) NULL,
+  login_url VARCHAR(255) NULL,
+  login_username VARCHAR(190) NULL,
+  login_password TEXT NULL,
+  notes TEXT NULL,
+  created_by INT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  INDEX idx_wl_ws (workspace_id),
+  INDEX idx_wl_client (client_id),
+  INDEX idx_wl_project (project_id),
+  CONSTRAINT fk_wl_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wl_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_wl_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+  CONSTRAINT fk_wl_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Optional project live website URL
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS live_website_url VARCHAR(255) NULL AFTER due_date;
+
+-- Phase 2: Billing models and invoice metadata
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_model ENUM('monthly_retainer','hourly','fixed_project','hybrid') NOT NULL DEFAULT 'fixed_project';
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_cycle ENUM('monthly','every_15_days') NULL;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS retainer_amount DECIMAL(12,2) NULL;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS hourly_rate DECIMAL(12,2) NULL;
+
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS pricing_model ENUM('fixed_price','hourly') NOT NULL DEFAULT 'fixed_price';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_price DECIMAL(12,2) NULL;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS payment_terms ENUM('full_upfront','50_50','milestones') NULL;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS hourly_rate DECIMAL(12,2) NULL;
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS hours_logged DECIMAL(8,2) NOT NULL DEFAULT 0.00;
+
+ALTER TABLE finance_receivables ADD COLUMN IF NOT EXISTS invoice_type ENUM('retainer','hourly','project_fixed') NOT NULL DEFAULT 'project_fixed';
+ALTER TABLE finance_receivables ADD COLUMN IF NOT EXISTS period_start DATE NULL;
+ALTER TABLE finance_receivables ADD COLUMN IF NOT EXISTS period_end DATE NULL;
+ALTER TABLE finance_receivables ADD COLUMN IF NOT EXISTS invoice_no VARCHAR(120) NULL;
+
+ALTER TABLE finance_payments ADD COLUMN IF NOT EXISTS receivable_id INT NULL;
+ALTER TABLE finance_payments ADD COLUMN IF NOT EXISTS invoice_id INT NULL;

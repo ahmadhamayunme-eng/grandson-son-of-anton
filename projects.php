@@ -1,10 +1,70 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
-$role = auth_user()['role_name'] ?? '';
+$user = auth_user();
+$role = $user['role_name'] ?? '';
 $canManage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
+
+
+function projects_has_live_url_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'live_website_url'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function projects_has_website_details_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'website_details_json'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function projects_is_valid_url(string $value): bool {
+  if ($value === '') {
+    return true;
+  }
+  if (!filter_var($value, FILTER_VALIDATE_URL)) {
+    return false;
+  }
+  $scheme = strtolower((string)parse_url($value, PHP_URL_SCHEME));
+  return in_array($scheme, ['http', 'https'], true);
+}
+
+if (!projects_has_live_url_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+if (!projects_has_website_details_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN website_details_json LONGTEXT NULL AFTER notes"); } catch (Throwable $e) {}
+}
+
+try {
+  $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id INT NOT NULL,
+    client_id INT NULL,
+    project_id INT NULL,
+    site_name VARCHAR(190) NOT NULL,
+    website_url VARCHAR(255) NULL,
+    login_url VARCHAR(255) NULL,
+    login_username VARCHAR(190) NULL,
+    login_password TEXT NULL,
+    notes TEXT NULL,
+    created_by INT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_wl_ws (workspace_id),
+    INDEX idx_wl_client (client_id),
+    INDEX idx_wl_project (project_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) {}
+
 $isSuperAdmin = $role === 'Super Admin';
 
 $projects = [];
@@ -19,7 +79,11 @@ $q = trim((string)($_GET['q'] ?? ''));
 $statusFilter = (int)($_GET['status_id'] ?? 0);
 $sort = strtolower(trim((string)($_GET['sort'] ?? 'activity')));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 12;
+  $perPageOptions = [10, 20, 30, 40, 50];
+  $perPage = (int)($_GET['per_page'] ?? 10);
+  if (!in_array($perPage, $perPageOptions, true)) {
+    $perPage = 10;
+  }
 $offset = ($page - 1) * $perPage;
 
 function project_badge_class(string $status): string {
@@ -100,18 +164,79 @@ try {
     $typeId = (int)($_POST['type_id'] ?? 0);
     $statusId = (int)($_POST['status_id'] ?? 0);
     $dueDate = trim((string)($_POST['due_date'] ?? ''));
+    $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+    $projectPrice = ($_POST['project_price'] ?? '') !== '' ? (float)$_POST['project_price'] : null;
+    $paymentTerms = trim((string)($_POST['payment_terms'] ?? ''));
+    $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
+    $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
+
+    $loginTypes = (array)($_POST['login_type'] ?? []);
+    $loginNames = (array)($_POST['login_name'] ?? []);
+    $loginUrls = (array)($_POST['login_url'] ?? []);
+    $loginLoginUrls = (array)($_POST['login_login_url'] ?? []);
+    $loginUsernames = (array)($_POST['login_username'] ?? []);
+    $loginPasswords = (array)($_POST['login_password'] ?? []);
 
     if ($name === '' || $clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
       flash_set('error', 'Project name, client, type and status are required.');
       redirect('projects.php');
     }
 
-    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, null, now(), now()]);
+    if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
+      flash_set('error', 'Project pricing model is required.');
+      redirect('projects.php');
+    }
+
+    $loginRows = [];
+    $rowCount = max(count($loginTypes), count($loginNames), count($loginUrls), count($loginLoginUrls), count($loginUsernames), count($loginPasswords));
+    for ($i = 0; $i < $rowCount; $i++) {
+      $row = [
+        'type' => trim((string)($loginTypes[$i] ?? '')),
+        'name' => trim((string)($loginNames[$i] ?? '')),
+        'url' => trim((string)($loginUrls[$i] ?? '')),
+        'login_url' => trim((string)($loginLoginUrls[$i] ?? '')),
+        'username' => trim((string)($loginUsernames[$i] ?? '')),
+        'password' => (string)($loginPasswords[$i] ?? ''),
+      ];
+      $allBlank = $row['type'] === '' && $row['name'] === '' && $row['url'] === '' && $row['login_url'] === '' && $row['username'] === '' && $row['password'] === '';
+      if ($allBlank) {
+        continue;
+      }
+      if ($row['type'] === '' || $row['name'] === '' || $row['url'] === '' || $row['login_url'] === '' || $row['username'] === '' || $row['password'] === '') {
+        flash_set('error', 'Each login entry must include type, name, URL, login URL, username and password.');
+        redirect('projects.php');
+      }
+      $loginRows[] = $row;
+    }
+
+    if (!$loginRows) {
+      flash_set('error', 'At least one website login entry is required.');
+      redirect('projects.php');
+    }
+
+    foreach ($loginRows as $loginRow) {
+      if (!projects_is_valid_url($loginRow['url']) || !projects_is_valid_url($loginRow['login_url'])) {
+        flash_set('error', 'Please enter valid website URLs (http/https).');
+        redirect('projects.php');
+      }
+    }
+
+    $websiteDetails = ['loginEntries' => $loginRows];
+
+    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, pricing_model, project_price, payment_terms, hourly_rate, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $loginRows[0]['url'] ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+
+    $newProjectId = (int)$pdo->lastInsertId();
+
+    foreach ($loginRows as $index => $loginRow) {
+      $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $newProjectId, $loginRow['name'], $loginRow['url'], $loginRow['login_url'], $loginRow['username'], $loginRow['password'], $index === 0 ? ($wlNotes ?: $loginRow['type']) : $loginRow['type'], (int)($user['id'] ?? 0), now(), now()]);
+    }
 
     flash_set('success', 'Project created.');
     redirect('projects.php');
   }
+
 
   $allowedSorts = ['activity', 'name', 'status'];
   if (!in_array($sort, $allowedSorts, true)) {
@@ -212,9 +337,9 @@ SQL;
   .projects-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(150deg, rgba(13,13,13,.97), rgba(10,10,10,.96)); box-shadow: 0 24px 58px rgba(0,0,0,.42); padding: 16px; }
   .projects-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
   .projects-title { margin: 0; font-size: 2rem; font-weight: 600; }
-  .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; gap: 10px; margin-bottom: 12px; }
+  .projects-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto auto; gap: 10px; margin-bottom: 12px; }
   .tool-search-wrap { position: relative; }
-  .tool-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
+  .tool-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .tool-search { width: 100%; padding: 10px 12px 10px 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.03); color: #f2f2f5; }
   .tool-select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04); color: #eceef5; min-width: 132px; }
   .tool-select:focus, .tool-search:focus { outline: none; border-color: rgba(255,212,83,.5); box-shadow: 0 0 0 3px rgba(255,212,83,.12); }
@@ -266,6 +391,11 @@ SQL;
       <option value="name" <?=$sort === 'name' ? 'selected' : ''?>>Project Name</option>
       <option value="status" <?=$sort === 'status' ? 'selected' : ''?>>Status</option>
     </select>
+    <select class="tool-select" name="per_page" onchange="this.form.submit()">
+      <?php foreach ($perPageOptions as $option): ?>
+        <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+      <?php endforeach; ?>
+    </select>
   </form>
 
   <?php if($canManage): ?><form method="post" id="bulkDeleteProjects" class="mb-2"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="bulk_delete_projects" value="1"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('This will permanently delete selected projects and all linked tasks/docs/phases. Are you sure?');">Delete Selected</button></form><?php endif; ?>
@@ -306,8 +436,8 @@ SQL;
 
     <footer class="foot">
       <div>
-        <?php if ($page > 1): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-        <?php if ($page < $totalPages): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+        <?php if ($page > 1): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&per_page=<?=$perPage?>&page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+        <?php if ($page < $totalPages): ?><a href="projects.php?q=<?=urlencode($q)?>&status_id=<?=$statusFilter?>&sort=<?=urlencode($sort)?>&per_page=<?=$perPage?>&page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
       </div>
       <div>Showing <?=count($projects)?> of <?=$totalRows?></div>
     </footer>
@@ -316,18 +446,42 @@ SQL;
 
 <?php if ($canManage): ?>
 <div class="modal fade" id="newProject" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content card p-3">
       <div class="modal-header border-0"><h5 class="modal-title">New Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
       <form method="post">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <input type="hidden" name="create_project" value="1">
         <div class="modal-body">
-          <div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div>
-          <div class="mb-3"><label class="form-label">Client</label><select class="form-select" name="client_id" required><?php foreach($clients as $client): ?><option value="<?=h($client['id'])?>"><?=h($client['name'])?></option><?php endforeach; ?></select></div>
-          <div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
-          <div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
-          <div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div>
+          <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div>
+            <div class="col-md-4"><label class="form-label">Client</label><select class="form-select" name="client_id" required><?php foreach($clients as $client): ?><option value="<?=h($client['id'])?>"><?=h($client['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-2"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $type): ?><option value="<?=h($type['id'])?>"><?=h($type['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-2"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statusOptions as $status): ?><option value="<?=h($status['id'])?>"><?=h($status['name'])?></option><?php endforeach; ?></select></div>
+            <div class="col-md-4"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div>
+            <div class="col-md-4"><label class="form-label">Project Pricing Model</label><select class="form-select" name="pricing_model" id="project_pricing_model" required><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
+            <div class="col-md-4" id="project_price_wrap"><label class="form-label">Project Price</label><input class="form-control" name="project_price" type="number" min="0" step="0.01"></div>
+            <div class="col-md-4" id="project_terms_wrap"><label class="form-label">Payment Terms</label><select class="form-select" name="payment_terms"><option value="full_upfront">Full Upfront</option><option value="50_50">50/50</option><option value="milestones">Milestones</option></select></div>
+            <div class="col-md-4" id="project_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="project_hourly_rate" type="number" min="0" step="0.01"></div>
+          </div>
+
+          <div class="mt-4 p-3 rounded border border-warning-subtle">
+            <h6 class="mb-2">Website Logins</h6>
+            <div class="small text-muted mb-3">Add one or more login entries. Every field in each used entry is required.</div>
+            <div id="login-repeater">
+              <div class="row g-3 login-entry mb-2">
+                <div class="col-md-4"><label class="form-label">Login Type</label><input class="form-control" name="login_type[]" placeholder="Current, Production, Hosting" required></div>
+                <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="login_name[]" placeholder="Main website" required></div>
+                <div class="col-md-4"><label class="form-label">URL</label><input class="form-control" type="url" name="login_url[]" placeholder="https://example.com" required></div>
+                <div class="col-md-4"><label class="form-label">Login URL</label><input class="form-control" type="url" name="login_login_url[]" placeholder="https://example.com/wp-admin" required></div>
+                <div class="col-md-2"><label class="form-label">Username</label><input class="form-control" name="login_username[]" required></div>
+                <div class="col-md-2"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password[]" required></div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light mt-2" id="add-login-entry">Add more login</button>
+          </div>
+
+          <div class="mt-3"><label class="form-label">Notes</label><textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea></div>
         </div>
         <div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div>
       </form>
@@ -335,5 +489,35 @@ SQL;
   </div>
 </div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model=document.getElementById('project_pricing_model');
+  const fixed=document.getElementById('project_price_wrap');
+  const terms=document.getElementById('project_terms_wrap');
+  const hourly=document.getElementById('project_hourly_wrap');
+  if(!model) return;
+  function sync(){
+    const v=model.value;
+    fixed.style.display=v==='fixed_price'?'':'none';
+    terms.style.display=v==='fixed_price'?'':'none';
+    hourly.style.display=v==='hourly'?'':'none';
+  }
+  model.addEventListener('change',sync);
+  sync();
+
+  const repeater=document.getElementById('login-repeater');
+  const addBtn=document.getElementById('add-login-entry');
+  if(repeater && addBtn){
+    addBtn.addEventListener('click',function(){
+      const first=repeater.querySelector('.login-entry');
+      if(!first) return;
+      const clone=first.cloneNode(true);
+      clone.querySelectorAll('input').forEach((input)=>{ input.value=''; });
+      repeater.appendChild(clone);
+    });
+  }
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

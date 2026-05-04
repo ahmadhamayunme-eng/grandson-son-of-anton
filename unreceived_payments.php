@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/lib/activity.php';
+require_once __DIR__ . '/lib/finance.php';
 auth_require_perm('finance.view');
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $u = auth_user();
 
@@ -46,6 +48,9 @@ if ($action === 'create') {
   $client_id = ($_POST['client_id'] ?? '') !== '' ? (int)$_POST['client_id'] : null;
   $project_id = ($_POST['project_id'] ?? '') !== '' ? (int)$_POST['project_id'] : null;
   $expected_amount = max(0, (float)($_POST['expected_amount'] ?? 0));
+  $invoiceType = trim((string)($_POST['invoice_type'] ?? 'project_fixed'));
+  $periodStart = ($_POST['period_start'] ?? '') ?: null;
+  $periodEnd = ($_POST['period_end'] ?? '') ?: null;
   $due_date = $_POST['due_date'] ?? date('Y-m-d');
   $description = trim($_POST['description'] ?? '');
   $reference = trim($_POST['reference'] ?? '');
@@ -56,12 +61,20 @@ if ($action === 'create') {
     redirect(basename(__FILE__));
   }
 
-  $pdo->prepare("INSERT INTO finance_receivables
-    (workspace_id,client_id,project_id,expected_amount,received_amount,due_date,status,description,reference,notes,created_by,created_at)
-    VALUES (?,?,?,?,0,?,'pending',?,?,?,?,NOW())")
-    ->execute([$ws, $client_id, $project_id, $expected_amount, $due_date, $description ?: null, $reference ?: null, $notes ?: null, (int)$u['id']]);
+  $newId = finance_create_receivable_invoice($pdo, $ws, (int)$u['id'], [
+    'client_id' => $client_id,
+    'project_id' => $project_id,
+    'amount_due' => $expected_amount,
+    'due_date' => $due_date,
+    'invoice_type' => $invoiceType,
+    'period_start' => $periodStart,
+    'period_end' => $periodEnd,
+    'description' => $description ?: null,
+    'reference' => $reference ?: null,
+    'notes' => $notes ?: null,
+  ]);
 
-  activity_log('finance_receivable', (int)$pdo->lastInsertId(), 'create', 'Receivable added');
+  activity_log('finance_receivable', (int)$newId, 'create', 'Receivable added');
   flash_set('success', 'Unreceived payment saved.');
   redirect(basename(__FILE__));
 }
@@ -251,6 +264,9 @@ $summary = $summaryStmt->fetch() ?: [
           <div class="col-md-2"><label class="form-label">Expected Amount</label><input class="form-control" name="expected_amount" type="number" min="0" step="0.01" required></div>
           <div class="col-md-2"><label class="form-label">Due Date</label><input class="form-control" name="due_date" type="date" value="<?= date('Y-m-d') ?>" required></div>
           <div class="col-md-2"><label class="form-label">Reference</label><input class="form-control" name="reference"></div>
+          <div class="col-md-2"><label class="form-label">Invoice Type</label><select class="form-select" name="invoice_type"><option value="retainer">Retainer</option><option value="hourly">Hourly</option><option value="project_fixed" selected>Project Fixed</option></select></div>
+          <div class="col-md-2"><label class="form-label">Period Start</label><input class="form-control" type="date" name="period_start"></div>
+          <div class="col-md-2"><label class="form-label">Period End</label><input class="form-control" type="date" name="period_end"></div>
           <div class="col-md-4"><label class="form-label">Description</label><input class="form-control" name="description"></div>
           <div class="col-md-5"><label class="form-label">Notes</label><input class="form-control" name="notes"></div>
           <div class="col-md-3 d-flex align-items-end"><button class="btn btn-yellow w-100">Save</button></div>
@@ -283,7 +299,7 @@ $summary = $summaryStmt->fetch() ?: [
         <table class="table table-dark table-hover align-middle mb-0">
           <thead>
             <tr>
-              <th>Invoice</th><th>Amount</th><th>Status</th><th>Due Date</th><th>Overdue by</th><th>Client</th><th>Actions</th>
+              <th>Invoice</th><th>Type</th><th>Amount Due</th><th>Status</th><th>Due Date</th><th>Overdue by</th><th>Client</th><th>Project</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -295,12 +311,14 @@ $summary = $summaryStmt->fetch() ?: [
               $daysOver = (int)$r['is_overdue']===1 ? floor((time()-strtotime((string)$r['due_date']))/86400) : 0;
             ?>
             <tr>
-              <td><?= h($r['reference'] ?: ('INV-'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT))) ?></td>
-              <td class="ur-overdue">$<?= number_format((float)$r['expected_amount'], 2) ?></td>
+              <td><?= h($r['invoice_no'] ?: $r['reference'] ?: ('INV-'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT))) ?></td>
+              <td><?= h($r['invoice_type'] ?: 'project_fixed') ?></td>
+              <td class="ur-overdue">$<?= number_format((float)$r['balance_due'], 2) ?></td>
               <td><span class="badge <?= $badgeClass ?>"><?= h(ucfirst($status)) ?></span></td>
               <td><?= h(date('M d', strtotime((string)$r['due_date']))) ?></td>
               <td class="ur-overdue"><?= $daysOver>0 ? ($daysOver.' days') : '-' ?></td>
               <td><?= h($r['client_name'] ?? '-') ?></td>
+              <td><?= h($r['project_name'] ?? '-') ?></td>
               <td>
                 <?php if ($isOpen): ?>
                   <details>
@@ -322,7 +340,7 @@ $summary = $summaryStmt->fetch() ?: [
               </td>
             </tr>
           <?php endforeach; ?>
-          <?php if (!$rows): ?><tr><td colspan="7" class="text-center text-muted">No receivables found for this filter.</td></tr><?php endif; ?>
+          <?php if (!$rows): ?><tr><td colspan="9" class="text-center text-muted">No receivables found for this filter.</td></tr><?php endif; ?>
           </tbody>
         </table>
       </div>

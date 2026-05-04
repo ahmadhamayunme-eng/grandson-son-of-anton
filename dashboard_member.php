@@ -86,7 +86,7 @@ function member_status_chip(string $status): string {
   .item-title { color: #f0f0f3; text-decoration: none; font-weight: 500; font-size: 1.04rem; }
   .item-meta { color: rgba(236,236,240,.62); font-size: .9rem; }
   .chip { border-radius: 999px; padding: 3px 10px; font-size: .78rem; border: 1px solid transparent; align-self: center; }
-  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #f6d469; }
+  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #ffcc00; }
   .chip-green { background: rgba(85,203,144,.14); border-color: rgba(85,203,144,.3); color: #7ae7af; }
   .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
   .chip-purple { background: rgba(175,175,175,.16); border-color: rgba(175,175,175,.32); color: #d0d0d0; }

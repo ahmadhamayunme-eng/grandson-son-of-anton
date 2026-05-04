@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
@@ -16,10 +18,64 @@ if (!in_array($tab, ['overview', 'projects', 'docs'], true)) {
 $clientStmt = $pdo->prepare('SELECT * FROM clients WHERE id = ? AND workspace_id = ?');
 $clientStmt->execute([$id, $ws]);
 $client = $clientStmt->fetch();
+
 if (!$client) {
   echo '<h3>Client not found</h3>';
   require __DIR__ . '/layout_end.php';
   exit;
+}
+
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_client'])) {
+  require_post();
+  csrf_verify();
+  if (!$can_manage) { flash_set('error', 'No permission.'); redirect("client_view.php?id=$id&tab=$tab"); }
+
+  $newName = trim((string)($_POST['client_name'] ?? ''));
+  $newNotes = trim((string)($_POST['client_notes'] ?? ''));
+  $billingModel = trim((string)($_POST['billing_model'] ?? ''));
+  $billingCycle = trim((string)($_POST['billing_cycle'] ?? ''));
+  $retainerAmount = ($_POST['retainer_amount'] ?? '') !== '' ? (float)$_POST['retainer_amount'] : null;
+  $hourlyRate = ($_POST['hourly_rate'] ?? '') !== '' ? (float)$_POST['hourly_rate'] : null;
+  if ($newName === '') {
+    flash_set('error', 'Client name is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  if (!in_array($billingModel, ['monthly_retainer', 'hourly', 'fixed_project', 'hybrid'], true)) {
+    flash_set('error', 'Billing model is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $pdo->prepare('UPDATE clients SET name=?, notes=?, billing_model=?, billing_cycle=?, retainer_amount=?, hourly_rate=?, updated_at=? WHERE id=? AND workspace_id=?')
+      ->execute([$newName, $newNotes ?: null, $billingModel, $billingCycle ?: null, $retainerAmount, $hourlyRate, now(), $id, $ws]);
+
+  if ((string)($_POST['remove_client_logo'] ?? '') === '1') {
+    foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+      $f = __DIR__ . '/uploads/client_logos/' . $id . '.' . $ext;
+      if (is_file($f)) { @unlink($f); }
+    }
+  }
+
+  if (isset($_FILES['client_logo']) && is_array($_FILES['client_logo']) && (int)($_FILES['client_logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+    $tmp=(string)($_FILES['client_logo']['tmp_name'] ?? '');
+    $size=(int)($_FILES['client_logo']['size'] ?? 0);
+    $info=@getimagesize($tmp);
+    $mime=strtolower((string)($info['mime'] ?? ''));
+    $allowed=['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
+    if ($size > 0 && $size <= 2*1024*1024 && isset($allowed[$mime])) {
+      $dir=__DIR__ . '/uploads/client_logos';
+      if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+      foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+        $f=$dir . '/' . $id . '.' . $ext;
+        if (is_file($f)) @unlink($f);
+      }
+      @move_uploaded_file($tmp, $dir . '/' . $id . '.' . $allowed[$mime]);
+    }
+  }
+
+  flash_set('success', 'Client updated successfully.');
+  redirect("client_view.php?id=$id&tab=$tab");
 }
 
 $typeStmt = $pdo->prepare('SELECT id, name FROM project_types WHERE workspace_id = ? ORDER BY sort_order ASC');
@@ -29,6 +85,59 @@ $types = $typeStmt->fetchAll();
 $statusStmt = $pdo->prepare('SELECT id, name FROM project_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
 $statusStmt->execute([$ws]);
 $statuses = $statusStmt->fetchAll();
+
+function client_view_has_live_url_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'live_website_url'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function client_view_has_website_details_col(PDO $pdo): bool {
+  try {
+    $st = $pdo->query("SHOW COLUMNS FROM projects LIKE 'website_details_json'");
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+function client_view_is_valid_url(string $value): bool {
+  if ($value === '') {
+    return true;
+  }
+  if (!filter_var($value, FILTER_VALIDATE_URL)) {
+    return false;
+  }
+  $scheme = strtolower((string)parse_url($value, PHP_URL_SCHEME));
+  return in_array($scheme, ['http', 'https'], true);
+}
+if (!client_view_has_live_url_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN live_website_url VARCHAR(255) NULL AFTER due_date"); } catch (Throwable $e) {}
+}
+if (!client_view_has_website_details_col($pdo)) {
+  try { $pdo->exec("ALTER TABLE projects ADD COLUMN website_details_json LONGTEXT NULL AFTER notes"); } catch (Throwable $e) {}
+}
+try {
+  $pdo->exec("CREATE TABLE IF NOT EXISTS website_logins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id INT NOT NULL,
+    client_id INT NULL,
+    project_id INT NULL,
+    site_name VARCHAR(190) NOT NULL,
+    website_url VARCHAR(255) NULL,
+    login_url VARCHAR(255) NULL,
+    login_username VARCHAR(190) NULL,
+    login_password TEXT NULL,
+    notes TEXT NULL,
+    created_by INT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_wl_ws (workspace_id),
+    INDEX idx_wl_client (client_id),
+    INDEX idx_wl_project (project_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) {}
 
 $clientProjectsStmt = $pdo->prepare('SELECT id, name FROM projects WHERE workspace_id = ? AND client_id = ? ORDER BY id DESC');
 $clientProjectsStmt->execute([$ws, $id]);
@@ -46,17 +155,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $name = trim($_POST['name'] ?? '');
   $type_id = (int)($_POST['type_id'] ?? 0);
   $status_id = (int)($_POST['status_id'] ?? 0);
+  $dueDate = $_POST['due_date'] ?: null;
+  $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+  $projectPrice = ($_POST['project_price'] ?? '') !== '' ? (float)$_POST['project_price'] : null;
+  $paymentTerms = trim((string)($_POST['payment_terms'] ?? ''));
+  $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
+  $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
+
+  $loginTypes = (array)($_POST['login_type'] ?? []);
+  $loginNames = (array)($_POST['login_name'] ?? []);
+  $loginUrls = (array)($_POST['login_url'] ?? []);
+  $loginLoginUrls = (array)($_POST['login_login_url'] ?? []);
+  $loginUsernames = (array)($_POST['login_username'] ?? []);
+  $loginPasswords = (array)($_POST['login_password'] ?? []);
 
   if ($name === '') {
     flash_set('error', 'Project name required.');
     redirect("client_view.php?id=$id&tab=$tab");
   }
 
-  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $_POST['due_date'] ?: null, null, now(), now()]);
+  if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
+    flash_set('error', 'Project pricing model is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  $loginRows = [];
+  $rowCount = max(count($loginTypes), count($loginNames), count($loginUrls), count($loginLoginUrls), count($loginUsernames), count($loginPasswords));
+  for ($i = 0; $i < $rowCount; $i++) {
+    $row = [
+      'type' => trim((string)($loginTypes[$i] ?? '')),
+      'name' => trim((string)($loginNames[$i] ?? '')),
+      'url' => trim((string)($loginUrls[$i] ?? '')),
+      'login_url' => trim((string)($loginLoginUrls[$i] ?? '')),
+      'username' => trim((string)($loginUsernames[$i] ?? '')),
+      'password' => (string)($loginPasswords[$i] ?? ''),
+    ];
+    $allBlank = $row['type'] === '' && $row['name'] === '' && $row['url'] === '' && $row['login_url'] === '' && $row['username'] === '' && $row['password'] === '';
+    if ($allBlank) {
+      continue;
+    }
+    if ($row['type'] === '' || $row['name'] === '' || $row['url'] === '' || $row['login_url'] === '' || $row['username'] === '' || $row['password'] === '') {
+      flash_set('error', 'Each login entry must include type, name, URL, login URL, username and password.');
+      redirect("client_view.php?id=$id&tab=$tab");
+    }
+    $loginRows[] = $row;
+  }
+
+  if (!$loginRows) {
+    flash_set('error', 'At least one website login entry is required.');
+    redirect("client_view.php?id=$id&tab=$tab");
+  }
+
+  foreach ($loginRows as $loginRow) {
+    if (!client_view_is_valid_url($loginRow['url']) || !client_view_is_valid_url($loginRow['login_url'])) {
+      flash_set('error', 'Please enter valid website URLs (http/https).');
+      redirect("client_view.php?id=$id&tab=$tab");
+    }
+  }
+
+  $websiteDetails = ['loginEntries' => $loginRows];
+
+  $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,pricing_model,project_price,payment_terms,hourly_rate,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $loginRows[0]['url'] ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+
+  $newProjectId = (int)$pdo->lastInsertId();
+
+  foreach ($loginRows as $index => $loginRow) {
+    $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $id, $newProjectId, $loginRow['name'], $loginRow['url'], $loginRow['login_url'], $loginRow['username'], $loginRow['password'], $index === 0 ? ($wlNotes ?: $loginRow['type']) : $loginRow['type'], (int)($user['id'] ?? 0), now(), now()]);
+  }
 
   flash_set('success', 'Project created.');
   redirect("client_view.php?id=$id&tab=$tab");
+}
+
+
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_project'])) {
+  require_post();
+  csrf_verify();
+
+  if (!$can_manage) {
+    flash_set('error', 'No permission.');
+    redirect("client_view.php?id=$id&tab=projects");
+  }
+
+  $deleteId = (int)($_POST['project_id'] ?? 0);
+  if ($deleteId <= 0) {
+    flash_set('error', 'Invalid project selected.');
+    redirect("client_view.php?id=$id&tab=projects");
+  }
+
+  $st = $pdo->prepare('DELETE FROM projects WHERE workspace_id = ? AND client_id = ? AND id = ?');
+  $st->execute([$ws, $id, $deleteId]);
+
+  flash_set('success', $st->rowCount() ? 'Project deleted permanently.' : 'Project not found.');
+  redirect("client_view.php?id=$id&tab=projects");
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_doc'])) {
@@ -170,7 +364,11 @@ $projectTypeTags = array_keys($projectTypeTags);
 
 $docQ = trim((string)($_GET['dq'] ?? ''));
 $docPage = max(1, (int)($_GET['dp'] ?? 1));
-$docPerPage = 10;
+$docPerPageOptions = [10, 20, 30, 40, 50];
+$docPerPage = (int)($_GET['dpp'] ?? 10);
+if (!in_array($docPerPage, $docPerPageOptions, true)) {
+  $docPerPage = 10;
+}
 $docOffset = ($docPage - 1) * $docPerPage;
 $docLike = '%' . $docQ . '%';
 
@@ -243,19 +441,21 @@ function initials_from_names(string $names): string {
 ?>
 
 <style>
-  .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(15, 16, 24, .96), rgba(10, 11, 18, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
+  .client-shell { border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; background: linear-gradient(155deg, rgba(16, 16, 16, .96), rgba(10, 10, 10, .95)); box-shadow: 0 24px 64px rgba(0, 0, 0, .42); overflow: hidden; }
   .client-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-title-row { display: flex; align-items: center; gap: 12px; }
-  .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #f4cd5c; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
+  .client-logo-img, .client-logo-fallback { width:72px; height:72px; border-radius:16px; object-fit:cover; border:1px solid rgba(255,255,255,.2); }
+  .client-logo-fallback { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#ffcc00,#9d9d9d); color:#181818; font-weight:700; }
+  .client-icon { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(244, 205, 92, .68); color: #ffcc00; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(244, 205, 92, .24); }
   .client-name { font-size: 2rem; margin: 0; font-weight: 500; }
   .client-badge { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(102, 83, 211, .18); color: #d2c7ff; border: 1px solid rgba(159, 139, 255, .25); border-radius: 8px; padding: 4px 9px; font-size: .83rem; }
   .client-tabs { display: flex; gap: 24px; padding: 0 20px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .client-tab { color: rgba(255, 255, 255, .76); text-decoration: none; padding: 10px 0; display: inline-block; border-bottom: 2px solid transparent; font-weight: 500; }
-  .client-tab.active { color: #f3ca56; border-color: rgba(243, 202, 86, .85); }
+  .client-tab.active { color: #ffcc00; border-color: rgba(243, 202, 86, .85); }
 
   .overview-grid { display: grid; grid-template-columns: 1.06fr .94fr; gap: 16px; padding: 18px; }
   .stack { display: grid; gap: 14px; }
-  .glass-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); overflow: hidden; }
+  .glass-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); overflow: hidden; }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
   .card-title { margin: 0; font-size: 1.35rem; font-weight: 600; }
   .tiny-cta { color: rgba(255, 255, 255, .78); text-decoration: none; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; padding: 2px 8px; font-size: .88rem; }
@@ -263,7 +463,7 @@ function initials_from_names(string $names): string {
   .overview-body { padding: 12px 14px; }
   .type-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .type-tags span { display: inline-flex; border-radius: 7px; padding: 4px 10px; font-size: .84rem; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.04); color: #e1e5ef; }
-  .type-tags span:first-child { background: rgba(243, 202, 86, .18); border-color: rgba(243, 202, 86, .44); color: #f3ca56; }
+  .type-tags span:first-child { background: rgba(243, 202, 86, .18); border-color: rgba(243, 202, 86, .44); color: #ffcc00; }
   .overview-metrics { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; column-gap: 16px; font-size: 1.03rem; }
   .overview-metrics .label { color: rgba(255,255,255,.7); }
   .overview-metrics .value { font-weight: 600; color: #f0f3fb; text-align: right; }
@@ -274,7 +474,7 @@ function initials_from_names(string $names): string {
   .projects-table td { vertical-align: middle; }
   .status-badge { display: inline-flex; align-items: center; border-radius: 8px; padding: 2px 9px; font-size: .8rem; font-weight: 600; }
   .status-badge.is-progress { color: #79d795; background: rgba(61, 154, 91, .24); border: 1px solid rgba(80, 186, 113, .4); }
-  .status-badge.is-complete { color: #f0c95c; background: rgba(157, 123, 32, .24); border: 1px solid rgba(222, 181, 71, .4); }
+  .status-badge.is-complete { color: #ffcc00; background: rgba(157, 123, 32, .24); border: 1px solid rgba(222, 181, 71, .4); }
   .status-badge.is-paused { color: #c2c8d5; background: rgba(94, 101, 116, .3); border: 1px solid rgba(152, 160, 175, .35); }
 
   .line-items { list-style: none; margin: 0; padding: 0; }
@@ -286,12 +486,12 @@ function initials_from_names(string $names): string {
   .docs-shell { padding: 16px 18px 18px; }
   .docs-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 12px; }
   .docs-search-wrap { position: relative; }
-  .docs-search { width: 100%; background: linear-gradient(90deg, rgba(31, 32, 43, 0.95), rgba(23, 24, 35, 0.93)); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #f2f2f4; padding: 10px 40px 10px 38px; }
+  .docs-search { width: 100%; background: linear-gradient(90deg, rgba(28, 28, 28, 0.95), rgba(20, 20, 20, 0.93)); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #f2f2f4; padding: 10px 40px 10px 38px; }
   .docs-search:focus { outline: none; border-color: rgba(255, 212, 83, 0.55); box-shadow: 0 0 0 3px rgba(255,212,83,.13); }
-  .docs-search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
+  .docs-search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .docs-search-go { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); border: 0; background: rgba(255,255,255,.08); color: rgba(255,255,255,.78); border-radius: 6px; width: 28px; height: 28px; }
-  .docs-btn { border: 1px solid rgba(237, 200, 78, .6); background: linear-gradient(180deg, #f4d36a, #ebc84d); color: #2f2710; border-radius: 10px; font-weight: 700; padding: 9px 14px; }
-  .docs-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); overflow: hidden; }
+  .docs-btn { border: 1px solid rgba(237, 200, 78, .6); background: linear-gradient(180deg, #ffcc00, #ffcc00); color: #2f2710; border-radius: 10px; font-weight: 700; padding: 9px 14px; }
+  .docs-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); overflow: hidden; }
   .docs-table { width: 100%; border-collapse: collapse; }
   .docs-table th, .docs-table td { border-top: 1px solid rgba(255,255,255,.07); padding: 12px 14px; vertical-align: middle; }
   .docs-table th { color: rgba(255,255,255,.64); font-weight: 600; font-size: .85rem; text-transform: uppercase; }
@@ -304,11 +504,11 @@ function initials_from_names(string $names): string {
   .docs-foot a { color: rgba(255,255,255,.76); text-decoration: none; margin-right: 10px; }
 
   .project-grid { padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  .project-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(28, 29, 40, .68), rgba(18, 19, 27, .58)); padding: 14px; }
+  .project-card { border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: linear-gradient(160deg, rgba(30, 30, 30, .68), rgba(20, 20, 20, .58)); padding: 14px; }
   .project-title { margin: 0; font-size: 1.55rem; font-weight: 600; }
   .project-pill { margin-top: 8px; display: inline-flex; align-items: center; border-radius: 8px; padding: 3px 10px; font-size: .86rem; font-weight: 600; }
   .project-pill.is-progress { color: #79d795; background: rgba(61, 154, 91, .24); border: 1px solid rgba(80, 186, 113, .4); }
-  .project-pill.is-complete { color: #f0c95c; background: rgba(157, 123, 32, .24); border: 1px solid rgba(222, 181, 71, .4); }
+  .project-pill.is-complete { color: #ffcc00; background: rgba(157, 123, 32, .24); border: 1px solid rgba(222, 181, 71, .4); }
   .project-pill.is-paused { color: #c2c8d5; background: rgba(94, 101, 116, .3); border: 1px solid rgba(152, 160, 175, .35); }
   .project-owner { margin-top: 12px; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, .07); border-bottom: 1px solid rgba(255, 255, 255, .07); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .owner-chip { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -321,7 +521,9 @@ function initials_from_names(string $names): string {
   .meta-label { color: rgba(255,255,255,.55); font-size: .76rem; text-transform: uppercase; letter-spacing: .5px; }
   .meta-value { margin-top: 2px; color: #e9ecf4; font-weight: 600; }
   .project-note { margin: 11px 0 12px; color: rgba(235, 238, 245, .78); min-height: 48px; }
-  .project-open { display: block; text-align: center; text-decoration: none; background: linear-gradient(180deg, #f4d36a, #ebc84d); color: #2f2710; font-weight: 700; padding: 9px 10px; border-radius: 8px; }
+  .project-actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+  .project-open { display: block; text-align: center; text-decoration: none; background: linear-gradient(180deg, #ffcc00, #ffcc00); color: #2f2710; font-weight: 700; padding: 9px 10px; border-radius: 8px; }
+  .project-delete-btn { white-space: nowrap; }
 
   .client-empty { padding: 24px 20px; color: rgba(255,255,255,.65); text-align: center; }
   @media (max-width: 1180px) { .overview-grid, .project-grid { grid-template-columns: 1fr; } .client-head { flex-direction: column; align-items: stretch; } .docs-toolbar { grid-template-columns: 1fr; } }
@@ -331,10 +533,10 @@ function initials_from_names(string $names): string {
 <section class="client-shell">
   <header class="client-head">
     <div>
-      <div class="client-title-row"><span class="client-icon">⚡</span><h1 class="client-name"><?=h($client['name'])?></h1></div>
+      <div class="client-title-row"><?php if (client_logo_url((int)$client['id'])): ?><img class="client-logo-img" src="<?= h(client_logo_url((int)$client['id'])) ?>" alt="<?= h($client['name']) ?>"><?php else: ?><span class="client-logo-fallback"><?= h(user_initials((string)$client['name'])) ?></span><?php endif; ?><h1 class="client-name"><?=h($client['name'])?></h1></div>
       <span class="client-badge">◍ <?=h(format_date($client['created_at'] ?? now()))?></span>
     </div>
-    <?php if ($can_manage): ?><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?>
+    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-light" href="website_logins.php?client_id=<?= (int)$id ?>">Website Logins</a><?php if ($can_manage): ?><button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#editClient">Edit Client</button><button class="btn btn-yellow" data-bs-toggle="modal" data-bs-target="#addProject">＋ New Project</button><?php endif; ?></div>
   </header>
 
   <nav class="client-tabs">
@@ -350,9 +552,9 @@ function initials_from_names(string $names): string {
         <section class="glass-card">
           <div class="card-head"><h2 class="card-title">Projects</h2></div>
           <?php if (!$projects): ?><div class="client-empty">No projects yet for this client.</div><?php else: ?>
-            <table class="projects-table"><thead><tr><th>Project</th><th>Lead</th><th>Last Activity</th></tr></thead><tbody>
+            <table class="projects-table"><thead><tr><th>Project</th><th>Lead</th><th>Last Activity</th><?php if ($can_manage): ?><th></th><?php endif; ?></tr></thead><tbody>
             <?php foreach ($projects as $p): $statusClass = project_status_class((string)$p['status_name']); $leadName = trim((string)explode(',', (string)($p['assignees'] ?? ''))[0]); if ($leadName === '') { $leadName = 'Unassigned'; } ?>
-              <tr><td><a class="line-label" href="project_view.php?id=<?=h($p['id'])?>"><?=h($p['name'])?></a><div class="line-sub"><span class="status-badge <?=h($statusClass)?>"><?=h($p['status_name'])?></span></div></td><td><?=h($leadName)?></td><td><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></td></tr>
+              <tr><td><a class="line-label" href="project_view.php?id=<?=h($p['id'])?>"><?=h($p['name'])?></a><div class="line-sub"><span class="status-badge <?=h($statusClass)?>"><?=h($p['status_name'])?></span></div></td><td><?=h($leadName)?></td><td><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></td><?php if ($can_manage): ?><td class="text-end"><form method="post" onsubmit="return confirm('This will permanently delete this project and all linked tasks/docs/phases. Are you sure?');" style="display:inline"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_project" value="1"><input type="hidden" name="project_id" value="<?= (int)$p['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td><?php endif; ?></tr>
             <?php endforeach; ?>
             </tbody></table>
           <?php endif; ?>
@@ -373,6 +575,11 @@ function initials_from_names(string $names): string {
           <input class="docs-search" name="dq" value="<?=h($docQ)?>" placeholder="Search docs by title or project..." autocomplete="off">
           <button class="docs-search-go" type="submit">↵</button>
         </div>
+        <select class="form-select" name="dpp" onchange="this.form.submit()">
+          <?php foreach ($docPerPageOptions as $option): ?>
+            <option value="<?=$option?>" <?=$docPerPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+          <?php endforeach; ?>
+        </select>
         <?php if ($can_manage): ?><button class="docs-btn" type="button" data-bs-toggle="modal" data-bs-target="#addDoc">Create Doc</button><?php endif; ?>
       </form>
       <div class="docs-card">
@@ -396,8 +603,8 @@ function initials_from_names(string $names): string {
         </table>
         <div class="docs-foot">
           <div>
-            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+            <?php if ($docPage > 1): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+            <?php if ($docPage < $docsTotalPages): ?><a href="client_view.php?id=<?=h($id)?>&tab=docs&dq=<?=urlencode($docQ)?>&dpp=<?=$docPerPage?>&dp=<?=$docPage + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
           </div>
           <div>Page <?=$docPage?> of <?=$docsTotalPages?></div>
         </div>
@@ -407,16 +614,101 @@ function initials_from_names(string $names): string {
     <div class="project-grid">
       <?php if (!$projects): ?><div class="client-empty">No projects yet for this client.</div>
       <?php else: foreach ($projects as $p): $statusClass = project_status_class((string)$p['status_name']); $assignees = trim((string)($p['assignees'] ?? '')); $leadName = $assignees !== '' ? trim((string)explode(',', $assignees)[0]) : 'Unassigned'; $note = trim((string)($p['notes'] ?? '')); if ($note === '') { $note = trim((string)($p['type_name'] ?? 'General project')) . ' project for ' . $client['name'] . '.'; } ?>
-        <article class="project-card"><h2 class="project-title"><?=h($p['name'])?></h2><span class="project-pill <?=h($statusClass)?>"><?=h($p['status_name'])?></span><div class="project-owner"><div class="owner-chip"><span class="owner-avatar"><?=h(initials_from_names($assignees))?></span><div><div class="owner-name"><?=h($leadName)?></div><div class="owner-sub"><?=h($p['type_name'])?></div></div></div><div class="project-kpis"><span><?= (int)$p['task_count'] ?> Tasks</span><span><?= (int)$p['doc_count'] ?> Docs</span></div></div><div class="project-meta"><div><div class="meta-label">Last activity</div><div class="meta-value"><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></div></div><div><div class="meta-label">Active tasks</div><div class="meta-value"><?= (int)$p['active_task_count'] ?> active</div></div></div><p class="project-note"><?=h($note)?></p><a class="project-open" href="project_view.php?id=<?=h($p['id'])?>">View Project</a></article>
+        <article class="project-card"><h2 class="project-title"><?=h($p['name'])?></h2><span class="project-pill <?=h($statusClass)?>"><?=h($p['status_name'])?></span><div class="project-owner"><div class="owner-chip"><span class="owner-avatar"><?=h(initials_from_names($assignees))?></span><div><div class="owner-name"><?=h($leadName)?></div><div class="owner-sub"><?=h($p['type_name'])?></div></div></div><div class="project-kpis"><span><?= (int)$p['task_count'] ?> Tasks</span><span><?= (int)$p['doc_count'] ?> Docs</span></div></div><div class="project-meta"><div><div class="meta-label">Last activity</div><div class="meta-value"><?=h($p['last_activity'] ? format_date($p['last_activity']) : '—')?></div></div><div><div class="meta-label">Active tasks</div><div class="meta-value"><?= (int)$p['active_task_count'] ?> active</div></div></div><p class="project-note"><?=h($note)?></p><div class="project-actions"><a class="project-open" href="project_view.php?id=<?=h($p['id'])?>">View Project</a><?php if ($can_manage): ?><form method="post" onsubmit="return confirm('This will permanently delete this project and all linked tasks/docs/phases. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_project" value="1"><input type="hidden" name="project_id" value="<?= (int)$p['id'] ?>"><button class="btn btn-sm btn-outline-danger project-delete-btn" type="submit">Delete</button></form><?php endif; ?></div></article>
       <?php endforeach; endif; ?>
     </div>
   <?php endif; ?>
 </section>
 
 <?php if ($can_manage): ?>
-<div class="modal fade" id="addProject" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Add Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_project" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Project Name</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">Type</label><select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Status</label><select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select></div><div class="mb-3"><label class="form-label">Due Date (optional)</label><input class="form-control" type="date" name="due_date"></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create</button></div></form></div></div></div>
+<div class="modal fade" id="addProject" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content card p-3">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Add Project</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="create_project" value="1">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Project Name</label>
+              <input class="form-control" name="name" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Type</label>
+              <select class="form-select" name="type_id" required><?php foreach($types as $t): ?><option value="<?=h($t['id'])?>"><?=h($t['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status_id" required><?php foreach($statuses as $s): ?><option value="<?=h($s['id'])?>"><?=h($s['name'])?></option><?php endforeach; ?></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Due Date (optional)</label>
+              <input class="form-control" type="date" name="due_date">
+            </div>
+          </div>
+
+          <div class="mt-4 p-3 rounded border border-warning-subtle">
+            <h6 class="mb-2">Website Logins</h6>
+            <div class="small text-muted mb-3">Add one or more login entries. Every field in each used entry is required.</div>
+            <div id="cv-login-repeater">
+              <div class="row g-3 login-entry mb-2">
+                <div class="col-md-4"><label class="form-label">Login Type</label><input class="form-control" name="login_type[]" placeholder="Current, Production, Hosting" required></div>
+                <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="login_name[]" placeholder="Main website" required></div>
+                <div class="col-md-4"><label class="form-label">URL</label><input class="form-control" type="url" name="login_url[]" placeholder="https://example.com" required></div>
+                <div class="col-md-4"><label class="form-label">Login URL</label><input class="form-control" type="url" name="login_login_url[]" placeholder="https://example.com/wp-admin" required></div>
+                <div class="col-md-2"><label class="form-label">Username</label><input class="form-control" name="login_username[]" required></div>
+                <div class="col-md-2"><label class="form-label">Password</label><input class="form-control" type="password" name="login_password[]" required></div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light mt-2" id="cv-add-login-entry">Add more login</button>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" name="wl_notes" rows="2" placeholder="2FA notes etc."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-yellow" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editClient" tabindex="-1"><div class="modal-dialog"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Edit Client</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="update_client" value="1"><div class="modal-body"><div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="client_name" value="<?=h($client['name'])?>" required></div><div class="mb-3"><label class="form-label">Billing Model</label><select class="form-select" name="billing_model" id="edit_billing_model" required><option value="monthly_retainer" <?= (($client['billing_model'] ?? '')==='monthly_retainer') ? 'selected' : '' ?>>Monthly Retainer</option><option value="hourly" <?= (($client['billing_model'] ?? '')==='hourly') ? 'selected' : '' ?>>Hourly</option><option value="fixed_project" <?= (($client['billing_model'] ?? '')==='fixed_project') ? 'selected' : '' ?>>Fixed Project</option><option value="hybrid" <?= (($client['billing_model'] ?? '')==='hybrid') ? 'selected' : '' ?>>Hybrid</option></select></div><div class="row g-2"><div class="col-md-6" id="edit_cycle_wrap"><label class="form-label">Billing Cycle</label><select class="form-select" name="billing_cycle" id="edit_billing_cycle"><option value="monthly" <?= (($client['billing_cycle'] ?? '')==='monthly') ? 'selected' : '' ?>>Monthly</option><option value="every_15_days" <?= (($client['billing_cycle'] ?? '')==='every_15_days') ? 'selected' : '' ?>>Every 15 Days</option></select></div><div class="col-md-6" id="edit_retainer_wrap"><label class="form-label">Retainer Amount</label><input class="form-control" name="retainer_amount" type="number" min="0" step="0.01" value="<?=h((string)($client['retainer_amount'] ?? ''))?>"></div><div class="col-md-6" id="edit_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="hourly_rate" type="number" min="0" step="0.01" value="<?=h((string)($client['hourly_rate'] ?? ''))?>"></div></div><div class="mb-3 mt-3"><label class="form-label">Notes</label><textarea class="form-control" name="client_notes" rows="3"><?=h((string)($client['notes'] ?? ''))?></textarea></div><div class="mb-3"><label class="form-label">Client Logo</label><input class="form-control" type="file" name="client_logo" accept="image/png,image/jpeg,image/webp,image/gif"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="remove_client_logo" name="remove_client_logo" value="1"><label class="form-check-label" for="remove_client_logo">Remove current logo</label></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Save Changes</button></div></form></div></div></div>
+<script>(function(){const model=document.getElementById('edit_billing_model');const cycleWrap=document.getElementById('edit_cycle_wrap');const cycle=document.getElementById('edit_billing_cycle');const ret=document.getElementById('edit_retainer_wrap');const hour=document.getElementById('edit_hourly_wrap');if(!model)return;function sync(){const v=model.value;ret.style.display=v==='monthly_retainer'?'':'none';hour.style.display=(v==='hourly'||v==='hybrid')?'':'none';cycleWrap.style.display=(v==='monthly_retainer'||v==='hourly')?'':'none';if(v==='monthly_retainer')cycle.value='monthly';}model.addEventListener('change',sync);sync();})();</script>
 
 <div class="modal fade" id="addDoc" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content card p-3"><div class="modal-header border-0"><h5 class="modal-title">Create Doc</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="create_doc" value="1"><div class="modal-body"><div class="row g-3"><div class="col-md-8"><label class="form-label">Title</label><input class="form-control" name="doc_title" required></div><div class="col-md-4"><label class="form-label">Project</label><select class="form-select" name="doc_project_id" required><?php foreach($clientProjects as $cp): ?><option value="<?=h($cp['id'])?>"><?=h($cp['name'])?></option><?php endforeach; ?></select></div><div class="col-12"><label class="form-label">Content</label><textarea class="form-control" name="doc_content" rows="9" placeholder="Write document..."></textarea></div></div></div><div class="modal-footer border-0"><button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-yellow" type="submit">Create Doc</button></div></form></div></div></div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model=document.getElementById('cv_project_pricing_model');
+  const fixed=document.getElementById('cv_project_price_wrap');
+  const terms=document.getElementById('cv_project_terms_wrap');
+  const hourly=document.getElementById('cv_project_hourly_wrap');
+  if(!model) return;
+  function sync(){const v=model.value;fixed.style.display=v==='fixed_price'?'':'none';terms.style.display=v==='fixed_price'?'':'none';hourly.style.display=v==='hourly'?'':'none';}
+  model.addEventListener('change',sync);sync();
+
+  const repeater=document.getElementById('cv-login-repeater');
+  const addBtn=document.getElementById('cv-add-login-entry');
+  if(repeater && addBtn){
+    addBtn.addEventListener('click',function(){
+      const first=repeater.querySelector('.login-entry');
+      if(!first) return;
+      const clone=first.cloneNode(true);
+      clone.querySelectorAll('input').forEach((input)=>{ input.value=''; });
+      repeater.appendChild(clone);
+    });
+  }
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

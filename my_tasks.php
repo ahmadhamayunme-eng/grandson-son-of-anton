@@ -88,13 +88,13 @@ function task_badge_class(string $status): string {
   .tasks-table th{font-weight:600;color:rgba(228,228,228,.82);background:rgba(255,255,255,.03);text-align:left}
   .tasks-table tr:last-child td{border-bottom:0}
   .task-name{font-weight:600;color:#ececf0;text-decoration:none}
-  .task-name:hover{color:#f6d469}
+  .task-name:hover{color:#ffcc00}
   .pill{display:inline-flex;border:1px solid transparent;border-radius:999px;padding:.25rem .62rem;font-size:.75rem;font-weight:600}
-  .pill-warn{color:#f6d469;border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12)}
+  .pill-warn{color:#ffcc00;border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12)}
   .pill-ok{color:#78dfab;border-color:rgba(87,200,143,.35);background:rgba(87,200,143,.12)}
   .pill-bad{color:#ff9aa0;border-color:rgba(243,111,117,.35);background:rgba(243,111,117,.12)}
   .pill-neutral{color:#d9d9d9;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.07)}
-  .due-soon{color:#f6d469}
+  .due-soon{color:#ffcc00}
   @media (max-width: 992px){.tasks-filters{grid-template-columns:1fr}.tasks-cards{grid-template-columns:1fr}}
 </style>
 

@@ -34,3 +34,63 @@ function csrf_verify(): void {
   if (!$token || !hash_equals($_SESSION['csrf'] ?? '', $token)) { http_response_code(403); echo "Invalid CSRF token"; exit; }
 }
 function format_date(?string $d): string { return $d ? date('Y-m-d', strtotime($d)) : ''; }
+
+
+function user_initials(string $name): string {
+  $name = trim($name);
+  if ($name === '') return '?';
+  $parts = preg_split('/\s+/', $name) ?: [];
+  $first = strtoupper(substr((string)($parts[0] ?? ''), 0, 1));
+  $last = '';
+  if (count($parts) > 1) {
+    $last = strtoupper(substr((string)$parts[count($parts)-1], 0, 1));
+  } else {
+    $last = strtoupper(substr((string)($parts[0] ?? ''), 1, 1));
+  }
+  return $first . $last;
+}
+
+function user_avatar_url(int $userId): ?string {
+  if ($userId <= 0) return null;
+  $root = dirname(__DIR__);
+  $dir = $root . '/uploads/profile_pictures';
+  foreach (['jpg','jpeg','png','webp','gif'] as $ext) {
+    $file = $dir . '/' . $userId . '.' . $ext;
+    if (is_file($file)) {
+      return 'uploads/profile_pictures/' . $userId . '.' . $ext . '?v=' . (int)@filemtime($file);
+    }
+  }
+  return null;
+}
+
+function user_avatar_html(int $userId, string $name, string $class = 'avatar'): string {
+  $safeClass = trim($class);
+  $safeName = h($name);
+  $url = user_avatar_url($userId);
+  if ($url) {
+    return '<img src="' . h($url) . '" alt="' . $safeName . '" class="' . h($safeClass) . '">';
+  }
+  return '<span class="' . h($safeClass) . '">' . h(user_initials($name)) . '</span>';
+}
+
+
+function client_logo_url(int $clientId): ?string {
+  if ($clientId <= 0) return null;
+  $root = dirname(__DIR__);
+  $dir = $root . '/uploads/client_logos';
+  foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+    $file = $dir . '/' . $clientId . '.' . $ext;
+    if (is_file($file)) {
+      return 'uploads/client_logos/' . $clientId . '.' . $ext . '?v=' . (int)@filemtime($file);
+    }
+  }
+  return null;
+}
+
+function client_logo_html(int $clientId, string $name, string $class='client-logo'): string {
+  $url = client_logo_url($clientId);
+  if ($url) {
+    return '<img src="' . h($url) . '" alt="' . h($name) . '" class="' . h($class) . '">';
+  }
+  return '<span class="' . h($class) . '">' . h(user_initials($name)) . '</span>';
+}

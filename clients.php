@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/lib/finance.php';
 
 $pdo = db();
+finance_ensure_schema($pdo);
 $ws = auth_workspace_id();
 $user = auth_user();
 $userId = (int)($user['id'] ?? 0);
@@ -38,20 +40,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $name = trim($_POST['name'] ?? '');
   $notes = trim($_POST['notes'] ?? '');
+  $billingModel = trim((string)($_POST['billing_model'] ?? ''));
+  $billingCycle = trim((string)($_POST['billing_cycle'] ?? ''));
+  $retainerAmount = ($_POST['retainer_amount'] ?? '') !== '' ? (float)$_POST['retainer_amount'] : null;
+  $hourlyRate = ($_POST['hourly_rate'] ?? '') !== '' ? (float)$_POST['hourly_rate'] : null;
   if ($name === '') {
     flash_set('error', 'Client name required.');
     redirect('clients.php');
   }
+  if (!in_array($billingModel, ['monthly_retainer', 'hourly', 'fixed_project', 'hybrid'], true)) {
+    flash_set('error', 'Billing model is required.');
+    redirect('clients.php');
+  }
 
-  $pdo->prepare('INSERT INTO clients (workspace_id,name,notes,created_at,updated_at) VALUES (?,?,?,?,?)')
-      ->execute([$ws, $name, $notes ?: null, now(), now()]);
+  $pdo->prepare('INSERT INTO clients (workspace_id,name,notes,billing_model,billing_cycle,retainer_amount,hourly_rate,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      ->execute([$ws, $name, $notes ?: null, $billingModel, $billingCycle ?: null, $retainerAmount, $hourlyRate, now(), now()]);
+  $newClientId = (int)$pdo->lastInsertId();
+
+  if (isset($_FILES['logo']) && is_array($_FILES['logo']) && (int)($_FILES['logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+    $tmp = (string)($_FILES['logo']['tmp_name'] ?? '');
+    $size = (int)($_FILES['logo']['size'] ?? 0);
+    if ($size > 0 && $size <= 2 * 1024 * 1024) {
+      $info = @getimagesize($tmp);
+      $mime = strtolower((string)($info['mime'] ?? ''));
+      $allowed = ['image/png'=>'png','image/jpeg'=>'jpg','image/webp'=>'webp','image/gif'=>'gif'];
+      if (isset($allowed[$mime])) {
+        $dir = __DIR__ . '/uploads/client_logos';
+        if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+        foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
+          $oldLogo = $dir . '/' . $newClientId . '.' . $ext;
+          if (is_file($oldLogo)) { @unlink($oldLogo); }
+        }
+        @move_uploaded_file($tmp, $dir . '/' . $newClientId . '.' . $allowed[$mime]);
+      }
+    }
+  }
+
   flash_set('success', 'Client created.');
   redirect('clients.php');
 }
 
 $q = trim($_GET['q'] ?? '');
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 12;
+$perPageOptions = [10, 20, 30, 40, 50];
+$perPage = (int)($_GET['per_page'] ?? 10);
+if (!in_array($perPage, $perPageOptions, true)) {
+  $perPage = 10;
+}
 $offset = ($page - 1) * $perPage;
 $like = '%' . $q . '%';
 
@@ -128,16 +163,16 @@ function client_status_class(string $status): string {
   .clients-shell {
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;
-    background: linear-gradient(130deg, rgba(14, 15, 22, 0.96), rgba(9, 10, 15, 0.96));
+    background: linear-gradient(130deg, rgba(16, 16, 16, 0.96), rgba(10, 10, 10, 0.96));
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     padding: 18px;
   }
   .clients-title { font-size: 2rem; font-weight: 600; margin: 0 0 14px; }
   .clients-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 14px; }
   .clients-search-wrap { position: relative; }
-  .clients-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f3cb58; }
+  .clients-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #ffcc00; }
   .clients-search {
-    width: 100%; background: linear-gradient(90deg, rgba(31, 32, 43, 0.95), rgba(23, 24, 35, 0.93));
+    width: 100%; background: linear-gradient(90deg, rgba(28, 28, 28, 0.95), rgba(20, 20, 20, 0.93));
     border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 10px; color: #f2f2f4;
     padding: 10px 12px 10px 40px;
   }
@@ -147,6 +182,8 @@ function client_status_class(string $status): string {
     border-radius: 10px; color: #efeff2; font-weight: 600; padding: 10px 14px; text-decoration: none;
   }
   .clients-new-btn:hover { color: #fff; border-color: rgba(255, 212, 83, 0.35); }
+  .tool-select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04); color: #eceef5; min-width: 132px; }
+  .clients-meta-right { display: inline-flex; align-items: center; gap: 10px; }
 
   .clients-card {
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -156,7 +193,7 @@ function client_status_class(string $status): string {
   }
   .clients-tabs { display: flex; gap: 24px; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
   .clients-tab { display: inline-block; color: rgba(255,255,255,0.74); text-decoration: none; padding: 11px 0; font-weight: 500; border-bottom: 2px solid transparent; }
-  .clients-tab.active { color: #f2cb5f; border-color: #f2cb5f; }
+  .clients-tab.active { color: #ffcc00; border-color: #ffcc00; }
   .clients-meta-row {
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); color: rgba(255,255,255,0.62); font-size: .88rem;
@@ -166,7 +203,7 @@ function client_status_class(string $status): string {
   .clients-table th { font-size: .86rem; color: rgba(255, 255, 255, 0.62); font-weight: 600; background: rgba(255, 255, 255, 0.02); }
   .clients-table td { color: rgba(237,237,241,0.9); }
   .clients-logo {
-    width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,212,83,.6); color: #f3ce62;
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,212,83,.6); color: #ffcc00;
     display: inline-flex; align-items: center; justify-content: center; margin-right: 9px; font-size: .9rem;
   }
   .clients-name { color: #f5f5f6; text-decoration: none; font-weight: 600; }
@@ -175,9 +212,9 @@ function client_status_class(string $status): string {
     display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: .74rem;
     border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255,255,255,.07); color: #ddd;
   }
-  .chip.tag { background: rgba(255, 212, 83, 0.14); border-color: rgba(255, 212, 83, 0.34); color: #f3d471; }
+  .chip.tag { background: rgba(255, 212, 83, 0.14); border-color: rgba(255, 212, 83, 0.34); color: #ffcc00; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; display: inline-block; }
-  .is-active .status-dot { background: #f2cb5f; }
+  .is-active .status-dot { background: #ffcc00; }
   .is-completed .status-dot { background: #67d091; }
   .is-paused .status-dot { background: #9aa0ad; }
   .clients-footer {
@@ -185,7 +222,7 @@ function client_status_class(string $status): string {
     padding: 12px 16px; color: rgba(255,255,255,.6); font-size: .92rem;
   }
   .clients-footer a { color: rgba(255,255,255,.78); text-decoration: none; margin: 0 8px; }
-  .clients-footer a:hover { color: #f5d36e; }
+  .clients-footer a:hover { color: #ffcc00; }
 
   @media (max-width: 1040px) {
     .clients-toolbar { grid-template-columns: 1fr; }
@@ -202,6 +239,11 @@ function client_status_class(string $status): string {
       <span class="clients-search-icon">⌕</span>
       <input class="clients-search" name="q" value="<?=h($q)?>" placeholder="Search clients..." autocomplete="off">
     </div>
+    <select class="tool-select" name="per_page" onchange="this.form.submit()">
+      <?php foreach ($perPageOptions as $option): ?>
+        <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+      <?php endforeach; ?>
+    </select>
     <?php if ($can_manage): ?>
       <button type="button" class="clients-new-btn" data-bs-toggle="modal" data-bs-target="#addClient">＋ New Client</button>
     <?php endif; ?>
@@ -217,7 +259,18 @@ function client_status_class(string $status): string {
         Showing <?=count($clients)?> of <?=$allCount?>
         <?php if ($q !== ''): ?>for “<?=h($q)?>”<?php endif; ?>
       </div>
-      <div>Page <?=$page?> of <?=$totalPages?></div>
+      <div class="clients-meta-right">
+        <form method="get" class="m-0">
+          <input type="hidden" name="q" value="<?=h($q)?>">
+          <input type="hidden" name="page" value="1">
+          <select class="tool-select" name="per_page" onchange="this.form.submit()">
+            <?php foreach ($perPageOptions as $option): ?>
+              <option value="<?=$option?>" <?=$perPage === $option ? 'selected' : ''?>>Show <?=$option?></option>
+            <?php endforeach; ?>
+          </select>
+        </form>
+        <span>Page <?=$page?> of <?=$totalPages?></span>
+      </div>
     </div>
 
     
@@ -253,7 +306,7 @@ function client_status_class(string $status): string {
           ?>
             <tr>
               <td>
-                <span class="clients-logo">⚡</span>
+                <?= client_logo_html((int)$c['id'], (string)$c['name'], 'clients-logo') ?>
                 <a class="clients-name" href="client_view.php?id=<?=$c['id']?>"><?=h($c['name'])?></a>
               </td>
               <td class="text-muted">—</td>
@@ -262,7 +315,7 @@ function client_status_class(string $status): string {
               <td><?= (int)$c['project_count'] ?></td>
               <td class="text-muted"><?=h(client_last_active_label($c['last_active']))?></td>
               <td class="text-center"><?php if ($can_manage): ?><input class="client-check" type="checkbox" name="ids[]" value="<?= (int)$c['id'] ?>" form="bulkDeleteClients"><?php endif; ?></td>
-              <td class="text-end d-flex justify-content-end gap-2"><a class="text-decoration-none" href="client_view.php?id=<?=$c['id']?>">›</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
+              <td class="text-end d-flex justify-content-end gap-2"><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this client and all linked projects/tasks/docs. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
@@ -271,8 +324,8 @@ function client_status_class(string $status): string {
 
     <footer class="clients-footer">
       <div>
-        <?php if ($page > 1): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
-        <?php if ($page < $totalPages): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
+        <?php if ($page > 1): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;per_page=<?=$perPage?>&amp;page=<?=$page - 1?>">Previous</a><?php else: ?><span class="opacity-50">Previous</span><?php endif; ?>
+        <?php if ($page < $totalPages): ?><a href="clients.php?q=<?=urlencode($q)?>&amp;per_page=<?=$perPage?>&amp;page=<?=$page + 1?>">Next</a><?php else: ?><span class="opacity-50 ms-2">Next</span><?php endif; ?>
       </div>
       <div>Page <?=$page?> of <?=$totalPages?></div>
     </footer>
@@ -287,11 +340,31 @@ function client_status_class(string $status): string {
         <h5 class="modal-title">Add Client</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form method="post"><input type="hidden" name="action" value="create">
+      <form method="post" enctype="multipart/form-data"><input type="hidden" name="action" value="create">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
         <div class="modal-body">
           <div class="mb-3"><label class="form-label">Client Name</label><input class="form-control" name="name" required></div>
+          <div class="mb-3"><label class="form-label">Billing Model</label>
+            <select class="form-select" name="billing_model" id="create_billing_model" required>
+              <option value="">Select Billing Model</option>
+              <option value="monthly_retainer">Monthly Retainer</option>
+              <option value="hourly">Hourly</option>
+              <option value="fixed_project">Fixed Project</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div class="row g-2" id="create_billing_fields">
+            <div class="col-md-6"><label class="form-label">Billing Cycle</label>
+              <select class="form-select" name="billing_cycle" id="create_billing_cycle">
+                <option value="monthly">Monthly</option>
+                <option value="every_15_days">Every 15 Days</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="create_retainer_wrap"><label class="form-label">Retainer Amount</label><input class="form-control" name="retainer_amount" type="number" min="0" step="0.01"></div>
+            <div class="col-md-6" id="create_hourly_wrap"><label class="form-label">Hourly Rate</label><input class="form-control" name="hourly_rate" type="number" min="0" step="0.01"></div>
+          </div>
           <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
+          <div class="mb-3"><label class="form-label">Business Logo (optional)</label><input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></div>
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-outline-light" type="button" data-bs-dismiss="modal">Cancel</button>
@@ -302,5 +375,24 @@ function client_status_class(string $status): string {
   </div>
 </div>
 <?php endif; ?>
+
+<script>
+(function(){
+  const model = document.getElementById('create_billing_model');
+  const cycle = document.getElementById('create_billing_cycle');
+  const retainer = document.getElementById('create_retainer_wrap');
+  const hourly = document.getElementById('create_hourly_wrap');
+  if (!model) return;
+  function sync(){
+    const v = model.value;
+    retainer.style.display = v === 'monthly_retainer' ? '' : 'none';
+    hourly.style.display = (v === 'hourly' || v === 'hybrid') ? '' : 'none';
+    cycle.parentElement.style.display = (v === 'monthly_retainer' || v === 'hourly') ? '' : 'none';
+    if (v === 'monthly_retainer') cycle.value = 'monthly';
+  }
+  model.addEventListener('change', sync);
+  sync();
+})();
+</script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>

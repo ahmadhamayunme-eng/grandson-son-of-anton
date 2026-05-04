@@ -88,7 +88,7 @@ $rows = $rows->fetchAll();
           <tr>
             <td><?= h($r['paid_on'] ?? '-') ?></td>
             <td><?= h($r['name'] ?? '-') ?></td>
-            <td style="color:#f6d469;font-weight:600">$<?= number_format((float)($r['amount'] ?? 0), 2) ?></td>
+            <td style="color:#ffcc00;font-weight:600">$<?= number_format((float)($r['amount'] ?? 0), 2) ?></td>
             <td><?= h($r['note'] ?? '') ?></td>
             <td class="text-end"><form method="post" style="display:inline" onsubmit="return confirm('Delete this salary record?');"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form></td>
           </tr>

@@ -20,7 +20,7 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
       --line: rgba(255,255,255,.08);
       --text: #ececf0;
       --muted: rgba(232,232,232,.62);
-      --yellow: #f6d469;
+      --yellow: #ffcc00;
       --purple: #8e8e8e;
       --green: #57c88f;
       --red: #f36f75;
@@ -35,7 +35,8 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
         linear-gradient(180deg, #030303 0%, #090909 100%);
     }
     .sidebar {
-      width: 286px;
+      width: 340px;
+      flex: 0 0 340px;
       min-height: 100vh;
       background: linear-gradient(180deg, rgba(16,16,16,.95), rgba(10,10,10,.98));
       border-right: 1px solid var(--line);
@@ -46,17 +47,20 @@ $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../conf
     .nav-link:hover, .nav-link.active { color: var(--yellow); background: linear-gradient(90deg, rgba(246,212,105,.16), rgba(246,212,105,.04)); }
     .card { background:#121212; border:1px solid var(--line); border-radius:14px; }
     .btn-yellow { background:var(--yellow); border-color:var(--yellow); color:#0f0f11; font-weight:600; }
-    .btn-yellow:hover { background:#ffe18a; border-color:#ffe18a; color:#101012; }
+    .btn-yellow:hover { background:#ffcc00; border-color:#ffcc00; color:#101012; }
     .badge-soft { background: rgba(246,212,105,.15); border:1px solid rgba(246,212,105,.28); color:var(--yellow); }
     a { color: var(--yellow); }
     .table { --bs-table-bg: transparent; --bs-table-color: #ececf0; }
-    .form-control, .form-select { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
+    .form-control { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
+    input::placeholder, textarea::placeholder, .form-control::placeholder { color: rgba(255,255,255,.95) !important; opacity: 1; }
+    .form-select { background:#fff; border:1px solid rgba(255,255,255,.12); color:#000; }
+    select option { background:#fff; color:#000; }
     .form-control:focus, .form-select:focus { border-color: rgba(246,212,105,.6); box-shadow: 0 0 0 .2rem rgba(246,212,105,.15); }
     .text-muted { color: var(--muted) !important; }
     .small-help { font-size:.9rem; color: var(--muted); }
     main.flex-grow-1 { background: transparent; }
     @media (max-width: 1100px) {
-      .sidebar { width: 250px; }
+      .sidebar { width: 300px; flex-basis: 300px; }
       .brand { font-size: 1.75rem; }
     }
   </style>

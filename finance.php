@@ -10,11 +10,11 @@ $expenses = (float)($tot['expenses'] ?? 0);
 $salaries = (float)($tot['salaries'] ?? 0);
 $overheads = (float)($tot['overheads'] ?? 0);
 $profit = (float)($tot['profit'] ?? 0);
-$outstanding = max(0, ($expenses + $salaries + $overheads) - $payments);
+$outstanding = (float)($tot['total_unreceived'] ?? 0);
 
 $recent_unreceived=[];
 try {
-  $stmt=db()->prepare("SELECT id,invoice_no,client_name,amount,due_date,status FROM unreceived_payments WHERE workspace_id=? ORDER BY id DESC LIMIT 6");
+  $stmt=db()->prepare("SELECT fr.id, fr.invoice_no, fr.invoice_type, fr.status, fr.due_date, (fr.expected_amount-fr.received_amount) AS balance_due, c.name AS client_name, p.name AS project_name FROM finance_receivables fr LEFT JOIN clients c ON c.id=fr.client_id LEFT JOIN projects p ON p.id=fr.project_id WHERE fr.workspace_id=? AND fr.status IN ('pending','partial') ORDER BY fr.due_date ASC LIMIT 6");
   $stmt->execute([$ws]);
   $recent_unreceived=$stmt->fetchAll();
 } catch (Throwable $e) {
@@ -34,13 +34,13 @@ try {
   .metric-label{font-size:.92rem;color:rgba(225,225,225,.68);text-transform:uppercase;letter-spacing:.02em}
   .metric-value{font-size:2.7rem;line-height:1.12;margin-top:.3rem}
   .metric-trend{font-size:.95rem;margin-left:.35rem}
-  .trend-up{color:#70d39a}.trend-warn{color:#f6d469}.trend-down{color:#ff8f70}
+  .trend-up{color:#70d39a}.trend-warn{color:#ffcc00}.trend-down{color:#ff8f70}
   .fin-grid{display:grid;grid-template-columns:1fr 1.25fr;gap:1rem;margin-top:1rem}
   .panel{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));overflow:hidden}
   .panel-head{padding:.85rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);font-size:1.9rem;font-weight:500}
   .panel-body{padding:.95rem 1rem}
   .donut-wrap{height:315px;display:flex;align-items:center;justify-content:center;position:relative}
-  .donut{width:250px;height:250px;border-radius:50%;background:conic-gradient(#f6d469 0 45%, #f0bf46 45% 70%, #d17a3f 70% 84%, #617c76 84% 100%);position:relative}
+  .donut{width:250px;height:250px;border-radius:50%;background:conic-gradient(#ffcc00 0 45%, #f0bf46 45% 70%, #d17a3f 70% 84%, #617c76 84% 100%);position:relative}
   .donut:after{content:'';position:absolute;inset:24%;background:#101010;border-radius:50%;border:1px solid rgba(255,255,255,.08)}
   .donut-center{position:absolute;text-align:center;z-index:2}
   .donut-center .small{color:rgba(220,220,220,.68)}
@@ -57,7 +57,7 @@ try {
   .fin-table table{width:100%;border-collapse:collapse}
   .fin-table th,.fin-table td{padding:.75rem .8rem;border-bottom:1px solid rgba(255,255,255,.08)}
   .fin-table th{background:rgba(255,255,255,.03);color:rgba(226,226,226,.82);font-weight:600}
-  .amount-badge{display:inline-block;padding:.3rem .55rem;border-radius:8px;background:rgba(246,212,105,.16);border:1px solid rgba(246,212,105,.35);color:#f6d469}
+  .amount-badge{display:inline-block;padding:.3rem .55rem;border-radius:8px;background:rgba(246,212,105,.16);border:1px solid rgba(246,212,105,.35);color:#ffcc00}
   .overdue{color:#ff8f70}
   @media (max-width: 1200px){.fin-grid{grid-template-columns:1fr}}
 </style>
@@ -82,10 +82,10 @@ try {
     </div>
 
     <div class="row g-3">
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Income</div><div class="metric-value">$<?=number_format($payments,0)?><span class="metric-trend trend-up">↗ 2.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Profit</div><div class="metric-value">$<?=number_format($profit,0)?><span class="metric-trend trend-up">↗ 1.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Expenses</div><div class="metric-value">$<?=number_format($expenses+$salaries+$overheads,0)?><span class="metric-trend trend-down">↘ 4.0%</span></div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Outstanding</div><div class="metric-value" style="color:#f6d469">$<?=number_format($outstanding,0)?><span class="metric-trend trend-warn">↗ 2.0%</span></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Received Payments</div><div class="metric-value">$<?=number_format($payments,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Total Profit</div><div class="metric-value">$<?=number_format($profit,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Expenses</div><div class="metric-value">$<?=number_format($expenses+$salaries+$overheads,0)?></div></div></div>
+      <div class="col-md-6 col-xl-3"><div class="metric-card"><div class="metric-label">Unreceived / Unpaid</div><div class="metric-value" style="color:#ffcc00">$<?=number_format($outstanding,0)?></div></div></div>
     </div>
 
     <div class="fin-grid">
@@ -95,10 +95,9 @@ try {
           <div class="row">
             <div class="col-md-5">
               <ul class="list-unstyled legend mt-3">
-                <li><span class="dot" style="background:#f6d469"></span>Client A</li>
-                <li><span class="dot" style="background:#f0bf46"></span>Client B</li>
-                <li><span class="dot" style="background:#d17a3f"></span>Client C</li>
-                <li><span class="dot" style="background:#617c76"></span>Client D</li>
+                <li><span class="dot" style="background:#ffcc00"></span>Retainer: $<?=number_format((float)($tot['retainer_revenue'] ?? 0),2)?></li>
+                <li><span class="dot" style="background:#f0bf46"></span>Hourly: $<?=number_format((float)($tot['hourly_revenue'] ?? 0),2)?></li>
+                <li><span class="dot" style="background:#d17a3f"></span>Fixed Project: $<?=number_format((float)($tot['fixed_revenue'] ?? 0),2)?></li>
               </ul>
             </div>
             <div class="col-md-7">
@@ -117,8 +116,8 @@ try {
           <div class="chart-box">
             <div class="chart-grid"></div>
             <svg class="line" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polyline points="0,78 18,72 36,58 54,53 72,30 90,27" fill="none" stroke="#f6d469" stroke-width="1.2" />
-              <circle cx="0" cy="78" r="1.8" fill="#f6d469"/><circle cx="18" cy="72" r="1.8" fill="#f6d469"/><circle cx="36" cy="58" r="1.8" fill="#f6d469"/><circle cx="54" cy="53" r="1.8" fill="#f6d469"/><circle cx="72" cy="30" r="1.8" fill="#f6d469"/><circle cx="90" cy="27" r="1.8" fill="#f6d469"/>
+              <polyline points="0,78 18,72 36,58 54,53 72,30 90,27" fill="none" stroke="#ffcc00" stroke-width="1.2" />
+              <circle cx="0" cy="78" r="1.8" fill="#ffcc00"/><circle cx="18" cy="72" r="1.8" fill="#ffcc00"/><circle cx="36" cy="58" r="1.8" fill="#ffcc00"/><circle cx="54" cy="53" r="1.8" fill="#ffcc00"/><circle cx="72" cy="30" r="1.8" fill="#ffcc00"/><circle cx="90" cy="27" r="1.8" fill="#ffcc00"/>
             </svg>
             <div class="chart-bars"><div class="bar bar1"></div><div class="bar bar2"></div><div class="bar bar3"></div><div class="bar bar4"></div><div class="bar bar5"></div><div class="bar bar6"></div></div>
           </div>
@@ -128,19 +127,20 @@ try {
 
     <div class="fin-table mt-3">
       <table>
-        <thead><tr><th>Task / Invoice</th><th>Invoice</th><th>Status</th><th>Amount</th><th></th></tr></thead>
+        <thead><tr><th>Client / Project</th><th>Invoice</th><th>Type</th><th>Status</th><th>Amount Due</th><th></th></tr></thead>
         <tbody>
           <?php foreach($recent_unreceived as $r): ?>
             <tr>
-              <td><?=h($r['client_name'])?></td>
+              <td><?=h(($r['client_name'] ?? '-') . (!empty($r['project_name']) ? (' — ' . $r['project_name']) : ''))?></td>
               <td><?=h($r['invoice_no'] ?: ('INV-'.str_pad((string)$r['id'],4,'0',STR_PAD_LEFT)))?></td>
+              <td><?=h($r['invoice_type'] ?? 'project_fixed')?></td>
               <td class="<?= (stripos((string)$r['status'],'overdue')!==false) ? 'overdue' : '' ?>"><?=h($r['status'] ?: 'Pending')?></td>
-              <td><span class="amount-badge"><?=number_format((float)$r['amount'],2)?></span></td>
+              <td><span class="amount-badge"><?=number_format((float)$r['balance_due'],2)?></span></td>
               <td class="text-end"><a class="btn btn-sm btn-outline-light" href="unreceived_payments.php">View</a></td>
             </tr>
           <?php endforeach; ?>
           <?php if(!$recent_unreceived): ?>
-            <tr><td colspan="5" class="text-muted">No pending invoices. Great work.</td></tr>
+            <tr><td colspan="6" class="text-muted">No pending invoices. Great work.</td></tr>
           <?php endif; ?>
         </tbody>
       </table>

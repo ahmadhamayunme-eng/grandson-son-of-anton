@@ -200,20 +200,6 @@ try {
   $attachments_ready=false;
 }
 
-function tv_initials($name){
-  $name=trim((string)$name);
-  if($name==='') return '?';
-  $parts=preg_split('/\s+/', $name);
-  $a=isset($parts[0][0]) ? strtoupper($parts[0][0]) : '';
-  $b='';
-  if(count($parts)>1){
-    $last=$parts[count($parts)-1];
-    $b=isset($last[0]) ? strtoupper($last[0]) : '';
-  } elseif(isset($parts[0][1])) {
-    $b=strtoupper($parts[0][1]);
-  }
-  return $a.$b;
-}
 
 function tv_priority_from_task($task){
   $status=strtolower((string)(isset($task['status']) ? $task['status'] : ''));
@@ -246,10 +232,10 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
     $visited[$cid] = 1;
     $pad = min(60, $level*20);
     $author=(string)$c['author'];
-    $initials = tv_initials($author);
+    $authorId=(int)($c['author_id'] ?? 0);
     echo '<div class="comment-thread-item mb-3" style="margin-left:'.$pad.'px;">';
     echo '<div class="d-flex gap-3">';
-    echo '<div class="comment-avatar">'.h($initials).'</div>';
+    echo user_avatar_html($authorId, $author, 'comment-avatar');
     echo '<div class="comment-body-wrap flex-grow-1">';
     echo '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><div class="fw-semibold">'.h($author).'</div><div class="text-muted small">'.h($c['created_at']).'</div></div>';
     echo '<div class="comment-copy mt-2">'.nl2br(h($c['body'])).'</div>';
@@ -273,7 +259,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-meta{color:rgba(214,221,242,.78);font-size:1rem;margin-top:.25rem}
   .task-tabs{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.9rem}
   .task-tab{padding:.5rem .95rem;border-radius:.65rem;border:1px solid rgba(255,255,255,.17);text-decoration:none;color:rgba(224,224,224,.88);background:rgba(255,255,255,.05)}
-  .task-tab.active{color:#ffe5a4;border-color:rgba(248,217,120,.5);box-shadow:inset 0 -2px 0 #f8d978;background:rgba(248,217,120,.16)}
+  .task-tab.active{color:#ffe5a4;border-color:rgba(248,217,120,.5);box-shadow:inset 0 -2px 0 #ffcc00;background:rgba(248,217,120,.16)}
   .task-actions{display:flex;gap:.55rem;flex-wrap:wrap;justify-content:flex-end}
   .task-btn-outline{border:1px solid rgba(255,255,255,.26);color:#eff3ff;background:rgba(255,255,255,.05)}
   .task-btn-outline:hover{background:rgba(255,255,255,.13);color:#fff}
@@ -284,10 +270,10 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-chip{display:inline-flex;align-items:center;padding:.36rem .7rem;border-radius:999px;border:1px solid rgba(255,255,255,.15);font-size:.84rem;background:rgba(255,255,255,.06)}
   .priority-critical{border-color:rgba(255,123,142,.45);color:#ffb3c0}
   .priority-high{border-color:rgba(255,188,116,.42);color:#ffd09e}
-  .priority-medium{border-color:rgba(246,212,105,.42);color:#f8d978}
+  .priority-medium{border-color:rgba(246,212,105,.42);color:#ffcc00}
   .priority-low{border-color:rgba(132,235,169,.35);color:#8de9b2}
   .assignee-stack{display:flex;flex-wrap:wrap;gap:.4rem}
-  .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
+  .avatar-pill{width:33px;height:33px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;background:linear-gradient(140deg,#ffcc00,#9d9d9d);color:#161b2a;border:1px solid rgba(255,255,255,.35)}
   .task-section-title{font-size:1.15rem;font-weight:600;margin-bottom:.65rem}
   .task-description{padding:1rem;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(18,18,18,.68);line-height:1.7;color:rgba(233,233,233,.93)}
   .task-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.85rem}
@@ -295,7 +281,8 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
   .task-info-box .label{color:rgba(204,204,204,.7);font-size:.8rem}
   .task-info-box .value{font-size:.93rem;margin-top:.2rem}
   .file-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(14,14,14,.62);margin-bottom:.5rem}
-  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#f8d978,#9d9d9d);color:#12131b}
+  .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:linear-gradient(140deg,#ffcc00,#9d9d9d);color:#12131b}
+  .avatar-pill,.comment-avatar{object-fit:cover;overflow:hidden}
   .comment-body-wrap{padding:.75rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)}
   .comment-copy{color:rgba(242,242,242,.92);line-height:1.62}
   .task-panel .form-control,.task-panel .form-select,.task-comment-form textarea{background:rgba(16,16,16,.82);border-color:rgba(255,255,255,.2);color:#ececf0}
@@ -330,7 +317,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
           </div>
           <div class="assignee-stack">
             <?php foreach($assignees as $asg): ?>
-              <span class="avatar-pill" title="<?=h($asg['name'])?>"><?=h(tv_initials($asg['name']))?></span>
+              <?= user_avatar_html((int)$asg['id'], (string)$asg['name'], 'avatar-pill') ?>
             <?php endforeach; ?>
             <?php if(!$assignees): ?><span class="text-muted small">No assignees</span><?php endif; ?>
           </div>
