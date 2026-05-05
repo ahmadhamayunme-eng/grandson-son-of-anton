@@ -12,19 +12,8 @@ if (in_array($role, ['Developer', 'SEO'], true)) {
 }
 
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/lib/finance.php';
 $pdo = db();
 $ws = auth_workspace_id();
-
-function safe_scalar(PDO $pdo, string $sql, array $params = [], float $default = 0.0): float {
-  try {
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
-    return (float)$st->fetchColumn();
-  } catch (Throwable $e) {
-    return $default;
-  }
-}
 
 function safe_rows(PDO $pdo, string $sql, array $params = []): array {
   try {
@@ -36,205 +25,130 @@ function safe_rows(PDO $pdo, string $sql, array $params = []): array {
   }
 }
 
-$clients = (int)$pdo->query("SELECT COUNT(*) c FROM clients WHERE workspace_id=$ws")->fetch()['c'];
-$projects = (int)$pdo->query("SELECT COUNT(*) c FROM projects WHERE workspace_id=$ws")->fetch()['c'];
-$tasks = (int)$pdo->query("SELECT COUNT(*) c FROM tasks WHERE workspace_id=$ws AND status IN ('To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)')")->fetch()['c'];
-
-$finance = finance_totals($ws);
-$monthlyRevenue = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(CURDATE(), '%Y-%m')", [$ws]);
-$pendingInvoices = safe_scalar($pdo, "SELECT COALESCE(SUM(expected_amount - received_amount),0) FROM finance_receivables WHERE workspace_id=? AND status IN ('pending','partial')", [$ws]);
-
-$myTasks = safe_rows($pdo, 'SELECT t.id, t.title, t.status, p.name AS project_name
-  FROM tasks t
-  JOIN projects p ON p.id=t.project_id
-  WHERE t.workspace_id=?
-  ORDER BY t.updated_at DESC, t.id DESC
-  LIMIT 4', [$ws]);
-
-$recentProjects = safe_rows($pdo, 'SELECT p.id, p.name, c.name AS client_name, ps.name AS status_name
-  FROM projects p
-  JOIN clients c ON c.id=p.client_id
-  JOIN project_statuses ps ON ps.id=p.status_id
-  WHERE p.workspace_id=?
-  ORDER BY p.updated_at DESC, p.id DESC
-  LIMIT 4', [$ws]);
-
-$days = [];
-$taskSeries = [];
-$clientSeries = [];
-$taskMap = [];
-foreach (safe_rows($pdo, "SELECT DATE(updated_at) d, COUNT(*) c FROM tasks WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)", [$ws]) as $row) {
-  $taskMap[$row['d']] = (int)$row['c'];
-}
-$clientMap = [];
-foreach (safe_rows($pdo, "SELECT DATE(updated_at) d, COUNT(*) c FROM clients WHERE workspace_id=? AND updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(updated_at)", [$ws]) as $row) {
-  $clientMap[$row['d']] = (int)$row['c'];
-}
-
-for ($i = 6; $i >= 0; $i--) {
-  $d = date('Y-m-d', strtotime("-$i day"));
-  $days[] = date('M j', strtotime($d));
-  $taskSeries[] = $taskMap[$d] ?? 0;
-  $clientSeries[] = $clientMap[$d] ?? 0;
-}
-
-function status_chip(string $status): string {
+function status_class(string $status): string {
   $s = strtolower($status);
-  if (strpos($s, 'progress') !== false || strpos($s, 'active') !== false || $s === 'to do') return 'chip-yellow';
-  if (strpos($s, 'approved') !== false || strpos($s, 'complete') !== false || $s === 'done') return 'chip-green';
-  if (strpos($s, 'hold') !== false || strpos($s, 'pending') !== false || strpos($s, 'blocked') !== false) return 'chip-red';
-  return 'chip-purple';
+  if (strpos($s, 'block') !== false || strpos($s, 'hold') !== false || strpos($s, 'pending') !== false || strpos($s, 'overdue') !== false) return 'event-critical';
+  if (strpos($s, 'review') !== false || strpos($s, 'need') !== false) return 'event-review';
+  if (strpos($s, 'approved') !== false || strpos($s, 'submit') !== false || strpos($s, 'done') !== false || strpos($s, 'complete') !== false) return 'event-ontrack';
+  return 'event-milestone';
 }
-function make_points(array $values, int $width = 560, int $height = 190): string {
-  $count = max(count($values), 2);
-  $max = max(max($values), 1);
-  $step = $width / ($count - 1);
-  $pts = [];
-  foreach ($values as $i => $v) {
-    $x = (int)round($i * $step);
-    $y = (int)round($height - (($v / $max) * ($height - 24)));
-    $pts[] = $x . ',' . $y;
-  }
-  return implode(' ', $pts);
+
+$month = $_GET['month'] ?? date('Y-m');
+if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+  $month = date('Y-m');
 }
-$taskPoints = make_points($taskSeries);
-$clientPoints = make_points($clientSeries);
-$taskMax = max($taskSeries);
-$clientMax = max($clientSeries);
-$monthKey = date('Y-m');
-$currentMonthPayments = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=?", [$ws, $monthKey]);
-$previousMonthPayments = safe_scalar($pdo, "SELECT COALESCE(SUM(amount),0) FROM finance_payments WHERE workspace_id=? AND DATE_FORMAT(received_date, '%Y-%m')=DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')", [$ws]);
-$changePct = $previousMonthPayments > 0 ? (($currentMonthPayments - $previousMonthPayments) / $previousMonthPayments) * 100 : 0;
+$monthStart = $month . '-01';
+$monthEnd = date('Y-m-t', strtotime($monthStart));
+$calStart = date('Y-m-d', strtotime('monday this week', strtotime($monthStart)));
+$calEnd = date('Y-m-d', strtotime('sunday this week', strtotime($monthEnd)));
+$prevMonth = date('Y-m', strtotime($monthStart . ' -1 month'));
+$nextMonth = date('Y-m', strtotime($monthStart . ' +1 month'));
+
+$tasks = safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date, p.name AS project_name,
+    GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS assignees
+  FROM tasks t
+  JOIN projects p ON p.id=t.project_id AND p.workspace_id=t.workspace_id
+  LEFT JOIN task_assignees ta ON ta.task_id=t.id
+  LEFT JOIN users u ON u.id=ta.user_id
+  WHERE t.workspace_id=? AND t.due_date IS NOT NULL AND DATE(t.due_date) BETWEEN ? AND ?
+  GROUP BY t.id, t.title, t.status, t.due_date, p.name
+  ORDER BY t.due_date ASC, t.id DESC", [$ws, $calStart, $calEnd]);
+
+$calendarMap = [];
+foreach ($tasks as $t) {
+  $d = date('Y-m-d', strtotime((string)$t['due_date']));
+  if (!isset($calendarMap[$d])) $calendarMap[$d] = [];
+  $calendarMap[$d][] = $t;
+}
+
+$workingNow = safe_rows($pdo, "SELECT u.id, u.name,
+    GROUP_CONCAT(DISTINCT CONCAT(t.title, ' (', DATE_FORMAT(t.due_date, '%b %e'), ')') ORDER BY t.due_date ASC SEPARATOR ' • ') AS items
+  FROM task_assignees ta
+  JOIN users u ON u.id=ta.user_id
+  JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
+  WHERE t.status IN ('To Do','In Progress','Completed (Needs Manager Review)')
+  GROUP BY u.id, u.name
+  ORDER BY u.name ASC
+  LIMIT 8", [$ws]);
+
+$dueSoon = safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date,
+    GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS assignees
+  FROM tasks t
+  LEFT JOIN task_assignees ta ON ta.task_id=t.id
+  LEFT JOIN users u ON u.id=ta.user_id
+  WHERE t.workspace_id=? AND t.due_date IS NOT NULL AND DATE(t.due_date) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+  GROUP BY t.id, t.title, t.status, t.due_date
+  ORDER BY t.due_date ASC
+  LIMIT 10", [$ws]);
+
+$riskBlockers = safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date,
+    GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS assignees
+  FROM tasks t
+  LEFT JOIN task_assignees ta ON ta.task_id=t.id
+  LEFT JOIN users u ON u.id=ta.user_id
+  WHERE t.workspace_id=? AND (
+    LOWER(t.status) LIKE '%blocked%' OR LOWER(t.status) LIKE '%hold%' OR LOWER(t.status) LIKE '%pending%' OR
+    (t.due_date IS NOT NULL AND DATE(t.due_date) < CURDATE() AND t.status NOT IN ('Approved (Ready to Submit)','Submitted to Client'))
+  )
+  GROUP BY t.id, t.title, t.status, t.due_date
+  ORDER BY (t.due_date IS NULL), t.due_date ASC
+  LIMIT 10", [$ws]);
+
+$workload = safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(u.role), ''), 'General') AS team,
+    COUNT(DISTINCT ta.task_id) AS active_tasks,
+    COUNT(DISTINCT u.id) AS members,
+    ROUND((COUNT(DISTINCT ta.task_id) / NULLIF(COUNT(DISTINCT u.id) * 5, 0)) * 100, 0) AS capacity
+  FROM users u
+  LEFT JOIN task_assignees ta ON ta.user_id=u.id
+  LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=? AND t.status IN ('To Do','In Progress','Completed (Needs Manager Review)')
+  WHERE u.workspace_id=? AND u.is_active=1
+  GROUP BY team
+  ORDER BY active_tasks DESC
+  LIMIT 6", [$ws, $ws]);
 ?>
 <style>
-  .dashboard-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
-  .dashboard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .dashboard-title { margin: 0; font-size: 2rem; font-weight: 600; }
-  .top-icons { display: flex; align-items: center; gap: 12px; color: rgba(236,236,240,.76); }
-  .top-dot { width: 24px; height: 24px; border-radius: 50%; background: #8a8a8a; display: inline-block; }
-  .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,23,23,.92), rgba(14,14,14,.9)); padding: 14px 16px; min-height: 98px; }
-  .kpi-label { color: rgba(236,236,236,.72); font-size: .9rem; margin-bottom: 4px; }
-  .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
-  .kpi-icon { color: #ffcc00; margin-right: 8px; }
-  .kpi-red .kpi-icon { color: #f3797e; }
-  .kpi-green .kpi-icon { color: #55cb90; }
-  .kpi-change { font-size: .95rem; margin-left: 6px; }
-  .pos { color: #55cb90; }
-  .neg { color: #f3797e; }
-  .panel { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(120deg, rgba(24,24,24,.88), rgba(16,16,16,.88)); }
-  .panel-head { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.07); display: flex; justify-content: space-between; align-items: center; font-size: 1.6rem; font-weight: 600; }
-  .task-row, .project-row { display: flex; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .task-row:last-child, .project-row:last-child { border-bottom: 0; }
-  .task-title, .project-title { color: #f0f0f3; text-decoration: none; font-weight: 500; font-size: 1.15rem; }
-  .task-meta, .project-meta { color: rgba(236,236,240,.62); font-size: .92rem; }
-  .chip { border-radius: 999px; padding: 3px 10px; font-size: .78rem; border: 1px solid transparent; align-self: center; }
-  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #ffcc00; }
-  .chip-green { background: rgba(85,203,144,.14); border-color: rgba(85,203,144,.3); color: #7ae7af; }
-  .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
-  .chip-purple { background: rgba(175,175,175,.16); border-color: rgba(175,175,175,.32); color: #d0d0d0; }
-  .chart-wrap { padding: 8px 14px 14px; }
-  .chart-legend { display: flex; justify-content: space-between; gap: 18px; padding: 8px 16px 14px; color: rgba(236,236,236,.72); font-size: .9rem; }
-  .chart-legend-left { display: flex; gap: 16px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; }
-  .legend-yellow { background: #ffcc00; }
-  .legend-purple { background: #a1a1a1; }
-  .finance-box { padding: 14px 16px; }
-  .finance-line { border-bottom: 1px solid rgba(255,255,255,.08); padding: 11px 0; }
-  .finance-label { color: rgba(236,236,236,.68); }
-  .finance-value { font-size: 2rem; font-weight: 600; line-height: 1.2; }
+.dashboard-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}.dash-card{border:1px solid rgba(255,255,255,.08);border-radius:14px;background:linear-gradient(120deg,rgba(24,24,24,.88),rgba(16,16,16,.88))}.dash-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);font-size:1.3rem;font-weight:600;display:flex;justify-content:space-between;align-items:center}.cal-wrap{padding:10px}.cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.day-name{padding:6px 8px;color:rgba(236,236,240,.66);font-size:.85rem}.day{border:1px solid rgba(255,255,255,.09);border-radius:10px;min-height:130px;padding:8px;background:rgba(255,255,255,.02)}.day.muted{opacity:.45}.date{font-size:.82rem;color:rgba(236,236,240,.75);margin-bottom:6px}.event{display:block;padding:5px 6px;border-radius:8px;margin-bottom:6px;font-size:.78rem;text-decoration:none;color:#f0f0f3;border:1px solid transparent}.event small{display:block;color:rgba(236,236,240,.7)}.event-critical{background:rgba(243,111,117,.14);border-color:rgba(243,111,117,.34)}.event-review{background:rgba(246,212,105,.14);border-color:rgba(246,212,105,.36)}.event-ontrack{background:rgba(85,203,144,.14);border-color:rgba(85,203,144,.3)}.event-milestone{background:rgba(135,208,255,.14);border-color:rgba(135,208,255,.34)}.side-stack{display:grid;gap:16px}.list{padding:12px 14px}.row-item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.row-item:last-child{border-bottom:0}.meta{font-size:.82rem;color:rgba(236,236,240,.65)}.pill{font-size:.72rem;border-radius:999px;padding:2px 8px;border:1px solid rgba(255,255,255,.2)}.overdue{color:#ff9aa0}.legend{display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px 14px}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px}.bar{height:8px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}.bar>span{display:block;height:100%;background:linear-gradient(90deg,#ffcc00,#55cb90)}@media (max-width:1100px){.dashboard-grid{grid-template-columns:1fr}.cal-week{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:700px){.cal-week{grid-template-columns:1fr}}
 </style>
 
-<div class="dashboard-shell">
-  <div class="dashboard-top">
-    <h1 class="dashboard-title">Dashboard</h1>
-  </div>
-
-  <div class="row g-3 mb-3">
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card"><div class="kpi-label"><span class="kpi-icon">▣</span>Active Tasks</div><div class="kpi-value"><?=h($tasks)?></div></div></div>
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card"><div class="kpi-label"><span class="kpi-icon">◫</span>Active Projects</div><div class="kpi-value"><?=h($projects)?></div></div></div>
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-green"><div class="kpi-label"><span class="kpi-icon">↗</span>Monthly Revenue</div><div class="kpi-value">$<?=number_format($monthlyRevenue, 2)?><span class="kpi-change <?= $changePct >= 0 ? 'pos' : 'neg' ?>"><?=($changePct >= 0 ? '+' : '') . number_format($changePct, 1)?>%</span></div></div></div>
-    <div class="col-lg-3 col-sm-6"><div class="kpi-card kpi-red"><div class="kpi-label"><span class="kpi-icon">✉</span>Pending Invoices</div><div class="kpi-value">$<?=number_format($pendingInvoices, 2)?></div></div></div>
-  </div>
-
-  <div class="row g-3 mb-3">
-    <div class="col-lg-6">
-      <section class="panel h-100">
-        <div class="panel-head">My Tasks</div>
-        <?php if (!$myTasks): ?>
-          <div class="p-3 text-muted">No tasks yet.</div>
-        <?php else: foreach ($myTasks as $t): ?>
-          <article class="task-row">
-            <div>
-              <a class="task-title" href="task_view.php?id=<?=$t['id']?>">◉ <?=h($t['title'])?></a>
-              <div class="task-meta"><?=h($t['project_name'])?></div>
-            </div>
-            <span class="chip <?=status_chip($t['status'])?>"><?=h($t['status'])?></span>
-          </article>
-        <?php endforeach; endif; ?>
-      </section>
-    </div>
-    <div class="col-lg-6">
-      <section class="panel h-100">
-        <div class="panel-head">Weekly Report <span class="chip chip-purple">Weekly ▾</span></div>
-        <div class="chart-wrap">
-          <svg viewBox="0 0 560 210" width="100%" height="210" role="img" aria-label="Weekly report chart">
-            <line x1="0" y1="190" x2="560" y2="190" stroke="rgba(255,255,255,.12)" />
-            <line x1="0" y1="145" x2="560" y2="145" stroke="rgba(255,255,255,.08)" />
-            <line x1="0" y1="100" x2="560" y2="100" stroke="rgba(255,255,255,.08)" />
-            <line x1="0" y1="55" x2="560" y2="55" stroke="rgba(255,255,255,.08)" />
-            <polyline fill="none" stroke="#ffcc00" stroke-width="4" points="<?=h($taskPoints)?>" />
-            <polyline fill="none" stroke="#a3a3a3" stroke-width="4" points="<?=h($clientPoints)?>" />
-          </svg>
-        </div>
-        <div class="chart-legend">
-          <div class="chart-legend-left">
-            <span><span class="legend-dot legend-yellow"></span>Active Tasks</span>
-            <span><span class="legend-dot legend-purple"></span>Client Activity</span>
-          </div>
-          <div class="text-muted">Last 7 days</div>
-        </div>
-      </section>
-    </div>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-lg-8">
-      <section class="panel h-100">
-        <div class="panel-head">Recent Projects</div>
-        <?php if (!$recentProjects): ?>
-          <div class="p-3 text-muted">No projects yet.</div>
-        <?php else: foreach ($recentProjects as $p): ?>
-          <article class="project-row">
-            <div>
-              <a class="project-title" href="project_view.php?id=<?=$p['id']?>"><?=h($p['name'])?></a>
-              <div class="project-meta"><?=h($p['client_name'])?></div>
-            </div>
-            <span class="chip <?=status_chip($p['status_name'])?>"><?=h($p['status_name'])?></span>
-          </article>
-        <?php endforeach; endif; ?>
-      </section>
-    </div>
-    <div class="col-lg-4">
-      <section class="panel h-100">
-        <div class="panel-head">Finance Overview</div>
-        <div class="finance-box">
-          <div class="finance-line">
-            <div class="finance-label">Current Balance</div>
-            <div class="finance-value">$<?=number_format($finance['profit'], 2)?></div>
-          </div>
-          <div class="finance-line">
-            <div class="finance-label">Payments Received</div>
-            <div class="finance-value">$<?=number_format($finance['payments'], 2)?></div>
-          </div>
-          <div class="finance-line">
-            <div class="finance-label">Unreceived Payments</div>
-            <div class="finance-value">$<?=number_format($pendingInvoices, 2)?></div>
-          </div>
-          <div class="pt-3 text-muted">Last 7d: Tasks <?=h((string)$taskMax)?> · Clients <?=h((string)$clientMax)?></div>
-        </div>
-      </section>
-    </div>
-  </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="m-0">Agency Calendar Command Center</h1>
+  <div class="d-flex gap-2"><a class="btn btn-sm btn-outline-light" href="?month=<?=h($prevMonth)?>">← Prev</a><span class="btn btn-sm btn-dark disabled"><?=h(date('F Y', strtotime($monthStart)))?></span><a class="btn btn-sm btn-outline-light" href="?month=<?=h($nextMonth)?>">Next →</a></div>
 </div>
 
-<?php require_once __DIR__ . '/layout_end.php'; ?>
+<div class="dashboard-grid">
+  <section class="dash-card">
+    <div class="dash-head">Monthly Task Calendar</div>
+    <div class="cal-wrap">
+      <div class="cal-week"><?php foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $dn): ?><div class="day-name"><?=h($dn)?></div><?php endforeach; ?></div>
+      <div class="cal-week">
+        <?php for($d=strtotime($calStart); $d<=strtotime($calEnd); $d=strtotime('+1 day',$d)):
+          $key=date('Y-m-d',$d); $inMonth=(date('Y-m',$d)===$month); ?>
+          <div class="day <?=$inMonth?'':'muted'?>">
+            <div class="date"><?=h(date('M j',$d))?></div>
+            <?php if (empty($calendarMap[$key])): ?><div class="meta">No tasks</div><?php else: foreach(array_slice($calendarMap[$key],0,3) as $e):
+              $isOverdue = strtotime((string)$e['due_date']) < strtotime(date('Y-m-d')) && !in_array($e['status'], ['Approved (Ready to Submit)','Submitted to Client'], true); ?>
+              <a class="event <?=status_class((string)$e['status'])?>" href="task_view.php?id=<?=$e['id']?>">
+                <?=h($e['title'])?>
+                <small><?=h($e['assignees'] ?: 'Unassigned')?> · <?=h($e['status'])?><?= $isOverdue ? ' · <span class="overdue">Overdue</span>' : '' ?></small>
+              </a>
+            <?php endforeach; if(count($calendarMap[$key])>3): ?><div class="meta">+<?=count($calendarMap[$key])-3?> more</div><?php endif; endif; ?>
+          </div>
+        <?php endfor; ?>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#f3797e"></span>Critical deadline</span>
+      <span><span class="dot" style="background:#ffcc00"></span>Needs review</span>
+      <span><span class="dot" style="background:#55cb90"></span>On track</span>
+      <span><span class="dot" style="background:#a4a4ff"></span>Finance/Admin</span>
+      <span><span class="dot" style="background:#87d0ff"></span>Client milestone</span>
+    </div>
+  </section>
+
+  <div class="side-stack">
+    <section class="dash-card"><div class="dash-head">Who is Working on What</div><div class="list"><?php if(!$workingNow): ?><div class="meta">No active assignments.</div><?php else: foreach($workingNow as $w): ?><div class="row-item"><div><?=h($w['name'])?></div><div class="meta"><?=h($w['items'] ?: 'No active tasks')?></div></div><?php endforeach; endif; ?></div></section>
+    <section class="dash-card"><div class="dash-head">Due Soon (next 7 days)</div><div class="list"><?php if(!$dueSoon): ?><div class="meta">No upcoming deadlines in the next 7 days.</div><?php else: foreach($dueSoon as $d): ?><div class="row-item"><div><a href="task_view.php?id=<?=$d['id']?>"><?=h($d['title'])?></a></div><div class="meta"><?=h(format_date($d['due_date']))?> · <?=h($d['assignees'] ?: 'Unassigned')?> · <span class="pill"><?=h($d['status'])?></span></div></div><?php endforeach; endif; ?></div></section>
+    <section class="dash-card"><div class="dash-head">Risk & Blockers</div><div class="list"><?php if(!$riskBlockers): ?><div class="meta">No blocked or at-risk tasks right now.</div><?php else: foreach($riskBlockers as $r): ?><div class="row-item"><div><a href="task_view.php?id=<?=$r['id']?>"><?=h($r['title'])?></a></div><div class="meta <?= (!empty($r['due_date']) && strtotime((string)$r['due_date']) < strtotime(date('Y-m-d'))) ? 'overdue' : '' ?>"><?=h($r['status'])?><?= !empty($r['due_date']) ? ' · Due '.h(format_date($r['due_date'])) : '' ?> · <?=h($r['assignees'] ?: 'Unassigned')?></div></div><?php endforeach; endif; ?></div></section>
+    <section class="dash-card"><div class="dash-head">Workload Snapshot</div><div class="list"><?php if(!$workload): ?><div class="meta">No workload data available.</div><?php else: foreach($workload as $wl): $cap=max(0,min(100,(int)$wl['capacity'])); ?><div class="row-item"><div class="d-flex justify-content-between"><span><?=h($wl['team'])?></span><span class="meta"><?=h((string)$wl['active_tasks'])?> tasks / <?=h((string)$wl['members'])?> people</span></div><div class="bar mt-1"><span style="width:<?=$cap?>%"></span></div><div class="meta mt-1">Estimated capacity: <?=$cap?>%</div></div><?php endforeach; endif; ?></div></section>
+  </div>
+</div>
