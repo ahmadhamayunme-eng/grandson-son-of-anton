@@ -3,6 +3,15 @@ require_once __DIR__ . '/layout.php';
 auth_require_any(['Manager','Super Admin']);
 $pdo=db(); $ws=auth_workspace_id(); $u=auth_user();
 
+function mr_task_column_exists(PDO $pdo, string $column): bool {
+  try {
+    $st=$pdo->prepare("SHOW COLUMNS FROM tasks LIKE ?");
+    $st->execute([$column]);
+    return (bool)$st->fetch();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
 
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['disapprove_task'])){
   require_post(); csrf_verify();
@@ -16,10 +25,30 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['disapprove_task'])){
   $task=$find->fetch();
   if(!$task){ flash_set('error','Task was not waiting for manager review.'); redirect('manager_review.php'); }
 
-  $st=$pdo->prepare("UPDATE tasks SET status='In Progress', manager_feedback=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?");
-  $st->execute([$note,$note,now(),$task_id,$ws]);
-  flash_set('success','Task disapproved and returned to In Progress with your note.');
-  redirect('project_view.php?id='.(int)$task['project_id'].'&tab=tasks');
+  $sets=["status='In Progress'"];
+  $params=[];
+  if(mr_task_column_exists($pdo,'manager_feedback')){
+    $sets[]='manager_feedback=?';
+    $params[]=$note;
+  }
+  if(mr_task_column_exists($pdo,'internal_note')){
+    $sets[]='internal_note=?';
+    $params[]=$note;
+  }
+  $sets[]='updated_at=?';
+  $params[]=now();
+  $params[]=$task_id;
+  $params[]=$ws;
+
+  try {
+    $st=$pdo->prepare('UPDATE tasks SET '.implode(', ',$sets).' WHERE id=? AND workspace_id=?');
+    $st->execute($params);
+    flash_set('success','Task disapproved and returned to In Progress with your note.');
+    redirect('project_view.php?id='.(int)$task['project_id'].'&tab=tasks');
+  } catch (Throwable $e) {
+    flash_set('error','Could not disapprove this task. Please try again or contact admin.');
+    redirect('manager_review.php');
+  }
 }
 
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['approve_task'])){
