@@ -63,6 +63,7 @@ foreach (['antonx-logo.png', 'antonx-logo.svg', 'logo.png', 'antonx.png', 'brand
         <div class="sidebar-label">Manager</div>
         <a class="sidebar-dot-item <?=active('manager_review.php', $path)?>" href="manager_review.php">Review Completed Tasks</a>
         <a class="sidebar-dot-item <?=active('manager_submit.php', $path)?>" href="manager_submit.php">Submit to Client</a>
+        <a class="sidebar-dot-item <?=active('completed_task_archive.php', $path)?>" href="completed_task_archive.php">Completed Task Archive</a>
       <?php endif; ?>
 
       <?php if (auth_can_finance()): ?>

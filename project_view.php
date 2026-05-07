@@ -157,6 +157,15 @@ try {
       }
 
       flash_set('success', 'Task created.');
+      if (in_array($status, ['Completed','Completed (Needs Manager Review)'], true)) {
+        redirect('manager_review.php');
+      }
+      if (in_array($status, ['Approved','Approved (Ready to Submit)'], true)) {
+        redirect('manager_submit.php');
+      }
+      if ($status === 'Submitted to Client') {
+        redirect('completed_task_archive.php');
+      }
       redirect("project_view.php?id=$id&tab=tasks");
     }
 
@@ -189,7 +198,7 @@ try {
   $statusesStmt->execute([$ws]);
   $statuses = array_map(fn($r) => $r['name'], $statusesStmt->fetchAll());
   if (!$statuses) {
-    $statuses = ['Backlog','To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)','Submitted to Client'];
+    $statuses = ['To Do','In Progress','Completed','Approved','Submitted to Client'];
   }
 
   $teamStmt = $pdo->prepare("SELECT u.id,u.name,r.name AS role_name
@@ -205,6 +214,7 @@ try {
     LEFT JOIN task_assignees ta ON ta.task_id = t.id
     LEFT JOIN users u ON u.id = ta.user_id
     WHERE t.workspace_id = ? AND t.project_id = ?
+      AND t.status NOT IN ('Completed','Completed (Needs Manager Review)','Approved','Approved (Ready to Submit)','Submitted to Client')
     GROUP BY t.id
     ORDER BY COALESCE(t.due_date, DATE(t.updated_at)) ASC, t.id DESC");
   $tasksStmt->execute([$ws, $id]);
