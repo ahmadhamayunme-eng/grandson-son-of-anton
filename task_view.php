@@ -80,7 +80,7 @@ try {
 } catch (Exception $e) {
   $statuses=[];
 }
-if(!$statuses){ $statuses=['Backlog','To Do','In Progress','Completed (Needs Manager Review)','Approved (Ready to Submit)','Submitted to Client']; }
+if(!$statuses){ $statuses=['To Do','In Progress','Completed','Approved','Submitted to Client']; }
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   require_post(); csrf_verify();
@@ -101,9 +101,24 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
     $new_status=trim(isset($_POST['status']) ? $_POST['status'] : $task['status']);
     $new_note=trim(isset($_POST['internal_note']) ? $_POST['internal_note'] : '');
-    $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
-        ->execute([$new_status,$new_note?:null,now(),$id,$ws]);
+    $now=now();
+    if($new_status==='Submitted to Client'){
+      $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=?")
+          ->execute([$new_status,$new_note?:null,$now,$u['id'],$now,$id,$ws]);
+    } else {
+      $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
+          ->execute([$new_status,$new_note?:null,$now,$id,$ws]);
+    }
     flash_set('success','Task updated.');
+    if($can_manager && in_array($new_status, ['Completed','Completed (Needs Manager Review)'], true)){
+      redirect('manager_review.php');
+    }
+    if($can_manager && in_array($new_status, ['Approved','Approved (Ready to Submit)'], true)){
+      redirect('manager_submit.php');
+    }
+    if($can_manager && $new_status==='Submitted to Client'){
+      redirect('completed_task_archive.php');
+    }
     redirect("task_view.php?id=$id");
   }
 
@@ -143,8 +158,9 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if(!$can_manager){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
     $action=$_POST['manager_action'];
     if($action==='approve'){
-      $pdo->prepare("UPDATE tasks SET status='Approved (Ready to Submit)', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
-      flash_set('success','Task approved.');
+      $pdo->prepare("UPDATE tasks SET status='Approved', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(),$id,$ws]);
+      flash_set('success','Task approved and moved to Submit to Client.');
+      redirect('manager_submit.php');
     } elseif($action==='reject'){
       $reason=trim(isset($_POST['manager_reason']) ? $_POST['manager_reason'] : 'Needs changes.');
       $pdo->prepare("UPDATE tasks SET status='In Progress', internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
@@ -156,10 +172,11 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
   if(isset($_POST['submit_to_client'])){
     if(!$can_manager){ flash_set('error','No permission.'); redirect("task_view.php?id=$id"); }
-    $pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=? WHERE id=? AND workspace_id=?")
-        ->execute([now(),$u['id'],$id,$ws]);
-    flash_set('success','Task marked as Submitted to Client.');
-    redirect("task_view.php?id=$id");
+    $now=now();
+    $pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=?")
+        ->execute([$now,$u['id'],$now,$id,$ws]);
+    flash_set('success','Task marked as Submitted to Client and archived.');
+    redirect('completed_task_archive.php');
   }
 }
 
@@ -424,7 +441,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
         <div class="body">
           <form method="post" class="mb-2">
             <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <button class="btn task-btn-outline w-100" name="manager_action" value="approve">Approve (Ready to Submit)</button>
+            <button class="btn task-btn-outline w-100" name="manager_action" value="approve">Approved</button>
           </form>
           <form method="post">
             <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
@@ -439,7 +456,7 @@ function render_comment_tree($parentId,$byParent,$level=0,$allowReply=true,&$vis
         <div class="body">
           <form method="post">
             <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-            <button class="btn btn-yellow w-100" name="submit_to_client" value="1">Mark Submitted</button>
+            <button class="btn btn-yellow w-100" name="submit_to_client" value="1">Submitted</button>
           </form>
         </div>
       </div>

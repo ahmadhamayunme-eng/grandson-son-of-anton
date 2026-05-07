@@ -1,18 +1,30 @@
 <?php
 require_once __DIR__ . '/layout.php';
 auth_require_any(['Manager','Super Admin']);
-$pdo=db(); $ws=auth_workspace_id();
+$pdo=db(); $ws=auth_workspace_id(); $u=auth_user();
 
-$rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['approve_task'])){
+  require_post(); csrf_verify();
+  $task_id=(int)($_POST['task_id'] ?? 0);
+  if($task_id<=0){ flash_set('error','Invalid task selected.'); redirect('manager_review.php'); }
+  $st=$pdo->prepare("UPDATE tasks SET status='Approved', updated_at=? WHERE id=? AND workspace_id=? AND status IN ('Completed','Completed (Needs Manager Review)')");
+  $st->execute([now(),$task_id,$ws]);
+  flash_set($st->rowCount() ? 'success' : 'error', $st->rowCount() ? 'Task approved and moved to Submit to Client.' : 'Task was not waiting for manager review.');
+  redirect('manager_submit.php');
+}
+
+$stmt=$pdo->prepare("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,
   GROUP_CONCAT(u.name SEPARATOR ', ') AS assignees
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
   JOIN clients c ON c.id=p.client_id
   LEFT JOIN task_assignees ta ON ta.task_id=t.id
   LEFT JOIN users u ON u.id=ta.user_id
-  WHERE t.workspace_id=$ws AND t.status='Completed (Needs Manager Review)'
+  WHERE t.workspace_id=? AND t.status IN ('Completed','Completed (Needs Manager Review)')
   GROUP BY t.id
-  ORDER BY t.updated_at DESC")->fetchAll();
+  ORDER BY t.updated_at DESC");
+$stmt->execute([$ws]);
+$rows=$stmt->fetchAll();
 
 $total=count($rows);
 $unique_clients=[];
@@ -35,13 +47,14 @@ $client_count=count($unique_clients);
   .status-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(246,212,105,.45);background:rgba(246,212,105,.12);color:#ffcc00;font-size:.8rem}
   .assignee-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5e5e5;font-size:.8rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
+  .inline-action{display:inline;margin:0}
 </style>
 
 <div class="manager-shell">
   <div class="manager-head">
     <div>
       <h2 class="manager-title">Manager Review Queue</h2>
-      <div class="manager-sub">Review completed work before approval and client submission.</div>
+      <div class="manager-sub">Completed tasks wait here until a manager approves them.</div>
     </div>
     <div class="manager-badges">
       <span class="manager-badge">Waiting: <?= (int)$total ?></span>
@@ -62,9 +75,14 @@ $client_count=count($unique_clients);
               <div class="queue-meta"><?=h($r['client_name'])?> · <?=h($r['project_name'])?> · Updated <?=h($r['updated_at'])?></div>
             </div>
             <div class="queue-right">
-              <span class="status-chip">Needs Manager Review</span>
+              <span class="status-chip"><?=h($r['status'])?></span>
               <span class="assignee-chip" title="<?=h($r['assignees'] ?? '—')?>"><?=h($r['assignees'] ?? 'Unassigned')?></span>
-              <a class="btn btn-yellow btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open Review</a>
+              <a class="btn btn-outline-light btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open</a>
+              <form class="inline-action" method="post">
+                <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+                <input type="hidden" name="task_id" value="<?= (int)$r['id'] ?>">
+                <button class="btn btn-yellow btn-sm" name="approve_task" value="1">Approved</button>
+              </form>
             </div>
           </div>
         </div>

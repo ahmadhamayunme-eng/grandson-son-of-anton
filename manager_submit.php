@@ -1,18 +1,31 @@
 <?php
 require_once __DIR__ . '/layout.php';
 auth_require_any(['Manager','Super Admin']);
-$pdo=db(); $ws=auth_workspace_id();
+$pdo=db(); $ws=auth_workspace_id(); $u=auth_user();
 
-$rows=$pdo->query("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['submit_task'])){
+  require_post(); csrf_verify();
+  $task_id=(int)($_POST['task_id'] ?? 0);
+  if($task_id<=0){ flash_set('error','Invalid task selected.'); redirect('manager_submit.php'); }
+  $st=$pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=? AND status IN ('Approved','Approved (Ready to Submit)')");
+  $now=now();
+  $st->execute([$now,(int)$u['id'],$now,$task_id,$ws]);
+  flash_set($st->rowCount() ? 'success' : 'error', $st->rowCount() ? 'Task submitted to client and archived.' : 'Task was not ready to submit.');
+  redirect('completed_task_archive.php');
+}
+
+$stmt=$pdo->prepare("SELECT t.id,t.title,t.status,t.updated_at,p.name AS project_name,c.name AS client_name,
   GROUP_CONCAT(u.name SEPARATOR ', ') AS assignees
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
   JOIN clients c ON c.id=p.client_id
   LEFT JOIN task_assignees ta ON ta.task_id=t.id
   LEFT JOIN users u ON u.id=ta.user_id
-  WHERE t.workspace_id=$ws AND t.status='Approved (Ready to Submit)'
+  WHERE t.workspace_id=? AND t.status IN ('Approved','Approved (Ready to Submit)')
   GROUP BY t.id
-  ORDER BY t.updated_at DESC")->fetchAll();
+  ORDER BY t.updated_at DESC");
+$stmt->execute([$ws]);
+$rows=$stmt->fetchAll();
 
 $total=count($rows);
 $projects_ready=[];
@@ -35,6 +48,7 @@ $project_count=count($projects_ready);
   .ready-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(87,200,143,.45);background:rgba(87,200,143,.14);color:#8fe8b4;font-size:.8rem}
   .assignee-chip{padding:.3rem .62rem;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5e5e5;font-size:.8rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
+  .inline-action{display:inline;margin:0}
 </style>
 
 <div class="submit-shell">
@@ -62,9 +76,14 @@ $project_count=count($projects_ready);
               <div class="submit-meta"><?=h($r['client_name'])?> · <?=h($r['project_name'])?> · Updated <?=h($r['updated_at'])?></div>
             </div>
             <div class="submit-right">
-              <span class="ready-chip">Ready to Submit</span>
+              <span class="ready-chip"><?=h($r['status'])?></span>
               <span class="assignee-chip" title="<?=h($r['assignees'] ?? '—')?>"><?=h($r['assignees'] ?? 'Unassigned')?></span>
-              <a class="btn btn-yellow btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open & Submit</a>
+              <a class="btn btn-outline-light btn-sm" href="task_view.php?id=<?=h($r['id'])?>">Open</a>
+              <form class="inline-action" method="post">
+                <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+                <input type="hidden" name="task_id" value="<?= (int)$r['id'] ?>">
+                <button class="btn btn-yellow btn-sm" name="submit_task" value="1">Submitted</button>
+              </form>
             </div>
           </div>
         </div>
