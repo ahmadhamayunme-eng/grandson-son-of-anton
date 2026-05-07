@@ -6,6 +6,7 @@ $ws = auth_workspace_id();
 $user = auth_user();
 $role = $user['role_name'] ?? '';
 $can_manage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
+$can_final_status = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
 $isSuperAdmin = $role === 'Super Admin';
 
 $id = (int)($_GET['id'] ?? 0);
@@ -36,6 +37,23 @@ function pv_status_class(string $status): string {
   return 'is-todo';
 }
 
+function pv_task_status_options(PDO $pdo, int $ws, bool $can_final_status): array {
+  try {
+    $st = $pdo->prepare('SELECT name FROM task_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
+    $st->execute([$ws]);
+    $statuses = array_map(fn($r) => $r['name'], $st->fetchAll());
+  } catch (Throwable $e) {
+    $statuses = [];
+  }
+  if (!$statuses) {
+    $statuses = ['To Do','In Progress','Completed','Approved','Submitted to Client'];
+  }
+  if (!$can_final_status) {
+    $statuses = array_values(array_filter($statuses, fn($s) => !in_array($s, ['Approved','Approved (Ready to Submit)','Submitted to Client'], true)));
+  }
+  return $statuses;
+}
+
 try {
   $projectStmt = $pdo->prepare("SELECT p.*, c.name AS client_name, pt.name AS type_name, ps.name AS status_name
     FROM projects p
@@ -55,6 +73,31 @@ try {
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_post();
     csrf_verify();
+
+    if (isset($_POST['update_task_status'])) {
+      if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=tasks"); }
+      $taskUpdateId = (int)($_POST['task_id'] ?? 0);
+      $newStatus = trim((string)($_POST['status'] ?? ''));
+      $allowedStatuses = pv_task_status_options($pdo, $ws, $can_final_status);
+      if ($taskUpdateId <= 0 || $newStatus === '' || !in_array($newStatus, $allowedStatuses, true)) {
+        flash_set('error', 'You cannot set that status.');
+        redirect("project_view.php?id=$id&tab=tasks");
+      }
+
+      $now = now();
+      if ($newStatus === 'Submitted to Client') {
+        $st = $pdo->prepare('UPDATE tasks SET status=?, submitted_at=?, submitted_by=?, updated_at=? WHERE workspace_id=? AND project_id=? AND id=?');
+        $st->execute([$newStatus, $now, (int)$user['id'], $now, $ws, $id, $taskUpdateId]);
+      } else {
+        $st = $pdo->prepare('UPDATE tasks SET status=?, updated_at=? WHERE workspace_id=? AND project_id=? AND id=?');
+        $st->execute([$newStatus, $now, $ws, $id, $taskUpdateId]);
+      }
+      flash_set('success', 'Task status updated.');
+      if (in_array($newStatus, ['Completed','Completed (Needs Manager Review)'], true)) { redirect('manager_review.php'); }
+      if (in_array($newStatus, ['Approved','Approved (Ready to Submit)'], true)) { redirect('manager_submit.php'); }
+      if ($newStatus === 'Submitted to Client') { redirect('completed_task_archive.php'); }
+      redirect("project_view.php?id=$id&tab=tasks");
+    }
 
     if (isset($_POST['delete_phase'])) {
       if (!$can_manage) { flash_set('error', 'No permission.'); redirect("project_view.php?id=$id&tab=tasks"); }
@@ -194,12 +237,7 @@ try {
   $phasesStmt->execute([$ws, $id]);
   $phases = $phasesStmt->fetchAll();
 
-  $statusesStmt = $pdo->prepare('SELECT name FROM task_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
-  $statusesStmt->execute([$ws]);
-  $statuses = array_map(fn($r) => $r['name'], $statusesStmt->fetchAll());
-  if (!$statuses) {
-    $statuses = ['To Do','In Progress','Completed','Approved','Submitted to Client'];
-  }
+  $statuses = pv_task_status_options($pdo, $ws, $can_final_status);
 
   $teamStmt = $pdo->prepare("SELECT u.id,u.name,r.name AS role_name
     FROM users u
@@ -293,6 +331,7 @@ try {
   .list{list-style:none;margin:0;padding:0}.list li{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid rgba(255,255,255,.07)}
   .list .sub,.sub{font-size:.9rem;color:rgba(255,255,255,.6)}
   .pill{display:inline-flex;padding:2px 9px;border-radius:8px;font-size:.82rem;font-weight:600;border:1px solid rgba(255,255,255,.18)}
+  .status-inline{display:inline-block;margin:0}.status-inline-select{appearance:none;-webkit-appearance:none;cursor:pointer;border-radius:8px;padding:2px 23px 2px 9px;font-size:.82rem;font-weight:600;border:1px solid rgba(255,255,255,.18);background-color:transparent;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 12px) 50%,calc(100% - 8px) 50%;background-size:4px 4px,4px 4px;background-repeat:no-repeat;color:inherit}.status-inline-select option{background:#111;color:#ececf0}
   .is-blocked{background:rgba(161,131,47,.24);color:#f0d071}.is-progress{background:rgba(101,78,157,.26);color:#c9b4ff}.is-done{background:rgba(62,141,98,.24);color:#82d79f}.is-todo{background:rgba(68,97,137,.24);color:#8eb7f2}
   .phase-wrap{display:grid;gap:12px}.phase{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:linear-gradient(160deg,rgba(30,30,30,.7),rgba(20,20,20,.62));overflow:hidden}
   .phase h4{margin:0}.pv-table{width:100%;border-collapse:collapse;table-layout:fixed}.pv-table th,.pv-table td{padding:9px 12px;border-top:1px solid rgba(255,255,255,.07);vertical-align:middle}.pv-table th{color:rgba(255,255,255,.65);font-size:.82rem;text-transform:uppercase}
@@ -334,7 +373,7 @@ try {
     <div class="pv-grid">
       <section class="glass"><div class="card-h"><h3>Overview</h3></div><div class="ov-body"><div class="text-muted">Progress</div><div class="prog"><span style="width: <?=$progress?>%"></span></div><div><?=$progress?>% complete (<?=$doneTasks?>/<?=$totalTasks?> tasks)</div><div class="mt-3 text-muted">Summary</div><p class="mb-0"><?=h($project['notes'] ?: 'Project overview and delivery milestones are tracked through tasks and docs for this workspace.')?></p><div class="meta"><div><div class="text-muted small">Last Updated</div><div><?=h(format_date($project['updated_at']))?></div></div><div><div class="text-muted small">Created</div><div><?=h(format_date($project['created_at']))?></div></div></div></div></section>
       <div class="d-grid gap-3">
-        <section class="glass"><div class="card-h"><h3>Active Tasks</h3><a class="btn btn-sm btn-outline-light" href="project_view.php?id=<?=$id?>&tab=tasks">View</a></div><ul class="list"><?php foreach(array_slice($tasks,0,5) as $t): ?><li><div><div><?=h($t['title'])?></div><div class="sub"><?=h($t['assignee_names'] ?: 'Unassigned')?></div></div><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span><span><?=h($t['due_date']?format_date($t['due_date']):'—')?></span></li><?php endforeach; ?><?php if(!$tasks): ?><li><div class="text-muted">No tasks yet.</div></li><?php endif; ?></ul></section>
+        <section class="glass"><div class="card-h"><h3>Active Tasks</h3><a class="btn btn-sm btn-outline-light" href="project_view.php?id=<?=$id?>&tab=tasks">View</a></div><ul class="list"><?php foreach(array_slice($tasks,0,5) as $t): ?><li><div><div><?=h($t['title'])?></div><div class="sub"><?=h($t['assignee_names'] ?: 'Unassigned')?></div></div><?php if($can_manage): ?><form class="status-inline" method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="task_id" value="<?= (int)$t['id'] ?>"><select class="status-inline-select pill <?=pv_status_class((string)$t['status'])?>" name="status" onchange="this.form.submit()" aria-label="Change task status"><?php foreach($statuses as $opt): ?><option value="<?=h($opt)?>" <?= $t['status']===$opt ? 'selected' : '' ?>><?=h($opt)?></option><?php endforeach; ?></select><input type="hidden" name="update_task_status" value="1"></form><?php else: ?><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span><?php endif; ?><span><?=h($t['due_date']?format_date($t['due_date']):'—')?></span></li><?php endforeach; ?><?php if(!$tasks): ?><li><div class="text-muted">No tasks yet.</div></li><?php endif; ?></ul></section>
         <section class="glass"><div class="card-h"><h3>Docs</h3><a class="btn btn-sm btn-outline-light" href="project_view.php?id=<?=$id?>&tab=docs">Open</a></div><ul class="list"><?php foreach(array_slice($docs,0,5) as $d): ?><li><div><div><?=h($d['title'])?></div><div class="sub">By <?=h($d['author_name'] ?: 'Unknown')?></div></div><span class="sub"><?=h(format_date($d['updated_at']))?></span><a class="btn btn-sm btn-outline-light" href="doc_edit.php?id=<?=$d['id']?>">Open</a></li><?php endforeach; ?><?php if(!$docs): ?><li><div class="text-muted">No documents yet.</div></li><?php endif; ?></ul></section>
       </div>
     </div>
@@ -360,7 +399,7 @@ try {
               <?php foreach(($by_phase[$ph['id']] ?? []) as $t): ?>
                 <tr>
                   <td class="task-cell"><div class="task-title"><?=h($t['title'])?></div></td>
-                  <td class="status-cell"><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span></td>
+                  <td class="status-cell"><?php if($can_manage): ?><form class="status-inline" method="post"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="task_id" value="<?= (int)$t['id'] ?>"><select class="status-inline-select pill <?=pv_status_class((string)$t['status'])?>" name="status" onchange="this.form.submit()" aria-label="Change task status"><?php foreach($statuses as $opt): ?><option value="<?=h($opt)?>" <?= $t['status']===$opt ? 'selected' : '' ?>><?=h($opt)?></option><?php endforeach; ?></select><input type="hidden" name="update_task_status" value="1"></form><?php else: ?><span class="pill <?=pv_status_class((string)$t['status'])?>"><?=h($t['status'])?></span><?php endif; ?></td>
                   <td class="assignee-cell"><div class="task-title"><?=h($t['assignee_names'] ?: '—')?></div></td>
                   <td class="due-cell"><?=h($t['due_date'] ? format_date($t['due_date']) : '—')?></td>
                   <td class="action-cell d-flex gap-2 justify-content-center"><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=$t['id']?>">Open</a><?php if($can_manage): ?><form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this task. Are you sure?');"><input type="hidden" name="csrf" value="<?=h(csrf_token())?>"><input type="hidden" name="delete_task" value="1"><input type="hidden" name="task_id" value="<?= (int)$t['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td>

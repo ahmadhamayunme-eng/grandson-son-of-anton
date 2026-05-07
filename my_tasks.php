@@ -2,13 +2,58 @@
 require_once __DIR__ . '/layout.php';
 $pdo = db();
 $ws = auth_workspace_id();
-$uid = (int)auth_user()['id'];
+$user = auth_user();
+$uid = (int)$user['id'];
+$role = $user['role_name'] ?? '';
+$canFinalStatus = in_array($role, ['CEO','Manager','Super Admin'], true);
 
 $q = trim((string)($_GET['q'] ?? ''));
 $status = trim((string)($_GET['status'] ?? ''));
 
 $hiddenStatuses = ['Completed','Completed (Needs Manager Review)','Approved','Approved (Ready to Submit)','Submitted to Client'];
 $hiddenMarks = implode(',', array_fill(0, count($hiddenStatuses), '?'));
+
+try {
+  $taskStatusOptions = $pdo->prepare('SELECT name FROM task_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
+  $taskStatusOptions->execute([$ws]);
+  $taskStatusOptions = array_map(fn($r) => $r['name'], $taskStatusOptions->fetchAll());
+} catch (Throwable $e) {
+  $taskStatusOptions = [];
+}
+if (!$taskStatusOptions) {
+  $taskStatusOptions = ['To Do','In Progress','Completed','Approved','Submitted to Client'];
+}
+if (!$canFinalStatus) {
+  $taskStatusOptions = array_values(array_filter($taskStatusOptions, fn($s) => !in_array($s, ['Approved','Approved (Ready to Submit)','Submitted to Client'], true)));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_task_status'])) {
+  require_post();
+  csrf_verify();
+  $taskId = (int)($_POST['task_id'] ?? 0);
+  $newStatus = trim((string)($_POST['status'] ?? ''));
+  if ($taskId <= 0 || $newStatus === '') { flash_set('error', 'Invalid task selected.'); redirect('my_tasks.php'); }
+  if (!in_array($newStatus, $taskStatusOptions, true)) { flash_set('error', 'You cannot set that status.'); redirect('my_tasks.php'); }
+
+  $owned = $pdo->prepare('SELECT t.id FROM tasks t JOIN task_assignees ta ON ta.task_id=t.id AND ta.user_id=? WHERE t.id=? AND t.workspace_id=?');
+  $owned->execute([$uid, $taskId, $ws]);
+  if (!$owned->fetch()) { flash_set('error', 'Task not found.'); redirect('my_tasks.php'); }
+
+  $now = now();
+  if ($newStatus === 'Submitted to Client') {
+    $st = $pdo->prepare('UPDATE tasks SET status=?, submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=?');
+    $st->execute([$newStatus, $now, $uid, $now, $taskId, $ws]);
+  } else {
+    $st = $pdo->prepare('UPDATE tasks SET status=?, updated_at=? WHERE id=? AND workspace_id=?');
+    $st->execute([$newStatus, $now, $taskId, $ws]);
+  }
+
+  flash_set('success', 'Task status updated.');
+  if ($canFinalStatus && in_array($newStatus, ['Completed','Completed (Needs Manager Review)'], true)) { redirect('manager_review.php'); }
+  if ($canFinalStatus && in_array($newStatus, ['Approved','Approved (Ready to Submit)'], true)) { redirect('manager_submit.php'); }
+  if ($canFinalStatus && $newStatus === 'Submitted to Client') { redirect('completed_task_archive.php'); }
+  redirect('my_tasks.php');
+}
 
 $sql = "SELECT t.*, p.name AS project_name, c.name AS client_name
   FROM tasks t
@@ -93,6 +138,7 @@ function task_badge_class(string $status): string {
   .task-name{font-weight:600;color:#ececf0;text-decoration:none}
   .task-name:hover{color:#ffcc00}
   .pill{display:inline-flex;border:1px solid transparent;border-radius:999px;padding:.25rem .62rem;font-size:.75rem;font-weight:600}
+  .status-inline{display:inline-block;margin:0}.status-inline-select{appearance:none;-webkit-appearance:none;cursor:pointer;border-radius:999px;padding:.25rem 1.35rem .25rem .62rem;font-size:.75rem;font-weight:600;border:1px solid transparent;background-color:transparent;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - .7rem) 50%,calc(100% - .45rem) 50%;background-size:.25rem .25rem,.25rem .25rem;background-repeat:no-repeat;color:inherit}.status-inline-select option{background:#111;color:#ececf0}
   .pill-warn{color:#ffcc00;border-color:rgba(246,212,105,.35);background:rgba(246,212,105,.12)}
   .pill-ok{color:#78dfab;border-color:rgba(87,200,143,.35);background:rgba(87,200,143,.12)}
   .pill-bad{color:#ff9aa0;border-color:rgba(243,111,117,.35);background:rgba(243,111,117,.12)}
@@ -136,7 +182,16 @@ function task_badge_class(string $status): string {
             <td><a class="task-name" href="task_view.php?id=<?=h($t['id'])?>"><?=h($t['title'])?></a></td>
             <td class="text-muted"><?=h($t['client_name'])?></td>
             <td class="text-muted"><?=h($t['project_name'])?></td>
-            <td><span class="pill <?=task_badge_class((string)$t['status'])?>"><?=h($t['status'])?></span></td>
+            <td>
+              <form class="status-inline" method="post">
+                <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+                <input type="hidden" name="task_id" value="<?= (int)$t['id'] ?>">
+                <select class="status-inline-select pill <?=task_badge_class((string)$t['status'])?>" name="status" onchange="this.form.submit()" aria-label="Change task status">
+                  <?php foreach($taskStatusOptions as $opt): ?><option value="<?=h($opt)?>" <?= $t['status']===$opt ? 'selected' : '' ?>><?=h($opt)?></option><?php endforeach; ?>
+                </select>
+                <input type="hidden" name="update_task_status" value="1">
+              </form>
+            </td>
             <td class="text-muted"><?=h($t['due_date'] ? format_date($t['due_date']) : '—')?></td>
             <td class="text-end"><a class="btn btn-sm btn-outline-light" href="task_view.php?id=<?=h($t['id'])?>">Open</a></td>
           </tr>

@@ -4,6 +4,7 @@ $pdo=db(); $ws=auth_workspace_id();
 $u=auth_user(); $role=isset($u['role_name']) ? $u['role_name'] : '';
 $can_manager=in_array($role,['Manager','Super Admin'],true);
 $can_manage=in_array($role,['CEO','Manager','Super Admin'],true);
+$can_final_status=in_array($role,['CEO','Manager','Super Admin'],true);
 
 function tv_column_exists($pdo, $table, $column) {
   try {
@@ -81,6 +82,11 @@ try {
   $statuses=[];
 }
 if(!$statuses){ $statuses=['To Do','In Progress','Completed','Approved','Submitted to Client']; }
+if(!$can_final_status){
+  $statuses=array_values(array_filter($statuses, function($s){
+    return !in_array($s, ['Approved','Approved (Ready to Submit)','Submitted to Client'], true);
+  }));
+}
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   require_post(); csrf_verify();
@@ -100,6 +106,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   if(isset($_POST['update_task'])){
     if($locked && !$can_manage){ flash_set('error','Task is locked.'); redirect("task_view.php?id=$id"); }
     $new_status=trim(isset($_POST['status']) ? $_POST['status'] : $task['status']);
+    if(!in_array($new_status, $statuses, true)){
+      flash_set('error','You cannot set that status.');
+      redirect("task_view.php?id=$id");
+    }
     $new_note=trim(isset($_POST['internal_note']) ? $_POST['internal_note'] : '');
     $now=now();
     if($new_status==='Submitted to Client'){
