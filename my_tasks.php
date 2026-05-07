@@ -7,13 +7,16 @@ $uid = (int)auth_user()['id'];
 $q = trim((string)($_GET['q'] ?? ''));
 $status = trim((string)($_GET['status'] ?? ''));
 
+$hiddenStatuses = ['Completed','Completed (Needs Manager Review)','Approved','Approved (Ready to Submit)','Submitted to Client'];
+$hiddenMarks = implode(',', array_fill(0, count($hiddenStatuses), '?'));
+
 $sql = "SELECT t.*, p.name AS project_name, c.name AS client_name
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
   JOIN clients c ON c.id=p.client_id
   JOIN task_assignees ta ON ta.task_id=t.id AND ta.user_id=?
-  WHERE t.workspace_id=?";
-$params = [$uid, $ws];
+  WHERE t.workspace_id=? AND t.status NOT IN ($hiddenMarks)";
+$params = array_merge([$uid, $ws], $hiddenStatuses);
 
 if ($status !== '') {
   $sql .= " AND t.status=?";
@@ -35,10 +38,10 @@ $tasks = $st->fetchAll();
 $statusStmt = $pdo->prepare("SELECT t.status, COUNT(*) c
   FROM tasks t
   JOIN task_assignees ta ON ta.task_id=t.id AND ta.user_id=?
-  WHERE t.workspace_id=?
+  WHERE t.workspace_id=? AND t.status NOT IN ($hiddenMarks)
   GROUP BY t.status
   ORDER BY c DESC");
-$statusStmt->execute([$uid, $ws]);
+$statusStmt->execute(array_merge([$uid, $ws], $hiddenStatuses));
 $statusRows = $statusStmt->fetchAll();
 
 $statusCounts = [];
