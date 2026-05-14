@@ -120,28 +120,9 @@ $avatarUrl = user_avatar_url($userId);
 ?>
 
 <style>
-  .acc-wrap { max-width: 760px; }
-  .acc-card {
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 14px;
-    background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95));
-  }
-  .acc-card h5,
-  .acc-card label.form-label {
-    color: #fff !important;
-  }
-  .acc-card .form-control {
-    color: #fff;
-    background: rgba(0,0,0,.15);
-  }
-  .profile-preview {
-    width: 88px;
-    height: 88px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255,255,255,.3);
-    background: rgba(255,255,255,.06);
-  }
+  .acc-wrap { max-width: 720px; }
+  .acc-card { border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); }
+  .acc-card h5, .acc-card .form-label { color: #f3f3f3; }
 </style>
 
 <div class="acc-wrap">
