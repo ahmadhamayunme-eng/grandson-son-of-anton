@@ -51,6 +51,66 @@ function dashboard_avatar_gradient(string $seed): string {
   return $palette[$h % count($palette)];
 }
 
+/**
+ * 50 wry / motivational quotes for the dashboard header.
+ * One is picked at random on each request via array_rand().
+ */
+function dashboard_random_quote(): string {
+  static $quotes = [
+    "If you're the smartest person in the room, you're in the wrong room. If you're the dumbest, also leave.",
+    "The early bird gets the worm. The late bird avoids the guy who hands out tasks.",
+    "Not all who wander are lost. Some are just bad at admitting they're lost.",
+    "You miss 100% of the shots you don't take, but also 87% of the ones you do. Consider not taking shots.",
+    "Do what you love and you'll never work a day in your life, because no one will pay you for it.",
+    "Be yourself. Unless yourself is annoying. Then be someone else.",
+    "The universe is under no obligation to make sense to you, and honestly, same.",
+    "Follow your dreams. They're running away for a reason — chase them anyway.",
+    "A wise man once said nothing. The room still called him difficult.",
+    "If life gives you lemons, ask why life is giving you lemons. What does it want from you?",
+    "Every expert was once a beginner. Every beginner was once a baby. Think about that.",
+    "The best time to plant a tree was 20 years ago. The second best time is still 20 years ago. You had one job.",
+    "Pain is temporary. Posting about pain is forever.",
+    "The only way out is through — unless there's a window, in which case please use the window.",
+    "Know thyself. Regret immediately.",
+    "Comparison is the thief of joy, but also the engine of all progress. Pick your poison.",
+    "What doesn't kill you makes you stronger. What almost kills you writes your personality.",
+    "You are enough. You are also, apparently, too much. Somehow both are true simultaneously.",
+    "Success is not final, failure is not fatal, and your GoodReads year-in-review is not real.",
+    "A smooth sea never made a skilled sailor, but it did make for a really pleasant afternoon.",
+    "Dream big. Sleep bigger.",
+    "The truth will set you free, but first it will make everyone at dinner uncomfortable.",
+    "Be the change you wish to see in the world, and then watch the world change back immediately.",
+    "The greatest risk is not taking one, unless the risk is financial, then consult a professional.",
+    "Wherever you go, there you are. This is the worst possible news for some people.",
+    "Work smarter, not harder. Also harder. Also smarter and harder. Basically don't stop.",
+    "Fall down seven times, get up eight. On the eighth time, consider staying down and reassessing.",
+    "You can't pour from an empty cup. You also can't pour from a full cup without spilling. Cups are a trap.",
+    "The journey of a thousand miles begins with a single step, and immediately a blister.",
+    "Silence is golden. Duct tape is silver. One of these is more versatile.",
+    "In the middle of difficulty lies opportunity, and also more difficulty. The difficulty does not end.",
+    "If you can dream it, you can do it. If you can't stop dreaming it, that's a different kind of problem.",
+    "Act as if what you do makes a difference. It does, but not always the way you intend.",
+    "Shoot for the moon. Even if you miss, you'll be in cold airless void.",
+    "Attitude is a little thing that makes a big difference, which is frustrating when you're tired.",
+    "The secret of getting ahead is getting started. The secret of getting started is unclear.",
+    "Don't watch the clock; do what it does. Keep going. Also spin.",
+    "We are what we repeatedly do. Check your screen time report and reconsider.",
+    "Life is 10% what happens to you and 90% how you respond, which is extremely bad news.",
+    "Do not go where the path may lead. Go instead where there is no path, and then complain about it later.",
+    "The mind is its own place and can make a heaven of hell or a hell of heaven. It has chosen poorly.",
+    "You can't connect the dots looking forward. You can barely see them looking backward either.",
+    "Hardship often prepares an ordinary person for an extraordinary destiny. Or just hardship. It's a coin flip.",
+    "It does not matter how slowly you go, as long as you do not stop. Unless it's traffic. Speed up.",
+    "Live as if you were to die tomorrow. Then call your bank to sort out that recurring charge.",
+    "The only place where success comes before work is in the dictionary, and frankly the dictionary is showing off.",
+    "Do one thing every day that scares you. Not that. Something else. Not that either.",
+    "You have brains in your head and feet in your shoes. What you do with this combination remains to be seen.",
+    "The cave you fear to enter holds the treasure you seek, and also, statistically, a lot of bats.",
+    "At the end of the day, it's the end of the day. That's it. That's the wisdom.",
+  ];
+  return $quotes[array_rand($quotes)];
+}
+
 $month = $_GET['month'] ?? date('Y-m');
 if (!preg_match('/^\d{4}-\d{2}$/', $month)) { $month = date('Y-m'); }
 $monthStart = $month . '-01';
@@ -240,8 +300,8 @@ require_once __DIR__ . '/layout.php';
   <div class="page-header-left">
     <?= back_button_html() ?>
     <div>
-      <div class="page-title">Agency Calendar Command Center</div>
-      <div class="page-sub">Everything happening across the agency this month, at a glance.</div>
+      <div class="page-title">Hello <?= h(auth_user()['name'] ?? 'there') ?></div>
+      <div class="page-sub" style="font-style:italic;">&ldquo;<?= h(dashboard_random_quote()) ?>&rdquo;</div>
     </div>
   </div>
   <div class="month-pager">
