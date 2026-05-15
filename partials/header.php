@@ -1,68 +1,35 @@
 <?php
 require_once __DIR__ . '/../lib/helpers.php';
-$config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../config.php') : ['app'=>['name'=>'SpeedX BMS']];
+$config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../config.php') : ['app'=>['name'=>'AntonX']];
+$pageTitle = $pageTitle ?? ($config['app']['name'] ?? 'AntonX');
+$pageHeadExtra = $pageHeadExtra ?? '';
 ?><!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?=h($config['app']['name'] ?? 'Anton X - Powered By SpeedX')?></title>
+  <title>anton x — <?=h($pageTitle)?></title>
   <link rel="icon" type="image/png" href="partials/antonx-favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/anton.css">
+  <!-- Bootstrap remains loaded as a compatibility shim for pages not yet rebuilt against the new design system. -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    :root {
-      --bg-0: #050505;
-      --bg-1: #0d0d0d;
-      --bg-2: #161616;
-      --line: rgba(255,255,255,.08);
-      --text: #ececf0;
-      --muted: rgba(232,232,232,.62);
-      --yellow: #ffcc00;
-      --purple: #8e8e8e;
-      --green: #57c88f;
-      --red: #f36f75;
-    }
-    body {
-      font-family: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      color: var(--text);
-      background:
-        radial-gradient(1200px 700px at 20% 0%, rgba(255,255,255,.04), transparent 70%),
-        radial-gradient(900px 500px at 85% 12%, rgba(255,255,255,.03), transparent 70%),
-        linear-gradient(180deg, #030303 0%, #090909 100%);
-    }
-    .sidebar {
-      width: 340px;
-      flex: 0 0 340px;
-      min-height: 100vh;
-      background: linear-gradient(180deg, rgba(16,16,16,.95), rgba(10,10,10,.98));
-      border-right: 1px solid var(--line);
-      box-shadow: inset -1px 0 0 rgba(255,255,255,.03);
-    }
-    .brand { color: var(--text); font-size: 2rem; font-weight: 600; letter-spacing: .02em; }
-    .nav-link { color: rgba(236,236,236,.78); border-radius: 10px; padding: 10px 12px; }
-    .nav-link:hover, .nav-link.active { color: var(--yellow); background: linear-gradient(90deg, rgba(246,212,105,.16), rgba(246,212,105,.04)); }
-    .card { background:#121212; border:1px solid var(--line); border-radius:14px; }
-    .btn-yellow { background:var(--yellow); border-color:var(--yellow); color:#0f0f11; font-weight:600; }
-    .btn-yellow:hover { background:#ffcc00; border-color:#ffcc00; color:#101012; }
-    .badge-soft { background: rgba(246,212,105,.15); border:1px solid rgba(246,212,105,.28); color:var(--yellow); }
-    a { color: var(--yellow); }
-    .table { --bs-table-bg: transparent; --bs-table-color: #ececf0; }
-    .form-control { background:#101010; border:1px solid rgba(255,255,255,.12); color:var(--text); }
-    input::placeholder, textarea::placeholder, .form-control::placeholder { color: rgba(255,255,255,.95) !important; opacity: 1; }
-    .form-select { background:#fff; border:1px solid rgba(255,255,255,.12); color:#000; }
-    select option { background:#fff; color:#000; }
-    .form-control:focus, .form-select:focus { border-color: rgba(246,212,105,.6); box-shadow: 0 0 0 .2rem rgba(246,212,105,.15); }
-    .text-muted { color: var(--muted) !important; }
-    .small-help { font-size:.9rem; color: var(--muted); }
-    main.flex-grow-1 { background: transparent; }
-    @media (max-width: 1100px) {
-      .sidebar { width: 300px; flex-basis: 300px; }
-      .brand { font-size: 1.75rem; }
-    }
+    /* Tone-down Bootstrap defaults so it blends with anton.css */
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .btn-yellow { background: var(--accent); border-color: var(--accent); color: #1a1400; font-weight: 600; }
+    .btn-yellow:hover, .btn-yellow:focus { background: var(--accent-hover); border-color: var(--accent-hover); color: #1a1400; }
+    .form-control, .form-select { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+    .form-control:focus, .form-select:focus { background: var(--bg); border-color: var(--accent); box-shadow: 0 0 0 0.15rem rgba(250,204,21,0.18); }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    .modal-header, .modal-footer { border-color: var(--border); }
+    .table { color: var(--text); --bs-table-bg: transparent; --bs-table-color: var(--text); }
+    .alert-success { background: var(--success-soft); border-color: rgba(34,197,94,0.25); color: #86efac; }
+    .alert-danger { background: var(--danger-soft); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
   </style>
+  <?=$pageHeadExtra?>
 </head>
 <body>
+<div class="app" data-screen-label="<?=h($pageTitle)?>">

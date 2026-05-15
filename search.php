@@ -1,5 +1,10 @@
 <?php
-require_once __DIR__ . '/layout.php';
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/helpers.php';
+require_once __DIR__ . '/lib/db.php';
+auth_require_login();
+
 $pdo = db();
 $ws = auth_workspace_id();
 $q = trim($_GET['q'] ?? '');
@@ -19,177 +24,138 @@ if ($q !== '') {
   $projects = $st->fetchAll();
 
   $st = $pdo->prepare('SELECT t.id,t.title,t.status,p.name AS project_name,c.name AS client_name,t.updated_at
-    FROM tasks t
-    JOIN projects p ON p.id=t.project_id
-    JOIN clients c ON c.id=p.client_id
+    FROM tasks t JOIN projects p ON p.id=t.project_id JOIN clients c ON c.id=p.client_id
     WHERE t.workspace_id=? AND t.title LIKE ? ORDER BY t.id DESC LIMIT 20');
   $st->execute([$ws, $like]);
   $tasks = $st->fetchAll();
 }
-?>
+
+$totalResults = count($clients) + count($projects) + count($tasks);
+
+$pageTitle = 'Search';
+$activeKey = 'search';
+$pageHeadExtra = <<<HTML
 <style>
-  .search-shell {
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
-    background: linear-gradient(130deg, rgba(16, 16, 16, 0.95), rgba(9, 9, 9, 0.95));
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-    padding: 24px;
-  }
-  .search-title { font-size: 2rem; font-weight: 600; margin-bottom: 16px; }
-  .search-form { position: relative; margin-bottom: 18px; }
-  .search-icon {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #ffd453;
-    pointer-events: none;
-  }
-  .search-input {
-    width: 100%;
-    background: linear-gradient(90deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.92));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 12px 52px 12px 44px;
-    color: #f3f3f5;
-    font-size: 1.07rem;
-    font-weight: 500;
-  }
-  .search-input:focus {
-    outline: none;
-    border-color: rgba(255, 212, 83, 0.55);
-    box-shadow: 0 0 0 3px rgba(255, 212, 83, 0.15);
-  }
-  .search-clear {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 0;
-    background: rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.85);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-  }
-  .search-tabs { display: flex; gap: 22px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 16px; }
-  .search-tab { color: rgba(255, 255, 255, 0.72); text-decoration: none; padding-bottom: 10px; font-size: 1.05rem; font-weight: 500; }
-  .search-tab.active { color: #f3d46c; border-bottom: 2px solid #f3d46c; }
-  .search-section { margin-bottom: 16px; }
-  .search-section h2 { font-size: 1.9rem; margin: 0 0 10px; }
-  .search-list {
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    overflow: hidden;
-  }
-  .search-item {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .search-item:last-child { border-bottom: 0; }
-  .search-main { display: flex; gap: 10px; }
-  .search-bullet { width: 10px; height: 10px; border-radius: 50%; background: #f2d062; margin-top: 8px; flex: none; }
-  .search-name { color: #ededee; font-size: 1.05rem; font-weight: 500; text-decoration: none; }
-  .search-name:hover { color: #f7d86f; }
-  .search-meta { color: rgba(255, 255, 255, 0.6); font-size: .9rem; margin-top: 2px; }
-  .search-chip {
-    border: 1px solid rgba(255, 212, 83, 0.26);
-    background: rgba(255, 212, 83, 0.11);
-    color: #f6d66e;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: .78rem;
-    align-self: center;
-  }
+  .page-header { padding: 28px 32px 0; max-width: 1640px; margin: 0 auto; width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .page-header-left { display: flex; align-items: center; gap: 14px; }
+  .page-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .page-sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+  .search-form-wrap { max-width: 1640px; margin: 0 auto; width: 100%; padding: 24px 32px 18px; }
+  .big-search { position: relative; }
+  .big-search svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--accent); }
+  .big-search input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 48px 14px 50px; font-size: 15px; color: var(--text); outline: none; transition: all 0.15s; font-family: inherit; font-weight: 500; }
+  .big-search input::placeholder { color: var(--text-dim); }
+  .big-search input:focus { border-color: var(--accent); background: var(--bg); }
+  .big-search .clear { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; text-decoration: none; border: 1px solid var(--border); }
+  .big-search .clear:hover { color: var(--text); background: var(--surface-hover); }
+  .body-wrap { max-width: 1640px; margin: 0 auto; width: 100%; padding: 0 32px 60px; display: flex; flex-direction: column; gap: 28px; }
+  .section { display: flex; flex-direction: column; gap: 12px; }
+  .section-head { display: flex; align-items: baseline; gap: 8px; }
+  .section-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .section-count { font-size: 11px; background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .result { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; transition: background 0.12s; }
+  .result:last-child { border-bottom: none; }
+  .result:hover { background: var(--surface-hover); }
+  .result-main { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+  .result-bullet { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 8px; box-shadow: 0 0 0 3px rgba(250,204,21,0.18); }
+  .result-name { font-size: 14px; font-weight: 500; color: var(--text); text-decoration: none; }
+  .result-name:hover { color: var(--accent); }
+  .result-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+  .result-chip { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(250,204,21,0.25); }
+  .empty-state { padding: 28px 18px; text-align: center; color: var(--text-dim); font-size: 13px; font-style: italic; }
+  .start-card { padding: 48px 24px; text-align: center; color: var(--text-muted); font-size: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; max-width: 720px; margin: 18px auto; }
+  .start-card svg { width: 36px; height: 36px; color: var(--text-dim); margin-bottom: 14px; }
 </style>
+HTML;
 
-<div class="search-shell">
-  <h1 class="search-title">Search</h1>
+require_once __DIR__ . '/layout.php';
+?>
 
-  <form class="search-form" method="get">
-    <span class="search-icon">⌕</span>
-    <input class="search-input" name="q" value="<?=h($q)?>" placeholder="Search clients, projects, tasks..." autocomplete="off">
-    <?php if ($q !== ''): ?>
-      <a href="search.php" class="search-clear" aria-label="Clear search">✕</a>
-    <?php endif; ?>
+<div class="page-header">
+  <div class="page-header-left">
+    <?= back_button_html() ?>
+    <div>
+      <div class="page-title">Search</div>
+      <div class="page-sub">Find clients, projects, and tasks across the workspace.</div>
+    </div>
+  </div>
+</div>
+
+<div class="search-form-wrap">
+  <form class="big-search" method="get">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input name="q" value="<?= h($q) ?>" placeholder="Search clients, projects, tasks..." autocomplete="off" autofocus>
+    <?php if ($q !== ''): ?><a href="search.php" class="clear" aria-label="Clear search">×</a><?php endif; ?>
   </form>
+</div>
 
-  <nav class="search-tabs">
-    <a class="search-tab active" href="#tasks">Tasks</a>
-    <a class="search-tab" href="#projects">Projects</a>
-    <a class="search-tab" href="#clients">Clients</a>
-  </nav>
-
+<div class="body-wrap">
   <?php if ($q === ''): ?>
-    <div class="text-muted">Type a keyword and press enter to see matching tasks, projects, and clients.</div>
+    <div class="start-card">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <div>Type a keyword and press enter to see matching tasks, projects, and clients.</div>
+    </div>
   <?php else: ?>
-    <section id="tasks" class="search-section">
-      <h2>Tasks</h2>
-      <div class="search-list">
+    <section class="section">
+      <div class="section-head"><span class="section-title">Tasks</span><span class="section-count"><?= count($tasks) ?></span></div>
+      <div class="panel">
         <?php if (!$tasks): ?>
-          <div class="p-3 text-muted">No tasks matched “<?=h($q)?>”.</div>
+          <div class="empty-state">No tasks matched "<?= h($q) ?>".</div>
         <?php else: foreach ($tasks as $t): ?>
-          <article class="search-item">
-            <div class="search-main">
-              <span class="search-bullet"></span>
+          <div class="result">
+            <div class="result-main">
+              <span class="result-bullet"></span>
               <div>
-                <a class="search-name" href="task_view.php?id=<?=$t['id']?>"><?=h($t['title'])?></a>
-                <div class="search-meta"><?=h($t['project_name'])?> · <?=h($t['client_name'])?></div>
+                <a class="result-name" href="task_view.php?id=<?= (int)$t['id'] ?>"><?= h($t['title']) ?></a>
+                <div class="result-meta"><?= h($t['project_name']) ?> · <?= h($t['client_name']) ?></div>
               </div>
             </div>
-            <span class="search-chip"><?=h($t['status'])?></span>
-          </article>
+            <span class="result-chip"><?= h($t['status']) ?></span>
+          </div>
         <?php endforeach; endif; ?>
       </div>
     </section>
 
-    <section id="projects" class="search-section">
-      <h2>Projects</h2>
-      <div class="search-list">
+    <section class="section">
+      <div class="section-head"><span class="section-title">Projects</span><span class="section-count"><?= count($projects) ?></span></div>
+      <div class="panel">
         <?php if (!$projects): ?>
-          <div class="p-3 text-muted">No projects matched “<?=h($q)?>”.</div>
+          <div class="empty-state">No projects matched "<?= h($q) ?>".</div>
         <?php else: foreach ($projects as $p): ?>
-          <article class="search-item">
-            <div class="search-main">
-              <span class="search-bullet"></span>
+          <div class="result">
+            <div class="result-main">
+              <span class="result-bullet"></span>
               <div>
-                <a class="search-name" href="project_view.php?id=<?=$p['id']?>"><?=h($p['name'])?></a>
-                <div class="search-meta"><?=h($p['client_name'])?> · Updated <?=h(date('M j, Y', strtotime($p['updated_at'])))?></div>
+                <a class="result-name" href="project_view.php?id=<?= (int)$p['id'] ?>"><?= h($p['name']) ?></a>
+                <div class="result-meta"><?= h($p['client_name']) ?> · Updated <?= h(date('M j, Y', strtotime((string)$p['updated_at']))) ?></div>
               </div>
             </div>
-            <span class="search-chip"><?=h($p['status_name'])?></span>
-          </article>
+            <span class="result-chip"><?= h($p['status_name']) ?></span>
+          </div>
         <?php endforeach; endif; ?>
       </div>
     </section>
 
-    <section id="clients" class="search-section mb-0">
-      <h2>Clients</h2>
-      <div class="search-list">
+    <section class="section">
+      <div class="section-head"><span class="section-title">Clients</span><span class="section-count"><?= count($clients) ?></span></div>
+      <div class="panel">
         <?php if (!$clients): ?>
-          <div class="p-3 text-muted">No clients matched “<?=h($q)?>”.</div>
+          <div class="empty-state">No clients matched "<?= h($q) ?>".</div>
         <?php else: foreach ($clients as $c): ?>
-          <article class="search-item">
-            <div class="search-main">
-              <span class="search-bullet"></span>
+          <div class="result">
+            <div class="result-main">
+              <span class="result-bullet"></span>
               <div>
-                <a class="search-name" href="client_view.php?id=<?=$c['id']?>"><?=h($c['name'])?></a>
-                <div class="search-meta">Updated <?=h(date('M j, Y', strtotime($c['updated_at'])))?></div>
+                <a class="result-name" href="client_view.php?id=<?= (int)$c['id'] ?>"><?= h($c['name']) ?></a>
+                <div class="result-meta">Updated <?= h(date('M j, Y', strtotime((string)$c['updated_at']))) ?></div>
               </div>
             </div>
-          </article>
+          </div>
         <?php endforeach; endif; ?>
       </div>
     </section>
   <?php endif; ?>
 </div>
+
 <?php require_once __DIR__ . '/layout_end.php'; ?>

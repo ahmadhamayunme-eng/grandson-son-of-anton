@@ -1,27 +1,26 @@
 <?php
-require_once __DIR__ . '/layout.php';
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/helpers.php';
+require_once __DIR__ . '/lib/db.php';
+auth_require_login();
 auth_require_perm('users.manage');
+
 $pdo = db();
 $ws = auth_workspace_id();
-
 $roles = $pdo->query("SELECT id,name FROM roles ORDER BY id")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  require_post();
-  csrf_verify();
+  require_post(); csrf_verify();
   $action = $_POST['action'] ?? '';
   if ($action === 'create') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $role_id = (int)($_POST['role_id'] ?? 0);
     $pass = $_POST['password'] ?? '';
-    if ($name === '' || $email === '' || $role_id <= 0 || $pass === '') {
-      flash_set('error', 'Fill all fields');
-      redirect(basename(__FILE__));
-    }
+    if ($name === '' || $email === '' || $role_id <= 0 || $pass === '') { flash_set('error', 'Fill all fields'); redirect(basename(__FILE__)); }
     $hash = password_hash($pass, PASSWORD_DEFAULT);
-    $pdo->prepare("INSERT INTO users (workspace_id,role_id,name,email,password_hash,is_active,created_at,updated_at)
-      VALUES (?,?,?,?,?,1,NOW(),NOW())")
+    $pdo->prepare("INSERT INTO users (workspace_id,role_id,name,email,password_hash,is_active,created_at,updated_at) VALUES (?,?,?,?,?,1,NOW(),NOW())")
       ->execute([$ws, $role_id, $name, $email, $hash]);
     flash_set('success', 'User created');
     redirect(basename(__FILE__));
@@ -43,10 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   if ($action === 'delete') {
     $id = (int)($_POST['id'] ?? 0);
-    if ($id === (int)auth_user()['id']) {
-      flash_set('error', 'Cannot delete yourself');
-      redirect(basename(__FILE__));
-    }
+    if ($id === (int)auth_user()['id']) { flash_set('error', 'Cannot delete yourself'); redirect(basename(__FILE__)); }
     $pdo->prepare("DELETE FROM users WHERE id=? AND workspace_id=?")->execute([$id, $ws]);
     flash_set('success', 'User deleted');
     redirect(basename(__FILE__));
@@ -59,147 +55,159 @@ $users = $users->fetchAll();
 
 $edit_id = (int)($_GET['edit'] ?? 0);
 $edit = null;
-if ($edit_id > 0) {
-  foreach ($users as $uu) {
-    if ((int)$uu['id'] === $edit_id) {
-      $edit = $uu;
-      break;
-    }
-  }
-}
+foreach ($users as $uu) { if ((int)$uu['id'] === $edit_id) { $edit = $uu; break; } }
 
 $totalUsers = count($users);
-$activeUsers = 0;
-$disabledUsers = 0;
-foreach ($users as $urow) {
-  if ((int)$urow['is_active'] === 1) $activeUsers++;
-  else $disabledUsers++;
+$activeUsers = 0; $disabledUsers = 0;
+foreach ($users as $urow) { if ((int)$urow['is_active'] === 1) $activeUsers++; else $disabledUsers++; }
+
+function um_avatar_gradient(string $seed): string {
+  $palette = [
+    'linear-gradient(135deg,#22c55e,#16a34a)','linear-gradient(135deg,#a855f7,#7c3aed)',
+    'linear-gradient(135deg,#0ea5e9,#0284c7)','linear-gradient(135deg,#f97316,#ea580c)',
+    'linear-gradient(135deg,#ec4899,#be185d)','linear-gradient(135deg,#3b82f6,#1d4ed8)',
+    'linear-gradient(135deg,#facc15,#ca8a04)',
+  ];
+  return $palette[crc32($seed) % count($palette)];
 }
+
+$pageTitle = 'Users';
+$activeKey = 'users';
+$pageHeadExtra = <<<HTML
+<style>
+  .page-header { padding: 28px 32px 0; max-width: 1640px; margin: 0 auto; width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .page-header-left { display: flex; align-items: center; gap: 14px; }
+  .page-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .page-sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+  .page-stats { display: flex; gap: 24px; font-variant-numeric: tabular-nums; }
+  .stat { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+  .stat-num { font-size: 20px; font-weight: 600; color: var(--text); }
+  .stat-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+  .body-wrap { max-width: 1640px; margin: 24px auto; padding: 0 32px 60px; display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+  .panel h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+  .form-row { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
+  .pw-wrap { position: relative; }
+  .pw-wrap input { padding-right: 40px; }
+  .pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: none; border: none; }
+  .pw-toggle:hover { background: var(--surface-hover); color: var(--text); }
+  .pw-toggle svg { width: 14px; height: 14px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .checkbox-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .checkbox-row label { font-size: 12.5px; color: var(--text-muted); }
+  table.users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.users-table thead th { text-align: left; padding: 12px 16px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); background: var(--bg); border-bottom: 1px solid var(--border); }
+  table.users-table tbody tr { transition: background 0.12s; }
+  table.users-table tbody tr:hover { background: var(--surface-hover); }
+  table.users-table tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  table.users-table tbody tr:last-child td { border-bottom: none; }
+  .user-cell { display: flex; align-items: center; gap: 10px; }
+  .user-cell .avatar { width: 30px; height: 30px; font-size: 10.5px; }
+  .user-name { font-weight: 600; }
+  .user-email { color: var(--text-muted); }
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 500; border: 1px solid; }
+  .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .status-pill.active { color: #86efac; background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); }
+  .status-pill.active .dot { background: #22c55e; }
+  .status-pill.disabled { color: var(--text-muted); background: var(--surface-2); border-color: var(--border); }
+  .status-pill.disabled .dot { background: var(--text-dim); }
+  .btn-tiny { padding: 5px 11px; font-size: 11.5px; font-weight: 500; border-radius: 6px; transition: all 0.12s; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 5px; color: var(--text); text-decoration: none; background: var(--surface); cursor: pointer; }
+  .btn-tiny:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .btn-tiny.danger { color: #fca5a5; border-color: rgba(239,68,68,0.25); background: transparent; }
+  .btn-tiny.danger:hover { background: var(--danger-soft); }
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .empty-state { padding: 32px 18px; text-align: center; color: var(--text-dim); font-style: italic; }
+  @media (max-width: 1100px) { .body-wrap { grid-template-columns: 1fr; } }
+</style>
+HTML;
+
+require_once __DIR__ . '/layout.php';
 ?>
 
-<style>
-  .users-shell{border:1px solid rgba(255,255,255,.1);border-radius:18px;background:linear-gradient(180deg,#111111,#090909);padding:1.15rem;box-shadow:0 24px 60px rgba(0,0,0,.4)}
-  .users-head{display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-bottom:.95rem}
-  .users-title{margin:0;font-size:2rem;font-weight:700}
-  .users-sub{color:rgba(232,232,232,.68);font-size:.92rem}
-  .users-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin-bottom:.95rem}
-  .users-metric{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.02));padding:.72rem .85rem}
-  .users-metric-label{font-size:.82rem;color:rgba(232,232,232,.68)}
-  .users-metric-value{font-size:1.55rem;font-weight:700;line-height:1.1}
-  .users-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:.8rem}
-  .users-card{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.02);padding:.85rem}
-  .users-card-title{font-size:1.02rem;font-weight:600;margin-bottom:.6rem}
-  .users-form .form-label{font-size:.82rem;color:rgba(232,232,232,.72)}
-  .users-table{overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.015)}
-  .users-table table{width:100%;border-collapse:collapse}
-  .users-table th,.users-table td{padding:.68rem .72rem;border-bottom:1px solid rgba(255,255,255,.07)}
-  .users-table th{background:rgba(255,255,255,.03);font-size:.85rem;font-weight:600;color:rgba(228,228,228,.82)}
-  .users-table tr:last-child td{border-bottom:0}
-  .status-pill{display:inline-flex;padding:.23rem .6rem;border-radius:999px;border:1px solid transparent;font-size:.75rem;font-weight:600}
-  .status-active{color:#78dfab;border-color:rgba(87,200,143,.35);background:rgba(87,200,143,.12)}
-  .status-disabled{color:#d5d5d5;border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.08)}
-
-  .password-input-wrap{position:relative}
-  .password-input-wrap .form-control{padding-right:2.5rem}
-  .password-toggle-btn{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#111;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;cursor:pointer}
-  .password-toggle-btn:hover{color:#000}
-  .password-toggle-btn:focus{outline:none;color:#000}
-  .password-toggle-btn svg{width:18px;height:18px}
-  @media (max-width: 1100px){.users-grid{grid-template-columns:1fr}.users-metrics{grid-template-columns:1fr}}
-</style>
-
-<div class="users-shell">
-  <div class="users-head">
+<div class="page-header">
+  <div class="page-header-left">
+    <?= back_button_html() ?>
     <div>
-      <h1 class="users-title">Users Management</h1>
-      <div class="users-sub">Create, update, and manage account status and roles.</div>
+      <div class="page-title">Users Management</div>
+      <div class="page-sub">Create, update, and manage account status and roles.</div>
     </div>
   </div>
-
-  <div class="users-metrics">
-    <div class="users-metric"><div class="users-metric-label">Total Users</div><div class="users-metric-value"><?= (int)$totalUsers ?></div></div>
-    <div class="users-metric"><div class="users-metric-label">Active</div><div class="users-metric-value"><?= (int)$activeUsers ?></div></div>
-    <div class="users-metric"><div class="users-metric-label">Disabled</div><div class="users-metric-value"><?= (int)$disabledUsers ?></div></div>
-  </div>
-
-  <div class="users-grid">
-    <div class="users-card">
-      <div class="users-card-title"><?= $edit ? 'Edit User' : 'Add User' ?></div>
-      <form class="users-form" method="post">
-        <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
-        <input type="hidden" name="action" value="<?= $edit ? 'update' : 'create' ?>">
-        <?php if ($edit): ?><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>"><?php endif; ?>
-        <div class="mb-2"><label class="form-label">Name</label><input class="form-control" name="name" value="<?= h($edit['name'] ?? '') ?>" required></div>
-        <div class="mb-2"><label class="form-label">Email</label><input class="form-control" name="email" value="<?= h($edit['email'] ?? '') ?>" required></div>
-        <div class="mb-2">
-          <label class="form-label">Role</label>
-          <select class="form-select" name="role_id" required>
-            <option value="">Select role...</option>
-            <?php foreach ($roles as $r): ?>
-              <option value="<?= (int)$r['id'] ?>" <?= ($edit && (int)$edit['role_id'] === (int)$r['id']) ? 'selected' : '' ?>><?= h($r['name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="mb-2"><label class="form-label">Password <?= $edit ? '(leave blank to keep)' : '' ?></label><div class="password-input-wrap"><input class="form-control" id="user-password" name="password" type="password" <?= $edit ? '' : 'required' ?>><button class="password-toggle-btn" type="button" aria-label="Show password" data-toggle-password="user-password" data-show-label="Show password" data-hide-label="Hide password"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></div>
-        <?php if ($edit): ?>
-          <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_active" <?= ((int)$edit['is_active'] === 1) ? 'checked' : '' ?>> <label class="form-check-label">Active</label></div>
-        <?php endif; ?>
-        <button class="btn btn-yellow w-100"><?= $edit ? 'Save Changes' : 'Create User' ?></button>
-      </form>
-    </div>
-
-    <div class="users-card">
-      <div class="users-card-title">Users</div>
-      <div class="users-table">
-        <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
-          <tbody>
-            <?php foreach ($users as $uu): ?>
-              <tr>
-                <td class="fw-semibold"><?= h($uu['name']) ?></td>
-                <td class="text-muted"><?= h($uu['email']) ?></td>
-                <td><?= h($uu['role_name']) ?></td>
-                <td><?= ((int)$uu['is_active'] === 1) ? '<span class="status-pill status-active">Active</span>' : '<span class="status-pill status-disabled">Disabled</span>' ?></td>
-                <td class="text-end">
-                  <a class="btn btn-sm btn-outline-light" href="?edit=<?= (int)$uu['id'] ?>">Edit</a>
-                  <form method="post" style="display:inline" onsubmit="return confirm('Delete user?');">
-                    <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="id" value="<?= (int)$uu['id'] ?>">
-                    <button class="btn btn-sm btn-outline-danger">Delete</button>
-                  </form>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-            <?php if (!$users): ?><tr><td colspan="5" class="text-muted">No users found.</td></tr><?php endif; ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <div class="page-stats">
+    <div class="stat"><span class="stat-num"><?= (int)$totalUsers ?></span><span class="stat-label">Total</span></div>
+    <div class="stat"><span class="stat-num" style="color:#86efac;"><?= (int)$activeUsers ?></span><span class="stat-label">Active</span></div>
+    <div class="stat"><span class="stat-num"><?= (int)$disabledUsers ?></span><span class="stat-label">Disabled</span></div>
   </div>
 </div>
 
+<div class="body-wrap">
+  <div class="panel">
+    <h3><?= $edit ? 'Edit User' : 'Add User' ?></h3>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+      <input type="hidden" name="action" value="<?= $edit ? 'update' : 'create' ?>">
+      <?php if ($edit): ?><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>"><?php endif; ?>
+      <div class="form-row"><label class="field-label">Name</label><input class="input" name="name" value="<?= h($edit['name'] ?? '') ?>" required></div>
+      <div class="form-row"><label class="field-label">Email</label><input class="input" type="email" name="email" value="<?= h($edit['email'] ?? '') ?>" required></div>
+      <div class="form-row">
+        <label class="field-label">Role</label>
+        <select class="select" name="role_id" required>
+          <option value="">Select role...</option>
+          <?php foreach ($roles as $r): ?>
+            <option value="<?= (int)$r['id'] ?>" <?= ($edit && (int)$edit['role_id'] === (int)$r['id']) ? 'selected' : '' ?>><?= h($r['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="field-label">Password <?= $edit ? '(leave blank to keep)' : '' ?></label>
+        <div class="pw-wrap">
+          <input class="input" id="user-password" name="password" type="password" <?= $edit ? '' : 'required' ?>>
+          <button type="button" class="pw-toggle" onclick="const i=document.getElementById('user-password');i.type=i.type==='password'?'text':'password';" aria-label="Show password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+      </div>
+      <?php if ($edit): ?>
+        <div class="checkbox-row"><input type="checkbox" id="is_active" name="is_active" <?= ((int)$edit['is_active'] === 1) ? 'checked' : '' ?>><label for="is_active">Active</label></div>
+      <?php endif; ?>
+      <button class="btn btn-primary btn-block save-flash" type="submit"><?= $edit ? 'Save Changes' : 'Create User' ?></button>
+      <?php if ($edit): ?><a class="btn btn-ghost btn-block" href="users_management.php" style="margin-top:8px;">Cancel Edit</a><?php endif; ?>
+    </form>
+  </div>
 
-<script>
-  (function(){
-    function eyeSvg(){
-      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>';
-    }
-    function eyeOffSvg(){
-      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.2 3.2L20.8 20.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 6.4C11 6.33 11.5 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C21 13.6 19.8 15 18.3 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.1 14.1C13.6 14.6 12.9 15 12 15C10.3 15 9 13.7 9 12C9 11.1 9.4 10.4 9.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.1 7.6C4.5 8.6 3.2 10.1 2.2 12C3.9 15.4 7.4 17.7 12 17.7C13.8 17.7 15.4 17.3 16.8 16.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-    }
-
-    document.querySelectorAll('[data-toggle-password]').forEach(function(btn){
-      var input = document.getElementById(btn.getAttribute('data-toggle-password'));
-      if (!input) return;
-      btn.addEventListener('click', function(){
-        var hidden = input.type === 'password';
-        input.type = hidden ? 'text' : 'password';
-        btn.innerHTML = hidden ? eyeOffSvg() : eyeSvg();
-        btn.setAttribute('aria-label', hidden ? (btn.dataset.hideLabel || 'Hide password') : (btn.dataset.showLabel || 'Show password'));
-      });
-    });
-  })();
-</script>
+  <div class="panel" style="padding:0;overflow:hidden;">
+    <table class="users-table">
+      <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right;width:140px;">Actions</th></tr></thead>
+      <tbody>
+      <?php if (!$users): ?>
+        <tr><td colspan="5" class="empty-state">No users found.</td></tr>
+      <?php else: foreach ($users as $uu): $grad = um_avatar_gradient((string)$uu['name']); ?>
+        <tr>
+          <td><div class="user-cell"><div class="avatar" style="background:<?= h($grad) ?>"><?= h(user_initials((string)$uu['name'])) ?></div><div class="user-name"><?= h($uu['name']) ?></div></div></td>
+          <td class="user-email"><?= h($uu['email']) ?></td>
+          <td><?= h($uu['role_name']) ?></td>
+          <td>
+            <?php if ((int)$uu['is_active'] === 1): ?>
+              <span class="status-pill active"><span class="dot"></span>Active</span>
+            <?php else: ?>
+              <span class="status-pill disabled"><span class="dot"></span>Disabled</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <div class="row-actions">
+              <a class="btn-tiny" href="?edit=<?= (int)$uu['id'] ?>">Edit</a>
+              <form method="post" style="display:inline;" onsubmit="return confirm('Delete user?');">
+                <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="<?= (int)$uu['id'] ?>">
+                <button class="btn-tiny danger">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      <?php endforeach; endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
