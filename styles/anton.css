@@ -68,7 +68,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav {
+  /* display + list-style explicitly reset so Bootstrap's .nav (display: flex; flex-wrap: wrap; list-style: none) cannot turn the sidebar into a wrapping horizontal row. */
+  display: block;
+  list-style: none;
   padding: 4px 12px;
+  margin: 0;
   flex: 1;
   overflow-y: auto;
 }

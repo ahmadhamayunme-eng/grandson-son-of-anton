@@ -13,11 +13,11 @@ $pageHeadExtra = $pageHeadExtra ?? '';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/anton.css">
-  <!-- Bootstrap remains loaded as a compatibility shim for pages not yet rebuilt against the new design system. -->
+  <!-- Bootstrap is loaded first as a compatibility shim for pages not yet rebuilt against the new design system. -->
+  <!-- anton.css and the shim block follow so the new design system wins all property collisions on shared class names (.btn, .btn-primary, .nav, body, ...). -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* Tone-down Bootstrap defaults so it blends with anton.css */
+    /* Tone-down Bootstrap defaults for legacy (non-redesigned) pages so they blend with anton.css. */
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
     .btn-yellow { background: var(--accent); border-color: var(--accent); color: #1a1400; font-weight: 600; }
     .btn-yellow:hover, .btn-yellow:focus { background: var(--accent-hover); border-color: var(--accent-hover); color: #1a1400; }
@@ -29,6 +29,7 @@ $pageHeadExtra = $pageHeadExtra ?? '';
     .alert-success { background: var(--success-soft); border-color: rgba(34,197,94,0.25); color: #86efac; }
     .alert-danger { background: var(--danger-soft); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
   </style>
+  <link rel="stylesheet" href="styles/anton.css">
   <?=$pageHeadExtra?>
 </head>
 <body>
