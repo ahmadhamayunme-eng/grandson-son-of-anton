@@ -68,12 +68,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav {
-  /* display + list-style explicitly reset so Bootstrap's .nav (display: flex; flex-wrap: wrap; list-style: none) cannot turn the sidebar into a wrapping horizontal row. */
-  display: block;
+  /* Forced column flex so Bootstrap's .nav (display: flex; flex-wrap: wrap) cannot lay out the sidebar items horizontally regardless of CSS load order or browser cache. */
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
   list-style: none;
   padding: 4px 12px;
   margin: 0;
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
 }
 .nav::-webkit-scrollbar { width: 0; }
@@ -288,6 +290,21 @@ textarea.input { resize: vertical; min-height: 64px; }
 /* ===== Save flash ===== */
 .save-flash { transition: transform 0.1s; }
 .save-flash:active { transform: scale(0.97); }
+
+/* ===== Global page-header back-button stacking =====
+   Force the back button to render ABOVE the page title on every page.
+   Per-page inline <style> blocks define `.page-header-left` (and variants)
+   with `display: flex; align-items: center;` which stacks them horizontally.
+   Scoping under `.app` raises specificity from (0,1,0) to (0,2,0) so this
+   rule wins regardless of where the inline block is in the cascade. */
+.app .page-header-left,
+.app .ph-left,
+.app .ch-left,
+.app .breadcrumb-left {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
 
 /* ===== Flash messages ===== */
 .flash {
