@@ -1,9 +1,15 @@
 <?php
-require_once __DIR__ . '/layout.php';
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/helpers.php';
+require_once __DIR__ . '/lib/db.php';
+auth_require_login();
 auth_require_any(['Manager','Super Admin']);
-$pdo=db(); $ws=auth_workspace_id();
 
-$stmt=$pdo->prepare("SELECT t.id,t.title,t.status,t.updated_at,t.submitted_at,p.name AS project_name,c.name AS client_name,
+$pdo = db();
+$ws = auth_workspace_id();
+
+$stmt = $pdo->prepare("SELECT t.id,t.title,t.status,t.updated_at,t.submitted_at,p.name AS project_name,c.name AS client_name,
   GROUP_CONCAT(u.name SEPARATOR ', ') AS assignees
   FROM tasks t
   JOIN projects p ON p.id=t.project_id
@@ -14,68 +20,90 @@ $stmt=$pdo->prepare("SELECT t.id,t.title,t.status,t.updated_at,t.submitted_at,p.
   GROUP BY t.id
   ORDER BY COALESCE(t.submitted_at,t.updated_at) DESC, t.id DESC");
 $stmt->execute([$ws]);
-$rows=$stmt->fetchAll();
+$rows = $stmt->fetchAll();
 
-$total=count($rows);
-$clients=[];
-foreach($rows as $r){ $clients[$r['client_name']]=1; }
-?>
+$total = count($rows);
+$clients = [];
+foreach ($rows as $r) $clients[$r['client_name']] = 1;
+
+$pageTitle = 'Completed Task Archive';
+$activeKey = 'archive';
+$pageHeadExtra = <<<HTML
 <style>
-  .archive-shell{border:1px solid rgba(255,255,255,.11);border-radius:16px;background:linear-gradient(180deg,#101010,#070707);overflow:hidden}
-  .archive-head{padding:1rem 1.1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
-  .archive-title{font-size:2rem;font-weight:600;margin:0}
-  .archive-sub{color:rgba(220,220,220,.7);margin-top:.2rem}
-  .archive-stats{display:flex;gap:.5rem;flex-wrap:wrap}
-  .archive-stat{padding:.42rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#eaeaea;font-size:.88rem}
-  .archive-body{padding:1rem 1.1rem}
-  .archive-table{width:100%;border-collapse:collapse;border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
-  .archive-table th,.archive-table td{padding:.72rem .8rem;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:middle}
-  .archive-table th{background:rgba(255,255,255,.04);color:rgba(236,236,236,.82);font-weight:600;text-align:left}
-  .archive-table tr:last-child td{border-bottom:0}
-  .archive-title-link{color:#ececf0;text-decoration:none;font-weight:600}
-  .archive-title-link:hover{color:#ffcc00}
-  .archive-chip{display:inline-flex;padding:.28rem .62rem;border-radius:999px;border:1px solid rgba(87,200,143,.45);background:rgba(87,200,143,.14);color:#8fe8b4;font-size:.8rem;font-weight:600;white-space:nowrap}
-  .archive-muted{color:rgba(220,220,220,.72);font-size:.9rem}
-  .empty-box{padding:2rem 1rem;text-align:center;border:1px dashed rgba(255,255,255,.18);border-radius:12px;color:rgba(220,220,220,.72)}
+  .page-header { padding: 28px 32px 0; max-width: 1640px; margin: 0 auto; width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .page-header-left { display: flex; align-items: center; gap: 14px; }
+  .page-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .page-sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+  .page-stats { display: flex; gap: 24px; font-variant-numeric: tabular-nums; }
+  .stat { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+  .stat-num { font-size: 20px; font-weight: 600; color: var(--text); }
+  .stat-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+  .table-wrap { max-width: 1640px; margin: 24px auto 28px; width: 100%; padding: 0 32px; }
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  table.archive { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.archive thead th { text-align: left; padding: 12px 16px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); background: var(--bg); border-bottom: 1px solid var(--border); }
+  table.archive tbody tr { transition: background 0.12s; }
+  table.archive tbody tr:hover { background: var(--surface-hover); }
+  table.archive tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+  table.archive tbody tr:last-child td { border-bottom: none; }
+  .task-link { color: var(--text); font-weight: 600; text-decoration: none; }
+  .task-link:hover { color: var(--accent); }
+  .chip-done { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 500; color: #86efac; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); }
+  .chip-done .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+  .empty-state { padding: 48px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .empty-state svg { width: 32px; height: 32px; color: var(--text-dim); margin-bottom: 12px; }
+  .btn-tiny { padding: 5px 11px; font-size: 11.5px; font-weight: 500; border-radius: 6px; transition: all 0.12s; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 5px; color: var(--text); text-decoration: none; }
+  .btn-tiny:hover { background: var(--accent); color: #1a1400; border-color: var(--accent); }
+  .btn-tiny svg { width: 11px; height: 11px; }
+  .due-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--text-muted); }
 </style>
+HTML;
 
-<div class="archive-shell">
-  <div class="archive-head">
+require_once __DIR__ . '/layout.php';
+?>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <?= back_button_html() ?>
     <div>
-      <h2 class="archive-title">Completed Task Archive</h2>
-      <div class="archive-sub">Final archive for tasks already submitted to the client.</div>
-    </div>
-    <div class="archive-stats">
-      <span class="archive-stat">Archived Tasks: <?= (int)$total ?></span>
-      <span class="archive-stat">Clients: <?= (int)count($clients) ?></span>
-      <span class="archive-stat">Status: Submitted to Client</span>
+      <div class="page-title">Completed Task Archive</div>
+      <div class="page-sub">Final archive for tasks already submitted to the client.</div>
     </div>
   </div>
-  <div class="archive-body">
-    <?php if(!$rows): ?>
-      <div class="empty-box">No submitted tasks have been archived yet.</div>
-    <?php else: ?>
-      <div class="table-responsive">
-        <table class="archive-table">
-          <thead>
-            <tr><th>Task</th><th>Client</th><th>Project</th><th>Assignees</th><th>Status</th><th>Submitted</th><th></th></tr>
-          </thead>
-          <tbody>
-            <?php foreach($rows as $r): ?>
-              <tr>
-                <td><a class="archive-title-link" href="task_view.php?id=<?= (int)$r['id'] ?>"><?=h($r['title'])?></a></td>
-                <td><?=h($r['client_name'])?></td>
-                <td><?=h($r['project_name'])?></td>
-                <td class="archive-muted"><?=h($r['assignees'] ?? 'Unassigned')?></td>
-                <td><span class="archive-chip"><?=h($r['status'])?></span></td>
-                <td class="archive-muted"><?=h($r['submitted_at'] ?: $r['updated_at'])?></td>
-                <td class="text-end"><a class="btn btn-outline-light btn-sm" href="task_view.php?id=<?= (int)$r['id'] ?>">Open</a></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+  <div class="page-stats">
+    <div class="stat"><span class="stat-num"><?= (int)$total ?></span><span class="stat-label">Archived</span></div>
+    <div class="stat"><span class="stat-num"><?= (int)count($clients) ?></span><span class="stat-label">Clients</span></div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-card">
+    <?php if (!$rows): ?>
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+        <div>No submitted tasks have been archived yet.</div>
       </div>
+    <?php else: ?>
+      <table class="archive">
+        <thead><tr><th>Task</th><th>Client</th><th>Project</th><th>Assignees</th><th>Status</th><th>Submitted</th><th style="text-align:right;width:90px;"></th></tr></thead>
+        <tbody>
+        <?php foreach ($rows as $r): ?>
+          <tr>
+            <td><a class="task-link" href="task_view.php?id=<?= (int)$r['id'] ?>"><?= h($r['title']) ?></a></td>
+            <td><?= h($r['client_name']) ?></td>
+            <td><?= h($r['project_name']) ?></td>
+            <td style="color:var(--text-muted);"><?= h($r['assignees'] ?? 'Unassigned') ?></td>
+            <td><span class="chip-done"><span class="dot"></span><?= h($r['status']) ?></span></td>
+            <td><span class="due-mono"><?= h($r['submitted_at'] ?: $r['updated_at']) ?></span></td>
+            <td style="text-align:right;">
+              <a class="btn-tiny" href="task_view.php?id=<?= (int)$r['id'] ?>">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></a>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
     <?php endif; ?>
   </div>
 </div>
+
 <?php require_once __DIR__ . '/layout_end.php'; ?>
