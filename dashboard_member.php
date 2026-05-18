@@ -94,7 +94,7 @@ function member_status_chip(string $status): string {
   .chip-green { background: var(--success-soft); border-color: rgba(34,197,94,0.30); color: var(--success); }
   .chip-red { background: var(--danger-soft); border-color: rgba(239,68,68,0.30); color: var(--danger); }
   .chip-purple { background: rgba(168,85,247,0.14); border-color: rgba(168,85,247,0.30); color: #a855f7; }
-  html.light .chip-yellow { color: #92400e; }       /* yellow text wouldn't read on the soft tint; use amber-800 in light mode for the chip text only */
+  /* Yellow chip text is overridden globally in anton.css's light-mode block to a dark neutral — no need for a per-page color here. */
   /* Make sure the "No tasks" Bootstrap helper reads correctly in light mode. */
   html.light .member-shell .text-muted { color: var(--text-muted) !important; }
 </style>
