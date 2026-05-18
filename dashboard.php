@@ -138,13 +138,19 @@ foreach ($tasks as $t) {
   $calendarMap[$d][] = $t;
 }
 
+// "Working now" = any user with at least one open task assigned in this workspace.
+// We intentionally only exclude truly terminal states (closed/cancelled/archived/done).
+// Tasks in "Submitted to Client" or "Approved (Ready to Submit)" are still in-flight
+// for the assignee — they may need revision, follow-up, or payment chase — so they count.
 $workingNow = dash_safe_rows($pdo, "SELECT u.id, u.name,
     COUNT(DISTINCT ta.task_id) AS task_count
   FROM task_assignees ta
   JOIN users u ON u.id=ta.user_id
   JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
-  WHERE LOWER(t.status) NOT LIKE '%submitted%'
-    AND LOWER(t.status) NOT LIKE '%approved%'
+  WHERE LOWER(t.status) NOT LIKE '%closed%'
+    AND LOWER(t.status) NOT LIKE '%cancel%'
+    AND LOWER(t.status) NOT LIKE '%archiv%'
+    AND LOWER(t.status) NOT IN ('done','completed')
   GROUP BY u.id, u.name
   ORDER BY task_count DESC, u.name ASC
   LIMIT 8", [$ws]);
@@ -159,9 +165,12 @@ if ($workingNow) {
      JOIN users u ON u.id=ta.user_id
      JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
      WHERE u.id IN ($in)
-       AND LOWER(t.status) NOT LIKE '%submitted%'
-       AND LOWER(t.status) NOT LIKE '%approved%'
-     ORDER BY t.due_date ASC", array_merge([$ws], $ids));
+       AND LOWER(t.status) NOT LIKE '%closed%'
+       AND LOWER(t.status) NOT LIKE '%cancel%'
+       AND LOWER(t.status) NOT LIKE '%archiv%'
+       AND LOWER(t.status) NOT IN ('done','completed')
+     ORDER BY t.due_date IS NULL, t.due_date ASC
+     LIMIT 200", array_merge([$ws], $ids));
   foreach ($rows as $r) { $workerTasks[(int)$r['uid']][] = $r; }
 }
 
@@ -188,6 +197,9 @@ $riskBlockers = dash_safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date
   ORDER BY (t.due_date IS NULL), t.due_date ASC
   LIMIT 10", [$ws]);
 
+// Workload by team. Start from users (so empty teams still show), then LEFT JOIN tasks
+// the team is currently working on. Same "active" definition as workingNow: only
+// truly terminal statuses are excluded.
 $workload = dash_safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(r.name), ''), 'General') AS team,
     COUNT(DISTINCT ta.task_id) AS active_tasks,
     COUNT(DISTINCT u.id) AS members,
@@ -196,11 +208,13 @@ $workload = dash_safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(r.name), ''), 'Gen
   LEFT JOIN roles r ON r.id=u.role_id
   LEFT JOIN task_assignees ta ON ta.user_id=u.id
   LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
-    AND LOWER(t.status) NOT LIKE '%submitted%'
-    AND LOWER(t.status) NOT LIKE '%approved%'
+    AND LOWER(t.status) NOT LIKE '%closed%'
+    AND LOWER(t.status) NOT LIKE '%cancel%'
+    AND LOWER(t.status) NOT LIKE '%archiv%'
+    AND LOWER(t.status) NOT IN ('done','completed')
   WHERE u.workspace_id=? AND u.is_active=1
   GROUP BY team
-  ORDER BY active_tasks DESC
+  ORDER BY active_tasks DESC, members DESC
   LIMIT 6", [$ws, $ws]);
 
 $pageTitle = 'Dashboard';
