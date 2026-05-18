@@ -89,6 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: var(--accent);
       margin-left: 4px;
     }
+    .auth-brand-logo {
+      display: block;
+      width: 100%;
+      max-width: 200px;
+      height: auto;
+      object-fit: contain;
+    }
+    /* PNG ships white-on-transparent + yellow X; invert + hue-rotate flips
+       white→black while keeping the X yellow in light mode. */
+    html.light .auth-brand-logo {
+      filter: invert(1) hue-rotate(180deg);
+    }
     .auth-eyebrow {
       font-size: 11px;
       color: var(--text-dim);
@@ -322,7 +334,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <div class="auth-shell">
   <div class="auth-card">
-    <div class="auth-brand" aria-label="anton x">anton<span class="x">x</span></div>
+    <div class="auth-brand" aria-label="anton x">
+      <img src="partials/antonx-logo.png" alt="anton x" class="auth-brand-logo">
+    </div>
 
     <div class="auth-eyebrow">Welcome back</div>
     <h1 class="auth-title">Sign in to your workspace</h1>
