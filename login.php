@@ -89,17 +89,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: var(--accent);
       margin-left: 4px;
     }
+    /* Inline SVG. "anton" text uses currentColor (set via .color below);
+       "X" stays #F2CC2F from the SVG's hardcoded fill — same yellow in
+       every theme, no filter math. */
     .auth-brand-logo {
-      display: block;
+      display: inline-block;
       width: 100%;
       max-width: 200px;
-      height: auto;
-      object-fit: contain;
+      line-height: 0;
+      color: var(--text);
     }
-    /* PNG ships white-on-transparent + yellow X; invert + hue-rotate flips
-       white→black while keeping the X yellow in light mode. */
-    html.light .auth-brand-logo {
-      filter: invert(1) hue-rotate(180deg);
+    .auth-brand-logo svg {
+      display: block;
+      width: 100%;
+      height: auto;
     }
     .auth-eyebrow {
       font-size: 11px;
@@ -335,7 +338,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="auth-shell">
   <div class="auth-card">
     <div class="auth-brand" aria-label="anton x">
-      <img src="partials/antonx-logo.png" alt="anton x" class="auth-brand-logo">
+      <span class="auth-brand-logo"><?= file_get_contents(__DIR__ . '/partials/antonx-logo.svg') ?></span>
     </div>
 
     <div class="auth-eyebrow">Welcome back</div>

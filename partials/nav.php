@@ -39,7 +39,7 @@ $icons = [
 ?>
 <aside class="sidebar">
   <a class="brand" href="dashboard.php" aria-label="anton x">
-    <img src="partials/antonx-logo.png" alt="anton x" class="brand-logo">
+    <span class="brand-logo"><?= file_get_contents(__DIR__ . '/antonx-logo.svg') ?></span>
   </a>
   <nav class="nav" id="antonNav">
     <?= nav_item_html('dashboard.php', 'dashboard', 'Dashboard', $icons['dashboard'], $activeKey) ?>
