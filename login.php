@@ -18,6 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- FOUC-safe theme init — mirrors the one in partials/header.php so the
+       login screen uses the same persisted theme as the rest of the app. -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('anton-theme');
+        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        var theme = saved || (prefersLight ? 'light' : 'dark');
+        if (theme === 'light') document.documentElement.classList.add('light');
+      } catch (e) {}
+    })();
+  </script>
   <title>anton x — Sign in</title>
   <link rel="icon" type="image/png" href="partials/antonx-favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -299,6 +311,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 
+<!-- Theme toggle (same fixed top-right button as the rest of the app). -->
+<button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle dark / light mode">
+  <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>
+  <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+</button>
+
 <div class="auth-shell">
   <div class="auth-card">
     <div class="auth-brand" aria-label="anton x">anton<span class="x">x</span></div>
@@ -405,6 +423,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const emailEl = document.getElementById('login-email');
     if (emailEl.value.trim() !== '') pwInput.focus();
   });
+
+  // Theme toggle (same behaviour as the rest of the app — persists to localStorage).
+  (function(){
+    const btn = document.getElementById('themeToggle');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const isLight = document.documentElement.classList.toggle('light');
+      try { localStorage.setItem('anton-theme', isLight ? 'light' : 'dark'); } catch (e) {}
+    });
+  })();
 </script>
 
 </body>
