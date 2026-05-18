@@ -12,6 +12,84 @@ if (in_array($role, ['Developer', 'SEO'], true)) {
 
 $pdo = db();
 $ws = auth_workspace_id();
+$user = auth_user();
+$canManage = in_array($role, ['CEO', 'Manager', 'Super Admin'], true);
+$canFinalStatus = $canManage;
+
+function dash_task_statuses(PDO $pdo, int $ws, bool $can_final): array {
+  try {
+    $st = $pdo->prepare('SELECT name FROM task_statuses WHERE workspace_id = ? ORDER BY sort_order ASC');
+    $st->execute([$ws]);
+    $list = array_map(fn($r) => $r['name'], $st->fetchAll());
+  } catch (Throwable $e) { $list = []; }
+  if (!$list) $list = ['To Do', 'In Progress', 'Completed', 'Approved', 'Submitted to Client'];
+  if (!$can_final) {
+    $list = array_values(array_filter($list, fn($s) => !in_array($s, ['Approved', 'Approved (Ready to Submit)', 'Submitted to Client'], true)));
+  }
+  return $list;
+}
+
+// Handle quick-create POSTs from the dashboard buttons before any other rendering.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManage) {
+  if (isset($_POST['add_task_dashboard'])) {
+    require_post();
+    csrf_verify();
+    $title    = trim((string)($_POST['title'] ?? ''));
+    $clientId = (int)($_POST['client_id'] ?? 0);
+    $projectId = (int)($_POST['project_id'] ?? 0);
+    $phaseId  = (int)($_POST['phase_id'] ?? 0);
+    $desc     = trim((string)($_POST['description'] ?? ''));
+    $status   = trim((string)($_POST['status'] ?? 'To Do'));
+    $due      = trim((string)($_POST['due_date'] ?? ''));
+
+    if ($title === '' || $projectId <= 0 || $phaseId <= 0) {
+      flash_set('error', 'Task title, project, and phase are required.');
+      redirect('dashboard.php');
+    }
+    // Verify the project + phase belong to this workspace (and phase to this project).
+    $st = $pdo->prepare('SELECT p.id FROM projects p WHERE p.id=? AND p.workspace_id=? AND p.client_id=?');
+    $st->execute([$projectId, $ws, $clientId]);
+    if (!$st->fetchColumn()) { flash_set('error', 'Invalid project selection.'); redirect('dashboard.php'); }
+    $st = $pdo->prepare('SELECT id FROM phases WHERE id=? AND project_id=? AND workspace_id=?');
+    $st->execute([$phaseId, $projectId, $ws]);
+    if (!$st->fetchColumn()) { flash_set('error', 'Invalid phase selection.'); redirect('dashboard.php'); }
+
+    $allowed = dash_task_statuses($pdo, $ws, $canFinalStatus);
+    if (!in_array($status, $allowed, true)) $status = $allowed[0] ?? 'To Do';
+
+    $pdo->prepare('INSERT INTO tasks (workspace_id,project_id,phase_id,title,description,status,due_date,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $projectId, $phaseId, $title, $desc ?: null, $status, $due ?: null, (int)$user['id'], now(), now()]);
+    $taskId = (int)$pdo->lastInsertId();
+    foreach (($_POST['assignees'] ?? []) as $uid) {
+      $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$taskId, (int)$uid]);
+    }
+    flash_set('success', 'Task created.');
+    redirect('task_view.php?id=' . $taskId);
+  }
+
+  if (isset($_POST['add_project_dashboard'])) {
+    require_post();
+    csrf_verify();
+    $name     = trim((string)($_POST['name'] ?? '')) ?: 'Untitled Project';
+    $clientId = (int)($_POST['client_id'] ?? 0);
+    $typeId   = (int)($_POST['type_id'] ?? 0);
+    $statusId = (int)($_POST['status_id'] ?? 0);
+    $due      = trim((string)($_POST['due_date'] ?? ''));
+    $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+    if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) $pricingModel = 'fixed_price';
+
+    if ($clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
+      flash_set('error', 'Client, project type, and status are required.');
+      redirect('dashboard.php');
+    }
+    // Match the column list used by projects.php so we don't trip on NOT NULL columns added by migrations.
+    $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, pricing_model, project_price, payment_terms, hourly_rate, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $due ?: null, $pricingModel, null, null, null, null, null, json_encode([], JSON_UNESCAPED_SLASHES), now(), now()]);
+    $projectId = (int)$pdo->lastInsertId();
+    flash_set('success', 'Project created.');
+    redirect('project_view.php?id=' . $projectId);
+  }
+}
 
 function dash_safe_rows(PDO $pdo, string $sql, array $params = []): array {
   try {
@@ -190,6 +268,32 @@ $riskBlockers = dash_safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date
   ORDER BY (t.due_date IS NULL), t.due_date ASC
   LIMIT 10", [$ws]);
 
+// Data for the Add Task + Add Project quick-create modals (manager+ only).
+$quickClients = [];
+$quickProjectsByClient = []; // map: client_id => [{id,name},...]
+$quickPhasesByProject = [];  // map: project_id => [{id,name},...]
+$quickProjectTypes = [];
+$quickProjectStatuses = [];
+$quickTaskStatuses = [];
+$quickTeam = [];
+if ($canManage) {
+  $quickClients = dash_safe_rows($pdo, 'SELECT id, name FROM clients WHERE workspace_id=? ORDER BY name ASC', [$ws]);
+  $projRows = dash_safe_rows($pdo, 'SELECT id, client_id, name FROM projects WHERE workspace_id=? ORDER BY name ASC', [$ws]);
+  foreach ($projRows as $pr) {
+    $quickProjectsByClient[(int)$pr['client_id']][] = ['id' => (int)$pr['id'], 'name' => $pr['name']];
+  }
+  $phaseRows = dash_safe_rows($pdo, 'SELECT id, project_id, name FROM phases WHERE workspace_id=? ORDER BY sort_order ASC, id ASC', [$ws]);
+  foreach ($phaseRows as $ph) {
+    $quickPhasesByProject[(int)$ph['project_id']][] = ['id' => (int)$ph['id'], 'name' => $ph['name']];
+  }
+  $quickProjectTypes    = dash_safe_rows($pdo, 'SELECT id, name FROM project_types WHERE workspace_id=? ORDER BY sort_order ASC, id ASC', [$ws]);
+  $quickProjectStatuses = dash_safe_rows($pdo, 'SELECT id, name FROM project_statuses WHERE workspace_id=? ORDER BY sort_order ASC, id ASC', [$ws]);
+  $quickTaskStatuses    = dash_task_statuses($pdo, $ws, $canFinalStatus);
+  $quickTeam = dash_safe_rows($pdo, "SELECT u.id, u.name, r.name AS role_name
+    FROM users u JOIN roles r ON r.id=u.role_id
+    WHERE u.workspace_id=? AND u.is_active=1 ORDER BY u.name ASC", [$ws]);
+}
+
 $pageTitle = 'Dashboard';
 $activeKey = 'dashboard';
 $pageHeadExtra = <<<HTML
@@ -282,6 +386,77 @@ $pageHeadExtra = <<<HTML
   .workload-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--success)); border-radius: 999px; }
   .workload-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
   @media (max-width: 1280px) { .content { grid-template-columns: 1fr; } }
+
+  /* Quick-create buttons in the page header */
+  .quick-actions { display: inline-flex; align-items: center; gap: 8px; }
+  .quick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; transition: all 0.15s; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  .quick-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .quick-btn.primary { background: var(--accent); color: #1a1400; border-color: var(--accent); }
+  .quick-btn.primary:hover { background: var(--accent-hover); }
+  .quick-btn svg { width: 14px; height: 14px; }
+  .page-header-right { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* Modal chrome (mirrors project_view.php) */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: flex-start; justify-content: center; padding: 60px 20px; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 720px; overflow: hidden; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .modal-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--bg); }
+  .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; background: none; border: none; cursor: pointer; }
+  .icon-close:hover { background: var(--surface-2); color: var(--text); }
+
+  /* Add Task / Add Project body — same look as task_view.php rail */
+  .at-card { max-width: 760px; }
+  .at-body { padding: 22px 24px 6px; max-height: 76vh; overflow-y: auto; }
+  .at-title-field { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; padding: 4px 0 14px; border-bottom: 1px solid var(--border); transition: border-color 0.15s; font-family: inherit; }
+  .at-title-field::placeholder { color: var(--text-dim); font-weight: 600; }
+  .at-title-field:focus { border-bottom-color: var(--accent); }
+  .at-section { margin-top: 22px; }
+  .at-section-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .at-section-label svg { width: 12px; height: 12px; }
+  .at-desc { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 14px; line-height: 1.55; min-height: 100px; resize: vertical; outline: none; transition: all 0.15s; font-family: inherit; }
+  .at-desc::placeholder { color: var(--text-dim); }
+  .at-desc:focus { border-color: var(--border-strong); background: var(--bg); }
+  .at-meta-row { display: grid; gap: 14px; }
+  .at-meta-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .at-meta-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .at-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .at-field-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 5px; }
+  .at-field-label svg { width: 12px; height: 12px; color: var(--text-dim); }
+  .at-input, .at-select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; outline: none; transition: all 0.15s; font-family: inherit; }
+  .at-input:focus, .at-select:focus { border-color: var(--accent); background: var(--bg); }
+  .at-input[type=date] { color-scheme: dark; }
+  .at-select { appearance: none; padding-right: 32px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .at-select:focus { background-color: var(--bg); }
+  .at-select option { background: #1a1a1a; color: var(--text); }
+  .at-select:disabled { opacity: 0.5; cursor: not-allowed; }
+  .at-status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .at-status-opt { padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; transition: all 0.15s; cursor: pointer; user-select: none; }
+  .at-status-opt:hover { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .at-status-opt.active { background: var(--accent-soft); border-color: rgba(250,204,21,0.4); color: var(--accent); font-weight: 500; }
+  .at-status-opt .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .at-status-opt.active .dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(250,204,21,0.18); }
+  .at-assignees { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); max-height: 220px; overflow-y: auto; padding: 6px; }
+  .at-assignee-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.12s; }
+  .at-assignee-row:hover { background: var(--surface); }
+  .at-assignee-row.selected { background: var(--surface); }
+  .at-assignee-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .at-av { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; color: #fff; letter-spacing: 0.02em; flex-shrink: 0; }
+  .at-assignee-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .at-assignee-role { font-size: 11px; color: var(--text-dim); }
+  .at-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; background: transparent; }
+  .at-assignee-row.selected .at-check { background: var(--accent); border-color: var(--accent); }
+  .at-check svg { width: 12px; height: 12px; color: #1a1400; opacity: 0; transition: opacity 0.15s; }
+  .at-assignee-row.selected .at-check svg { opacity: 1; }
+  .at-assignee-empty { padding: 18px; text-align: center; color: var(--text-dim); font-size: 12.5px; font-style: italic; }
+  .at-count-pill { font-size: 11px; background: var(--surface); color: var(--text-muted); padding: 2px 8px; border-radius: 999px; font-weight: 500; letter-spacing: 0; text-transform: none; border: 1px solid var(--border); margin-left: 6px; }
+  .at-count-pill.has { color: var(--accent); border-color: rgba(250,204,21,0.3); background: var(--accent-soft); }
+  .at-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; border-radius: 8px; transition: all 0.15s; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-family: inherit; }
+  .at-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .at-btn.primary { background: var(--accent); color: #1a1400; border-color: var(--accent); }
+  .at-btn.primary:hover { background: var(--accent-hover); }
+  @media (max-width: 640px) { .at-meta-row.cols-2, .at-meta-row.cols-3 { grid-template-columns: 1fr; } .at-status-grid { grid-template-columns: 1fr; } }
 </style>
 HTML;
 
@@ -296,16 +471,30 @@ require_once __DIR__ . '/layout.php';
       <div class="page-sub" style="font-style:italic;">&ldquo;<?= h(dashboard_random_quote()) ?>&rdquo;</div>
     </div>
   </div>
-  <div class="month-pager">
-    <a href="?month=<?= h($prevMonth) ?>" title="Previous month">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      Prev
-    </a>
-    <span class="month-label"><?= h(date('F Y', strtotime($monthStart))) ?></span>
-    <a href="?month=<?= h($nextMonth) ?>" title="Next month">
-      Next
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-    </a>
+  <div class="page-header-right">
+    <?php if ($canManage): ?>
+      <div class="quick-actions">
+        <button type="button" class="quick-btn" onclick="document.getElementById('quickAddProject').classList.add('open')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 3h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+          Add Project
+        </button>
+        <button type="button" class="quick-btn primary" onclick="document.getElementById('quickAddTask').classList.add('open')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add Task
+        </button>
+      </div>
+    <?php endif; ?>
+    <div class="month-pager">
+      <a href="?month=<?= h($prevMonth) ?>" title="Previous month">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Prev
+      </a>
+      <span class="month-label"><?= h(date('F Y', strtotime($monthStart))) ?></span>
+      <a href="?month=<?= h($nextMonth) ?>" title="Next month">
+        Next
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </a>
+    </div>
   </div>
 </div>
 
@@ -459,5 +648,316 @@ require_once __DIR__ . '/layout.php';
     </div>
   </aside>
 </div>
+
+<?php if ($canManage): ?>
+<?php
+  $dashAvatarGradient = function(string $seed): string {
+    $p = ['linear-gradient(135deg,#22c55e,#16a34a)','linear-gradient(135deg,#a855f7,#7c3aed)','linear-gradient(135deg,#0ea5e9,#0284c7)','linear-gradient(135deg,#f97316,#ea580c)','linear-gradient(135deg,#ec4899,#be185d)','linear-gradient(135deg,#3b82f6,#1d4ed8)','linear-gradient(135deg,#14b8a6,#0f766e)','linear-gradient(135deg,#facc15,#ca8a04)'];
+    return $p[crc32($seed) % count($p)];
+  };
+?>
+
+<!-- ===== Add Task (quick-create from dashboard) ===== -->
+<div class="modal-overlay" id="quickAddTask" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal-card at-card" role="dialog" aria-label="Add Task">
+    <div class="modal-head">
+      <span class="modal-title">New task</span>
+      <button type="button" class="icon-close" onclick="document.getElementById('quickAddTask').classList.remove('open')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <form method="post" id="quickAddTaskForm">
+      <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+      <input type="hidden" name="add_task_dashboard" value="1">
+      <?php $qatDefaultStatus = $quickTaskStatuses[0] ?? 'To Do'; ?>
+      <input type="hidden" name="status" id="qatStatusInput" value="<?= h($qatDefaultStatus) ?>">
+
+      <div class="at-body">
+        <input class="at-title-field" type="text" name="title" placeholder="Task name…" required autocomplete="off">
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line></svg>
+            Description
+          </div>
+          <textarea class="at-desc" name="description" rows="3" placeholder="Add more detail about this task…"></textarea>
+        </div>
+
+        <div class="at-section at-meta-row cols-3">
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              Client
+            </span>
+            <select class="at-select" name="client_id" id="qatClient" required>
+              <option value="" disabled selected>Select a client…</option>
+              <?php foreach ($quickClients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?>
+            </select>
+          </div>
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 3h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path></svg>
+              Project
+            </span>
+            <select class="at-select" name="project_id" id="qatProject" required disabled>
+              <option value="" disabled selected>Select a client first</option>
+            </select>
+          </div>
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+              Phase
+            </span>
+            <select class="at-select" name="phase_id" id="qatPhase" required disabled>
+              <option value="" disabled selected>Select a project first</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="9 12 11 14 15 10"></polyline></svg>
+            Status
+          </div>
+          <div class="at-status-grid" id="qatStatusGrid">
+            <?php foreach ($quickTaskStatuses as $i => $s): ?>
+              <div class="at-status-opt<?= $i === 0 ? ' active' : '' ?>" data-status="<?= h($s) ?>" role="button" tabindex="0">
+                <span class="dot"></span>
+                <span><?= h($s) ?></span>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <div class="at-section at-meta-row cols-2">
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Due date
+            </span>
+            <input class="at-input" type="date" name="due_date">
+          </div>
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg>
+              Assignees
+              <span class="at-count-pill" id="qatAssigneeCount">0 selected</span>
+            </span>
+            <div class="at-assignees" id="qatAssignees">
+              <?php if (empty($quickTeam)): ?>
+                <div class="at-assignee-empty">No teammates available.</div>
+              <?php else: foreach ($quickTeam as $m):
+                $ini = function_exists('user_initials') ? user_initials((string)$m['name']) : strtoupper(substr((string)$m['name'], 0, 2));
+                $grad = $dashAvatarGradient((string)$m['name']);
+              ?>
+                <label class="at-assignee-row" data-uid="<?= (int)$m['id'] ?>">
+                  <span class="at-assignee-info">
+                    <span class="at-av" style="background:<?= h($grad) ?>"><?= h($ini) ?></span>
+                    <span>
+                      <span class="at-assignee-name"><?= h($m['name']) ?></span><br>
+                      <span class="at-assignee-role"><?= h($m['role_name']) ?></span>
+                    </span>
+                  </span>
+                  <span class="at-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
+                  <input type="checkbox" name="assignees[]" value="<?= (int)$m['id'] ?>" hidden>
+                </label>
+              <?php endforeach; endif; ?>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button type="button" class="at-btn" onclick="document.getElementById('quickAddTask').classList.remove('open')">Cancel</button>
+        <button class="at-btn primary" type="submit">Create task</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Add Project (quick-create from dashboard) ===== -->
+<div class="modal-overlay" id="quickAddProject" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal-card at-card" style="max-width:600px;" role="dialog" aria-label="Add Project">
+    <div class="modal-head">
+      <span class="modal-title">New project</span>
+      <button type="button" class="icon-close" onclick="document.getElementById('quickAddProject').classList.remove('open')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <form method="post" id="quickAddProjectForm">
+      <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
+      <input type="hidden" name="add_project_dashboard" value="1">
+      <input type="hidden" name="pricing_model" value="fixed_price">
+
+      <div class="at-body">
+        <input class="at-title-field" type="text" name="name" placeholder="Project name…" required autocomplete="off">
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+            Client
+          </div>
+          <select class="at-select" name="client_id" required>
+            <option value="" disabled selected>Select a client…</option>
+            <?php foreach ($quickClients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="at-section at-meta-row cols-2">
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line></svg>
+              Type
+            </span>
+            <select class="at-select" name="type_id" required>
+              <?php if (empty($quickProjectTypes)): ?><option value="">No types configured</option>
+              <?php else: foreach ($quickProjectTypes as $t): ?><option value="<?= (int)$t['id'] ?>"><?= h($t['name']) ?></option><?php endforeach; endif; ?>
+            </select>
+          </div>
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="9 12 11 14 15 10"></polyline></svg>
+              Status
+            </span>
+            <select class="at-select" name="status_id" required>
+              <?php if (empty($quickProjectStatuses)): ?><option value="">No statuses configured</option>
+              <?php else: foreach ($quickProjectStatuses as $s): ?><option value="<?= (int)$s['id'] ?>"><?= h($s['name']) ?></option><?php endforeach; endif; ?>
+            </select>
+          </div>
+        </div>
+
+        <div class="at-section">
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Due date <span style="color:var(--text-dim);font-weight:400;">(optional)</span>
+            </span>
+            <input class="at-input" type="date" name="due_date">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button type="button" class="at-btn" onclick="document.getElementById('quickAddProject').classList.remove('open')">Cancel</button>
+        <button class="at-btn primary" type="submit">Create project</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Server-provided dependency maps.
+  const projectsByClient = <?= json_encode($quickProjectsByClient, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+  const phasesByProject  = <?= json_encode($quickPhasesByProject, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+  // ----- Add Task modal -----
+  const taskOverlay  = document.getElementById('quickAddTask');
+  const taskForm     = document.getElementById('quickAddTaskForm');
+  const clientSel    = document.getElementById('qatClient');
+  const projectSel   = document.getElementById('qatProject');
+  const phaseSel     = document.getElementById('qatPhase');
+  const statusGrid   = document.getElementById('qatStatusGrid');
+  const statusInput  = document.getElementById('qatStatusInput');
+  const assigneeWrap = document.getElementById('qatAssignees');
+  const assigneeCnt  = document.getElementById('qatAssigneeCount');
+
+  function fillSelect(sel, items, placeholder) {
+    sel.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = ''; opt.disabled = true; opt.selected = true; opt.textContent = placeholder;
+    sel.appendChild(opt);
+    items.forEach(it => {
+      const o = document.createElement('option');
+      o.value = it.id; o.textContent = it.name;
+      sel.appendChild(o);
+    });
+    sel.disabled = items.length === 0;
+  }
+
+  if (clientSel) {
+    clientSel.addEventListener('change', () => {
+      const cid = parseInt(clientSel.value, 10) || 0;
+      const projects = projectsByClient[cid] || [];
+      fillSelect(projectSel, projects, projects.length ? 'Select a project…' : 'No projects for this client');
+      fillSelect(phaseSel, [], 'Select a project first');
+    });
+  }
+  if (projectSel) {
+    projectSel.addEventListener('change', () => {
+      const pid = parseInt(projectSel.value, 10) || 0;
+      const phases = phasesByProject[pid] || [];
+      fillSelect(phaseSel, phases, phases.length ? 'Select a phase…' : 'No phases for this project');
+    });
+  }
+
+  if (statusGrid && statusInput) {
+    statusGrid.addEventListener('click', e => {
+      const opt = e.target.closest('.at-status-opt');
+      if (!opt) return;
+      statusGrid.querySelectorAll('.at-status-opt').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      statusInput.value = opt.dataset.status || '';
+    });
+    statusGrid.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const opt = e.target.closest('.at-status-opt');
+      if (!opt) return;
+      e.preventDefault();
+      opt.click();
+    });
+  }
+
+  function refreshAssigneeCount() {
+    if (!assigneeWrap || !assigneeCnt) return;
+    const n = assigneeWrap.querySelectorAll('input[type=checkbox]:checked').length;
+    assigneeCnt.textContent = n + ' selected';
+    assigneeCnt.classList.toggle('has', n > 0);
+  }
+  if (assigneeWrap) {
+    assigneeWrap.querySelectorAll('.at-assignee-row').forEach(row => {
+      const cb = row.querySelector('input[type=checkbox]');
+      if (!cb) return;
+      cb.addEventListener('change', () => {
+        row.classList.toggle('selected', cb.checked);
+        refreshAssigneeCount();
+      });
+    });
+    refreshAssigneeCount();
+  }
+
+  // Reset modal when closed.
+  function watchOverlay(overlay, form, onClose) {
+    if (!overlay || !form) return;
+    const obs = new MutationObserver(() => {
+      if (!overlay.classList.contains('open')) {
+        form.reset();
+        if (onClose) onClose();
+      }
+    });
+    obs.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  }
+  watchOverlay(taskOverlay, taskForm, () => {
+    if (clientSel) clientSel.value = '';
+    fillSelect(projectSel, [], 'Select a client first');
+    fillSelect(phaseSel, [], 'Select a project first');
+    if (assigneeWrap) {
+      assigneeWrap.querySelectorAll('.at-assignee-row').forEach(r => r.classList.remove('selected'));
+      refreshAssigneeCount();
+    }
+    if (statusGrid && statusInput) {
+      const opts = statusGrid.querySelectorAll('.at-status-opt');
+      opts.forEach((o, i) => o.classList.toggle('active', i === 0));
+      statusInput.value = opts[0] ? (opts[0].dataset.status || '') : '';
+    }
+  });
+
+  // ----- Add Project modal -----
+  const projectOverlay = document.getElementById('quickAddProject');
+  const projectForm    = document.getElementById('quickAddProjectForm');
+  watchOverlay(projectOverlay, projectForm, null);
+})();
+</script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
