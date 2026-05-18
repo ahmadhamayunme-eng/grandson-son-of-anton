@@ -67,6 +67,80 @@ html.light .cal-cell.dim { background: #eaecf0; }
 html.light .cal-cell.today { background: rgba(250,204,21,0.10); }
 html.light .cal-cell.today::before { border-color: rgba(250,204,21,0.55); }
 
+/* =====================================================================
+   LIGHT MODE: yellow-as-text is unreadable on white. Per user feedback,
+   every place that uses var(--accent) as a text color flips to a dark
+   neutral (#3f3f46, zinc-700). Backgrounds / borders / dots / button
+   surfaces stay yellow — only text changes. */
+html.light .brand .x,
+html.light .pill.status,
+html.light .micro-pill.progress,
+html.light .sp-progress,
+html.light .tsp.progress,
+html.light .cal-cell.today .cal-day,
+html.light .cal-task.review .t-state,
+html.light .chip-yellow,
+html.light .h-pill.role .v,
+html.light .stat-row .v.accent,
+html.light .scope-tabs .tab.active .count,
+html.light .section-nav a.active .count,
+html.light .tabs-row .tab.active .count,
+html.light .pwd-hint .strength.strong,
+html.light .stat-tile .ico.amber,
+html.light .task-icon.amber,
+html.light .folder .ico,
+html.light .auth-eyebrow,
+html.light .search-eyebrow,
+html.light .stat-card .ico.amber,
+html.light .item-title:hover,
+html.light .client-name:hover,
+html.light .projects-link:hover,
+html.light .doc-name:hover,
+html.light .task-title a:hover,
+html.light .r-title a:hover,
+html.light .ready-title a:hover,
+html.light .project-link:hover,
+html.light .forgot-link:hover,
+html.light .auth-foot a:hover,
+html.light .open-link,
+html.light .save-hint.dirty,
+html.light .role-row.active .role-name,
+html.light .role-edit,
+html.light .section-action:hover,
+html.light .results-head .see-all:hover,
+html.light .recent-row .body .title mark,
+html.light .result-row .body .title mark,
+html.light .role-pill,
+html.light .page-stat-card .num,
+html.light .panel-title .ico,
+html.light .perm-key,
+html.light .input-shell:focus-within svg.leading,
+html.light .auth-card .auth-eyebrow::before,
+html.light .scope-meta b,
+html.light .results-shell .results-head .see-all:hover,
+html.light .a-pill.amber,
+html.light .summary-meta .row .v.accent,
+html.light .preview-strip .preview-label,
+html.light .preview-label,
+html.light .s-card .a,
+html.light .ready-banner .role-pill .dot,
+html.light .submit-state .label,
+html.light .seg-btn.approve.active,
+html.light .seg-btn.send-back.active,
+html.light .tab.active .count,
+html.light .auth-shell .auth-title,
+html.light .save-hint,
+html.light .ready-banner .lbl,
+html.light .selected-role-banner .role-pill {
+  color: #3f3f46;     /* zinc-700, dark neutral, fully readable on white */
+}
+
+/* Per the user's explicit instruction: "no text colour should be yellow,
+   find appropriate dark colour". A single dark neutral is used for every
+   former yellow-text usage including the brand X. The yellow stays in
+   button backgrounds, the active sidebar indicator bar, status dots,
+   etc. (those are not text). */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
