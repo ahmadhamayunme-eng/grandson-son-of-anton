@@ -111,37 +111,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_project'])) {
   $paymentTerms = trim((string)($_POST['payment_terms'] ?? ''));
   $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
   $wlNotes = trim((string)($_POST['wl_notes'] ?? ''));
-  $currentLiveName = trim((string)($_POST['current_live_name'] ?? ''));
-  $currentLiveUrl = trim((string)($_POST['current_live_url'] ?? ''));
-  $currentLiveLoginUrl = trim((string)($_POST['current_live_login_url'] ?? ''));
-  $currentLiveUsername = trim((string)($_POST['current_live_username'] ?? ''));
-  $currentLivePassword = (string)($_POST['current_live_password'] ?? '');
-  $productionName = trim((string)($_POST['production_name'] ?? ''));
-  $productionUrl = trim((string)($_POST['production_url'] ?? ''));
-  $productionLoginUrl = trim((string)($_POST['production_login_url'] ?? ''));
-  $productionUsername = trim((string)($_POST['production_username'] ?? ''));
-  $productionPassword = (string)($_POST['production_password'] ?? '');
+
+  // Normalize repeater rows: trim, drop fully-empty rows, validate URLs.
+  $rawLogins = is_array($_POST['logins'] ?? null) ? $_POST['logins'] : [];
+  $logins = [];
+  foreach ($rawLogins as $row) {
+    if (!is_array($row)) continue;
+    $entry = [
+      'type'      => trim((string)($row['type'] ?? '')),
+      'name'      => trim((string)($row['name'] ?? '')),
+      'url'       => trim((string)($row['url'] ?? '')),
+      'login_url' => trim((string)($row['login_url'] ?? '')),
+      'username'  => trim((string)($row['username'] ?? '')),
+      'password'  => (string)($row['password'] ?? ''),
+    ];
+    if ($entry['type'] === '' && $entry['name'] === '' && $entry['url'] === '' && $entry['login_url'] === '' && $entry['username'] === '' && $entry['password'] === '') continue;
+    $logins[] = $entry;
+  }
+
   if ($name === '') { flash_set('error', 'Project name required.'); redirect("client_view.php?id=$id"); }
   if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) { flash_set('error', 'Project pricing model is required.'); redirect("client_view.php?id=$id"); }
-  if ($productionName === '' || $productionUrl === '' || $productionLoginUrl === '' || $productionUsername === '' || $productionPassword === '') {
-    flash_set('error', 'Production Website fields are required.'); redirect("client_view.php?id=$id");
+  foreach ($logins as $entry) {
+    if (!cv_is_valid_url($entry['url']) || !cv_is_valid_url($entry['login_url'])) {
+      flash_set('error', 'Please enter valid website URLs (http/https).'); redirect("client_view.php?id=$id");
+    }
   }
-  if (!cv_is_valid_url($currentLiveUrl) || !cv_is_valid_url($currentLiveLoginUrl) || !cv_is_valid_url($productionUrl) || !cv_is_valid_url($productionLoginUrl)) {
-    flash_set('error', 'Please enter valid website URLs (http/https).'); redirect("client_view.php?id=$id");
-  }
+
   $websiteDetails = [
-    'currentLiveWebsite' => ['name' => $currentLiveName ?: null, 'url' => $currentLiveUrl ?: null, 'loginUrl' => $currentLiveLoginUrl ?: null, 'username' => $currentLiveUsername ?: null, 'password' => $currentLivePassword !== '' ? $currentLivePassword : null],
-    'productionWebsite' => ['name' => $productionName, 'url' => $productionUrl, 'loginUrl' => $productionLoginUrl, 'username' => $productionUsername, 'password' => $productionPassword],
+    'logins' => array_map(fn($e) => [
+      'type'     => $e['type'] !== '' ? $e['type'] : null,
+      'name'     => $e['name'] !== '' ? $e['name'] : null,
+      'url'      => $e['url'] !== '' ? $e['url'] : null,
+      'loginUrl' => $e['login_url'] !== '' ? $e['login_url'] : null,
+      'username' => $e['username'] !== '' ? $e['username'] : null,
+      'password' => $e['password'] !== '' ? $e['password'] : null,
+    ], $logins),
   ];
+  $firstSiteUrl = null;
+  foreach ($logins as $e) { if ($e['url'] !== '') { $firstSiteUrl = $e['url']; break; } }
+
   $pdo->prepare('INSERT INTO projects (workspace_id,client_id,name,type_id,status_id,due_date,pricing_model,project_price,payment_terms,hourly_rate,live_website_url,notes,website_details_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $currentLiveUrl ?: null, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+      ->execute([$ws, $id, $name, $type_id, $status_id, $dueDate, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $firstSiteUrl, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
   $newProjectId = (int)$pdo->lastInsertId();
-  $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-    ->execute([$ws, $id, $newProjectId, $productionName, $productionUrl, $productionLoginUrl, $productionUsername, $productionPassword, $wlNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
-  if ($currentLiveLoginUrl !== '' && $currentLiveUsername !== '' && $currentLivePassword !== '') {
-    $currentSiteName = $currentLiveName !== '' ? $currentLiveName : ($name . ' (Current Live Website)');
+
+  foreach ($logins as $idx => $entry) {
+    $siteName = $entry['name'] !== ''
+      ? $entry['name']
+      : ($entry['type'] !== '' ? $entry['type'] : $name . ' (Login #' . ($idx + 1) . ')');
+    $rowNotes = trim(($entry['type'] !== '' ? 'Type: ' . $entry['type'] : '') . ($wlNotes !== '' ? ($entry['type'] !== '' ? "\n" : '') . $wlNotes : ''));
     $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      ->execute([$ws, $id, $newProjectId, $currentSiteName, $currentLiveUrl ?: null, $currentLiveLoginUrl, $currentLiveUsername, $currentLivePassword, 'Current Live Website', (int)($user['id'] ?? 0), now(), now()]);
+      ->execute([$ws, $id, $newProjectId, $siteName, $entry['url'] ?: null, $entry['login_url'] ?: null, $entry['username'] ?: null, $entry['password'] !== '' ? $entry['password'] : null, $rowNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
   }
   flash_set('success', 'Project created.'); redirect("client_view.php?id=$id");
 }
@@ -301,6 +320,19 @@ $pageHeadExtra = <<<HTML
   .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--bg); }
   .modal-section { padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-top: 14px; }
   .modal-section h6 { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; font-weight: 600; }
+  .login-repeater { margin-top: 14px; }
+  .login-repeater-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .login-repeater-head h6 { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin: 0; }
+  .login-row { position: relative; padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
+  .login-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+  .login-row-index { font-size: 10.5px; color: var(--text-dim); font-family: 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.1em; }
+  .login-row-remove { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-muted); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; transition: all 0.12s; }
+  .login-row-remove:hover { color: #fca5a5; border-color: rgba(239,68,68,0.3); background: var(--danger-soft); }
+  .login-row-remove svg { width: 11px; height: 11px; }
+  .login-row.is-only .login-row-remove { display: none; }
+  .login-add-row { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 12.5px; font-weight: 500; color: var(--text); border-radius: 8px; border: 1px dashed var(--border-strong); background: transparent; cursor: pointer; transition: all 0.15s; }
+  .login-add-row:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .login-add-row svg { width: 13px; height: 13px; }
   .modal-grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
   .modal-grid > * { display: flex; flex-direction: column; gap: 5px; }
   .c-12 { grid-column: span 12; } .c-8 { grid-column: span 8; } .c-6 { grid-column: span 6; } .c-4 { grid-column: span 4; } .c-3 { grid-column: span 3; }
@@ -478,26 +510,51 @@ require_once __DIR__ . '/layout.php';
           <div class="c-4"><label class="field-label">Pricing Model</label><select class="select" name="pricing_model"><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
           <div class="c-4"><label class="field-label">Project Price</label><input class="input" name="project_price" type="number" min="0" step="0.01"></div>
         </div>
-        <div class="modal-section">
-          <h6>Production Website (required)</h6>
-          <div class="modal-grid">
-            <div class="c-6"><label class="field-label">Name</label><input class="input" name="production_name" required></div>
-            <div class="c-6"><label class="field-label">URL</label><input class="input" type="url" name="production_url" required></div>
-            <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="production_login_url" required></div>
-            <div class="c-3"><label class="field-label">Username</label><input class="input" name="production_username" required></div>
-            <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="production_password" required></div>
+        <div class="login-repeater" id="loginRepeater">
+          <div class="login-repeater-head"><h6>Website Logins (optional)</h6></div>
+          <div class="login-rows" id="loginRows">
+            <div class="login-row is-only">
+              <div class="login-row-head">
+                <span class="login-row-index">Login #1</span>
+                <button type="button" class="login-row-remove" data-remove>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"></path></svg>
+                  Remove
+                </button>
+              </div>
+              <div class="modal-grid">
+                <div class="c-4"><label class="field-label">Login Type</label><input class="input" name="logins[0][type]" placeholder="e.g. Current Website, Production"></div>
+                <div class="c-4"><label class="field-label">Name</label><input class="input" name="logins[0][name]" placeholder="Main website"></div>
+                <div class="c-4"><label class="field-label">Website URL</label><input class="input" type="url" name="logins[0][url]" placeholder="https://example.com"></div>
+                <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="logins[0][login_url]" placeholder="https://example.com/wp-admin"></div>
+                <div class="c-3"><label class="field-label">Username</label><input class="input" name="logins[0][username]"></div>
+                <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="logins[0][password]"></div>
+              </div>
+            </div>
           </div>
+          <button type="button" class="login-add-row" id="loginAddRow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Row
+          </button>
         </div>
-        <div class="modal-section">
-          <h6>Current Live Website (optional)</h6>
-          <div class="modal-grid">
-            <div class="c-6"><label class="field-label">Name</label><input class="input" name="current_live_name"></div>
-            <div class="c-6"><label class="field-label">URL</label><input class="input" type="url" name="current_live_url"></div>
-            <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="current_live_login_url"></div>
-            <div class="c-3"><label class="field-label">Username</label><input class="input" name="current_live_username"></div>
-            <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="current_live_password"></div>
+        <template id="loginRowTemplate">
+          <div class="login-row">
+            <div class="login-row-head">
+              <span class="login-row-index">Login #__N__</span>
+              <button type="button" class="login-row-remove" data-remove>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"></path></svg>
+                Remove
+              </button>
+            </div>
+            <div class="modal-grid">
+              <div class="c-4"><label class="field-label">Login Type</label><input class="input" name="logins[__I__][type]" placeholder="e.g. Current Website, Production"></div>
+              <div class="c-4"><label class="field-label">Name</label><input class="input" name="logins[__I__][name]" placeholder="Main website"></div>
+              <div class="c-4"><label class="field-label">Website URL</label><input class="input" type="url" name="logins[__I__][url]" placeholder="https://example.com"></div>
+              <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="logins[__I__][login_url]" placeholder="https://example.com/wp-admin"></div>
+              <div class="c-3"><label class="field-label">Username</label><input class="input" name="logins[__I__][username]"></div>
+              <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="logins[__I__][password]"></div>
+            </div>
           </div>
-        </div>
+        </template>
         <div class="modal-grid" style="margin-top:14px;"><div class="c-12"><label class="field-label">Notes</label><textarea class="input" name="wl_notes" rows="2"></textarea></div></div>
       </div>
       <div class="modal-foot">
@@ -573,6 +630,49 @@ require_once __DIR__ . '/layout.php';
 <?php endif; ?>
 
 <script>
+  // Login repeater (Add Row / Remove / re-index)
+  (function () {
+    const rowsWrap = document.getElementById('loginRows');
+    const addBtn   = document.getElementById('loginAddRow');
+    const tmpl     = document.getElementById('loginRowTemplate');
+    if (!rowsWrap || !addBtn || !tmpl) return;
+    function reindex() {
+      const rows = rowsWrap.querySelectorAll('.login-row');
+      rows.forEach((row, idx) => {
+        row.classList.toggle('is-only', rows.length === 1);
+        const lbl = row.querySelector('.login-row-index');
+        if (lbl) lbl.textContent = 'Login #' + (idx + 1);
+        row.querySelectorAll('[name^="logins["]').forEach(input => {
+          input.name = input.name.replace(/^logins\[\d+\]/, 'logins[' + idx + ']');
+        });
+      });
+    }
+    addBtn.addEventListener('click', () => {
+      const nextIdx = rowsWrap.querySelectorAll('.login-row').length;
+      const html = tmpl.innerHTML.replace(/__N__/g, String(nextIdx + 1)).replace(/__I__/g, String(nextIdx));
+      const wrap = document.createElement('div');
+      wrap.innerHTML = html.trim();
+      const newRow = wrap.firstElementChild;
+      rowsWrap.appendChild(newRow);
+      reindex();
+      const firstInput = newRow.querySelector('input');
+      if (firstInput) firstInput.focus();
+    });
+    rowsWrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      const row = btn.closest('.login-row');
+      if (!row) return;
+      if (rowsWrap.querySelectorAll('.login-row').length <= 1) {
+        row.querySelectorAll('input').forEach(i => i.value = '');
+        return;
+      }
+      row.remove();
+      reindex();
+    });
+    reindex();
+  })();
+
   const navLinks = document.querySelectorAll('#sectionNav a');
   navLinks.forEach(a => a.addEventListener('click', (e) => {
     const t = document.getElementById(a.dataset.target);
