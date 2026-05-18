@@ -38,7 +38,9 @@ $icons = [
 ];
 ?>
 <aside class="sidebar">
-  <div class="brand">anton<span class="x">x</span></div>
+  <a class="brand" href="dashboard.php" aria-label="anton x">
+    <img src="partials/antonx-logo.png" alt="anton x" class="brand-logo">
+  </a>
   <nav class="nav" id="antonNav">
     <?= nav_item_html('dashboard.php', 'dashboard', 'Dashboard', $icons['dashboard'], $activeKey) ?>
     <?= nav_item_html('search.php', 'search', 'Search', $icons['search'], $activeKey) ?>
