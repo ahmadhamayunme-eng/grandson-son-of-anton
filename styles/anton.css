@@ -190,17 +190,23 @@ a { color: inherit; text-decoration: none; }
   color: var(--accent);
   margin-left: 4px;
 }
+/* Inline SVG logo. "anton" text uses currentColor; "X" stays #F2CC2F via
+   its hardcoded fill in the SVG, so the accent stays the same yellow in
+   both themes — no filter tricks needed. */
 .brand-logo {
   display: block;
   width: 100%;
   max-width: 130px;
-  height: auto;
-  object-fit: contain;
+  line-height: 0;
+  color: #E8E8E8;
 }
-/* The PNG ships with white "anton" + yellow "X" for dark mode. In light mode,
-   invert + hue-rotate flips the white to black while keeping the X yellow. */
+.brand-logo svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 html.light .brand-logo {
-  filter: invert(1) hue-rotate(180deg);
+  color: #1a1a1a;
 }
 
 .nav {
