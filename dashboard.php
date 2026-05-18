@@ -70,24 +70,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManage) {
   if (isset($_POST['add_project_dashboard'])) {
     require_post();
     csrf_verify();
-    $name     = trim((string)($_POST['name'] ?? '')) ?: 'Untitled Project';
-    $clientId = (int)($_POST['client_id'] ?? 0);
-    $typeId   = (int)($_POST['type_id'] ?? 0);
-    $statusId = (int)($_POST['status_id'] ?? 0);
-    $due      = trim((string)($_POST['due_date'] ?? ''));
-    $pricingModel = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
-    if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) $pricingModel = 'fixed_price';
+    // Mirror the projects.php handler so the dashboard "Add Project" is functionally equivalent.
+    $name              = trim((string)($_POST['name'] ?? ''));
+    $clientId          = (int)($_POST['client_id'] ?? 0);
+    $typeId            = (int)($_POST['type_id'] ?? 0);
+    $statusId          = (int)($_POST['status_id'] ?? 0);
+    $dueDate           = trim((string)($_POST['due_date'] ?? ''));
+    $pricingModel      = trim((string)($_POST['pricing_model'] ?? 'fixed_price'));
+    $projectPrice      = ($_POST['project_price'] ?? '') !== '' ? (float)$_POST['project_price'] : null;
+    $paymentTerms      = trim((string)($_POST['payment_terms'] ?? ''));
+    $projectHourlyRate = ($_POST['project_hourly_rate'] ?? '') !== '' ? (float)$_POST['project_hourly_rate'] : null;
+    $wlNotes           = trim((string)($_POST['wl_notes'] ?? ''));
 
+    $isValidUrl = function (string $value): bool {
+      if ($value === '') return true;
+      if (!filter_var($value, FILTER_VALIDATE_URL)) return false;
+      $scheme = strtolower((string)parse_url($value, PHP_URL_SCHEME));
+      return in_array($scheme, ['http', 'https'], true);
+    };
+
+    $rawLogins = is_array($_POST['logins'] ?? null) ? $_POST['logins'] : [];
+    $logins = [];
+    foreach ($rawLogins as $row) {
+      if (!is_array($row)) continue;
+      $entry = [
+        'type'      => trim((string)($row['type'] ?? '')),
+        'name'      => trim((string)($row['name'] ?? '')),
+        'url'       => trim((string)($row['url'] ?? '')),
+        'login_url' => trim((string)($row['login_url'] ?? '')),
+        'username'  => trim((string)($row['username'] ?? '')),
+        'password'  => (string)($row['password'] ?? ''),
+      ];
+      if ($entry['type'] === '' && $entry['name'] === '' && $entry['url'] === '' && $entry['login_url'] === '' && $entry['username'] === '' && $entry['password'] === '') continue;
+      $logins[] = $entry;
+    }
+
+    if ($name === '') $name = 'Untitled Project';
     if ($clientId <= 0 || $typeId <= 0 || $statusId <= 0) {
       flash_set('error', 'Client, project type, and status are required.');
       redirect('dashboard.php');
     }
-    // Match the column list used by projects.php so we don't trip on NOT NULL columns added by migrations.
+    if (!in_array($pricingModel, ['fixed_price', 'hourly'], true)) {
+      flash_set('error', 'Project pricing model is required.');
+      redirect('dashboard.php');
+    }
+    foreach ($logins as $entry) {
+      if (!$isValidUrl($entry['url']) || !$isValidUrl($entry['login_url'])) {
+        flash_set('error', 'Please enter valid website URLs (http/https).');
+        redirect('dashboard.php');
+      }
+    }
+
+    $websiteDetails = [
+      'logins' => array_map(fn($e) => [
+        'type'     => $e['type'] !== '' ? $e['type'] : null,
+        'name'     => $e['name'] !== '' ? $e['name'] : null,
+        'url'      => $e['url'] !== '' ? $e['url'] : null,
+        'loginUrl' => $e['login_url'] !== '' ? $e['login_url'] : null,
+        'username' => $e['username'] !== '' ? $e['username'] : null,
+        'password' => $e['password'] !== '' ? $e['password'] : null,
+      ], $logins),
+    ];
+    $firstSiteUrl = null;
+    foreach ($logins as $e) { if ($e['url'] !== '') { $firstSiteUrl = $e['url']; break; } }
+
     $pdo->prepare('INSERT INTO projects (workspace_id, client_id, name, type_id, status_id, due_date, pricing_model, project_price, payment_terms, hourly_rate, live_website_url, notes, website_details_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$ws, $clientId, $name, $typeId, $statusId, $due ?: null, $pricingModel, null, null, null, null, null, json_encode([], JSON_UNESCAPED_SLASHES), now(), now()]);
-    $projectId = (int)$pdo->lastInsertId();
+        ->execute([$ws, $clientId, $name, $typeId, $statusId, $dueDate ?: null, $pricingModel, $projectPrice, $paymentTerms ?: null, $projectHourlyRate, $firstSiteUrl, null, json_encode($websiteDetails, JSON_UNESCAPED_SLASHES), now(), now()]);
+    $newProjectId = (int)$pdo->lastInsertId();
+
+    foreach ($logins as $idx => $entry) {
+      $siteName = $entry['name'] !== ''
+        ? $entry['name']
+        : ($entry['type'] !== '' ? $entry['type'] : $name . ' (Login #' . ($idx + 1) . ')');
+      $rowNotes = trim(($entry['type'] !== '' ? 'Type: ' . $entry['type'] : '') . ($wlNotes !== '' ? ($entry['type'] !== '' ? "\n" : '') . $wlNotes : ''));
+      $pdo->prepare('INSERT INTO website_logins (workspace_id,client_id,project_id,site_name,website_url,login_url,login_username,login_password,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$ws, $clientId, $newProjectId, $siteName, $entry['url'] ?: null, $entry['login_url'] ?: null, $entry['username'] ?: null, $entry['password'] !== '' ? $entry['password'] : null, $rowNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
+    }
+
     flash_set('success', 'Project created.');
-    redirect('project_view.php?id=' . $projectId);
+    redirect('project_view.php?id=' . $newProjectId);
   }
 }
 
@@ -457,6 +518,30 @@ $pageHeadExtra = <<<HTML
   .at-btn.primary { background: var(--accent); color: #1a1400; border-color: var(--accent); }
   .at-btn.primary:hover { background: var(--accent-hover); }
   @media (max-width: 640px) { .at-meta-row.cols-2, .at-meta-row.cols-3 { grid-template-columns: 1fr; } .at-status-grid { grid-template-columns: 1fr; } }
+
+  /* Full Add-Project modal layout (mirrors projects.php; .input/.select/.btn/.field-label come from anton.css) */
+  .modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+  .modal-grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
+  .modal-grid > * { display: flex; flex-direction: column; gap: 5px; }
+  .c-12 { grid-column: span 12; } .c-8 { grid-column: span 8; } .c-6 { grid-column: span 6; } .c-4 { grid-column: span 4; } .c-3 { grid-column: span 3; } .c-2 { grid-column: span 2; }
+  @media (max-width: 768px) { .c-8, .c-6, .c-4, .c-3, .c-2 { grid-column: span 12; } }
+  .modal-section { padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-top: 14px; }
+  .modal-section h6 { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; font-weight: 600; }
+
+  /* Login repeater */
+  .login-repeater { margin-top: 14px; }
+  .login-repeater-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .login-repeater-head h6 { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin: 0; }
+  .login-row { position: relative; padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
+  .login-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+  .login-row-index { font-size: 10.5px; color: var(--text-dim); font-family: 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.1em; }
+  .login-row-remove { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-muted); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; transition: all 0.12s; }
+  .login-row-remove:hover { color: #fca5a5; border-color: rgba(239,68,68,0.3); background: var(--danger-soft); }
+  .login-row-remove svg { width: 11px; height: 11px; }
+  .login-row.is-only .login-row-remove { display: none; }
+  .login-add-row { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 12.5px; font-weight: 500; color: var(--text); border-radius: 8px; border: 1px dashed var(--border-strong); background: transparent; cursor: pointer; transition: all 0.15s; }
+  .login-add-row:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .login-add-row svg { width: 13px; height: 13px; }
 </style>
 HTML;
 
@@ -776,10 +861,11 @@ require_once __DIR__ . '/layout.php';
 </div>
 
 <!-- ===== Add Project (quick-create from dashboard) ===== -->
+<!-- Full New Project modal (mirrors projects.php — Client selector is the dashboard-specific addition) -->
 <div class="modal-overlay" id="quickAddProject" onclick="if(event.target===this) this.classList.remove('open')">
-  <div class="modal-card at-card" style="max-width:600px;" role="dialog" aria-label="Add Project">
+  <div class="modal-card" style="max-width:920px;" role="dialog" aria-label="New Project">
     <div class="modal-head">
-      <span class="modal-title">New project</span>
+      <span class="modal-title">New Project</span>
       <button type="button" class="icon-close" onclick="document.getElementById('quickAddProject').classList.remove('open')" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
@@ -787,59 +873,77 @@ require_once __DIR__ . '/layout.php';
     <form method="post" id="quickAddProjectForm">
       <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
       <input type="hidden" name="add_project_dashboard" value="1">
-      <input type="hidden" name="pricing_model" value="fixed_price">
-
-      <div class="at-body">
-        <input class="at-title-field" type="text" name="name" placeholder="Project name…" required autocomplete="off">
-
-        <div class="at-section">
-          <div class="at-section-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
-            Client
-          </div>
-          <select class="at-select" name="client_id" required>
-            <option value="" disabled selected>Select a client…</option>
-            <?php foreach ($quickClients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?>
-          </select>
-        </div>
-
-        <div class="at-section at-meta-row cols-2">
-          <div class="at-field">
-            <span class="at-field-label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line></svg>
-              Type
-            </span>
-            <select class="at-select" name="type_id" required>
-              <?php if (empty($quickProjectTypes)): ?><option value="">No types configured</option>
-              <?php else: foreach ($quickProjectTypes as $t): ?><option value="<?= (int)$t['id'] ?>"><?= h($t['name']) ?></option><?php endforeach; endif; ?>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="c-4"><label class="field-label">Project Name</label><input class="input" name="name" placeholder="Untitled Project"></div>
+          <div class="c-4"><label class="field-label">Client</label>
+            <select class="select" name="client_id" required>
+              <option value="" disabled selected>Select a client…</option>
+              <?php foreach ($quickClients as $c): ?><option value="<?= (int)$c['id'] ?>"><?= h($c['name']) ?></option><?php endforeach; ?>
             </select>
           </div>
-          <div class="at-field">
-            <span class="at-field-label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="9 12 11 14 15 10"></polyline></svg>
-              Status
-            </span>
-            <select class="at-select" name="status_id" required>
-              <?php if (empty($quickProjectStatuses)): ?><option value="">No statuses configured</option>
-              <?php else: foreach ($quickProjectStatuses as $s): ?><option value="<?= (int)$s['id'] ?>"><?= h($s['name']) ?></option><?php endforeach; endif; ?>
-            </select>
-          </div>
+          <div class="c-2"><label class="field-label">Type</label><select class="select" name="type_id" required><?php foreach ($quickProjectTypes as $t): ?><option value="<?= (int)$t['id'] ?>"><?= h($t['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="c-2"><label class="field-label">Status</label><select class="select" name="status_id" required><?php foreach ($quickProjectStatuses as $s): ?><option value="<?= (int)$s['id'] ?>"><?= h($s['name']) ?></option><?php endforeach; ?></select></div>
+          <div class="c-4"><label class="field-label">Due Date (optional)</label><input class="input" type="date" name="due_date"></div>
+          <div class="c-4"><label class="field-label">Pricing Model</label><select class="select" name="pricing_model" id="qap_pricing_model"><option value="fixed_price">Fixed Price</option><option value="hourly">Hourly</option></select></div>
+          <div class="c-4" id="qap_price_wrap"><label class="field-label">Project Price</label><input class="input" name="project_price" type="number" min="0" step="0.01"></div>
+          <div class="c-4" id="qap_terms_wrap"><label class="field-label">Payment Terms</label><select class="select" name="payment_terms"><option value="full_upfront">Full Upfront</option><option value="50_50">50/50</option><option value="milestones">Milestones</option></select></div>
+          <div class="c-4" id="qap_hourly_wrap" style="display:none;"><label class="field-label">Hourly Rate</label><input class="input" name="project_hourly_rate" type="number" min="0" step="0.01"></div>
         </div>
 
-        <div class="at-section">
-          <div class="at-field">
-            <span class="at-field-label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              Due date <span style="color:var(--text-dim);font-weight:400;">(optional)</span>
-            </span>
-            <input class="at-input" type="date" name="due_date">
+        <div class="login-repeater" id="qapLoginRepeater">
+          <div class="login-repeater-head"><h6>Website Logins (optional)</h6></div>
+          <div class="login-rows" id="qapLoginRows">
+            <div class="login-row is-only">
+              <div class="login-row-head">
+                <span class="login-row-index">Login #1</span>
+                <button type="button" class="login-row-remove" data-remove>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"></path></svg>
+                  Remove
+                </button>
+              </div>
+              <div class="modal-grid">
+                <div class="c-4"><label class="field-label">Login Type</label><input class="input" name="logins[0][type]" placeholder="e.g. Current Website, Production"></div>
+                <div class="c-4"><label class="field-label">Name</label><input class="input" name="logins[0][name]" placeholder="Main website"></div>
+                <div class="c-4"><label class="field-label">Website URL</label><input class="input" type="url" name="logins[0][url]" placeholder="https://example.com"></div>
+                <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="logins[0][login_url]" placeholder="https://example.com/wp-admin"></div>
+                <div class="c-3"><label class="field-label">Username</label><input class="input" name="logins[0][username]"></div>
+                <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="logins[0][password]"></div>
+              </div>
+            </div>
           </div>
+          <button type="button" class="login-add-row" id="qapLoginAddRow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Row
+          </button>
+        </div>
+        <template id="qapLoginRowTemplate">
+          <div class="login-row">
+            <div class="login-row-head">
+              <span class="login-row-index">Login #__N__</span>
+              <button type="button" class="login-row-remove" data-remove>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"></path></svg>
+                Remove
+              </button>
+            </div>
+            <div class="modal-grid">
+              <div class="c-4"><label class="field-label">Login Type</label><input class="input" name="logins[__I__][type]" placeholder="e.g. Current Website, Production"></div>
+              <div class="c-4"><label class="field-label">Name</label><input class="input" name="logins[__I__][name]" placeholder="Main website"></div>
+              <div class="c-4"><label class="field-label">Website URL</label><input class="input" type="url" name="logins[__I__][url]" placeholder="https://example.com"></div>
+              <div class="c-6"><label class="field-label">Login URL</label><input class="input" type="url" name="logins[__I__][login_url]" placeholder="https://example.com/wp-admin"></div>
+              <div class="c-3"><label class="field-label">Username</label><input class="input" name="logins[__I__][username]"></div>
+              <div class="c-3"><label class="field-label">Password</label><input class="input" type="password" name="logins[__I__][password]"></div>
+            </div>
+          </div>
+        </template>
+
+        <div class="modal-grid" style="margin-top:14px;">
+          <div class="c-12"><label class="field-label">Notes</label><textarea class="input" name="wl_notes" rows="2" placeholder="2FA notes, etc."></textarea></div>
         </div>
       </div>
-
       <div class="modal-foot">
-        <button type="button" class="at-btn" onclick="document.getElementById('quickAddProject').classList.remove('open')">Cancel</button>
-        <button class="at-btn primary" type="submit">Create project</button>
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('quickAddProject').classList.remove('open')">Cancel</button>
+        <button type="submit" class="btn btn-primary save-flash">Create</button>
       </div>
     </form>
   </div>
@@ -955,7 +1059,77 @@ require_once __DIR__ . '/layout.php';
   // ----- Add Project modal -----
   const projectOverlay = document.getElementById('quickAddProject');
   const projectForm    = document.getElementById('quickAddProjectForm');
-  watchOverlay(projectOverlay, projectForm, null);
+
+  // Pricing model toggle (Fixed Price vs. Hourly — same UX as projects.php).
+  const qapModel = document.getElementById('qap_pricing_model');
+  if (qapModel) {
+    const fixedWrap  = document.getElementById('qap_price_wrap');
+    const termsWrap  = document.getElementById('qap_terms_wrap');
+    const hourlyWrap = document.getElementById('qap_hourly_wrap');
+    function qapSyncPricing() {
+      const v = qapModel.value;
+      if (fixedWrap)  fixedWrap.style.display  = v === 'fixed_price' ? '' : 'none';
+      if (termsWrap)  termsWrap.style.display  = v === 'fixed_price' ? '' : 'none';
+      if (hourlyWrap) hourlyWrap.style.display = v === 'hourly' ? '' : 'none';
+    }
+    qapModel.addEventListener('change', qapSyncPricing);
+    qapSyncPricing();
+  }
+
+  // Login repeater (Add Row / Remove / re-index).
+  const qapRows = document.getElementById('qapLoginRows');
+  const qapAdd  = document.getElementById('qapLoginAddRow');
+  const qapTmpl = document.getElementById('qapLoginRowTemplate');
+  function qapReindex() {
+    if (!qapRows) return;
+    const rows = qapRows.querySelectorAll('.login-row');
+    rows.forEach((row, idx) => {
+      row.classList.toggle('is-only', rows.length === 1);
+      const lbl = row.querySelector('.login-row-index');
+      if (lbl) lbl.textContent = 'Login #' + (idx + 1);
+      row.querySelectorAll('[name^="logins["]').forEach(input => {
+        input.name = input.name.replace(/^logins\[\d+\]/, 'logins[' + idx + ']');
+      });
+    });
+  }
+  if (qapRows && qapAdd && qapTmpl) {
+    qapAdd.addEventListener('click', () => {
+      const nextIdx = qapRows.querySelectorAll('.login-row').length;
+      const html = qapTmpl.innerHTML.replace(/__N__/g, String(nextIdx + 1)).replace(/__I__/g, String(nextIdx));
+      const wrap = document.createElement('div');
+      wrap.innerHTML = html.trim();
+      const newRow = wrap.firstElementChild;
+      qapRows.appendChild(newRow);
+      qapReindex();
+      const firstInput = newRow.querySelector('input');
+      if (firstInput) firstInput.focus();
+    });
+    qapRows.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      const row = btn.closest('.login-row');
+      if (!row) return;
+      if (qapRows.querySelectorAll('.login-row').length <= 1) {
+        row.querySelectorAll('input').forEach(i => i.value = '');
+        return;
+      }
+      row.remove();
+      qapReindex();
+    });
+    qapReindex();
+  }
+
+  // Reset modal on close: collapse extra rows back to one and re-show fixed-price fields.
+  watchOverlay(projectOverlay, projectForm, () => {
+    if (qapRows) {
+      const rows = Array.from(qapRows.querySelectorAll('.login-row'));
+      rows.slice(1).forEach(r => r.remove());
+      const first = qapRows.querySelector('.login-row');
+      if (first) first.querySelectorAll('input').forEach(i => i.value = '');
+      qapReindex();
+    }
+    if (qapModel) { qapModel.value = 'fixed_price'; qapModel.dispatchEvent(new Event('change')); }
+  });
 })();
 </script>
 <?php endif; ?>
