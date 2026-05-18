@@ -38,10 +38,13 @@ html.light {
   --text: #18181b;
   --text-muted: #5a5a63;
   --text-dim: #8e8e95;
-  --accent: #b45309;               /* amber-700: still recognizable amber, readable on white */
-  --accent-hover: #92400e;         /* amber-800 */
-  --accent-on: #ffffff;            /* white text on the darker amber */
-  --accent-soft: rgba(180, 83, 9, 0.10);
+  /* Per user feedback the accent stays yellow in both modes — buttons are
+     yellow with black text everywhere, not the orange/amber-700 I tried
+     earlier. Soft tint is bumped slightly so it remains visible on white. */
+  --accent: #FACC15;
+  --accent-hover: #fbd84a;
+  --accent-on: #1a1400;
+  --accent-soft: rgba(250, 204, 21, 0.20);
   --danger: #dc2626;
   --danger-soft: rgba(220, 38, 38, 0.10);
   --success: #15803d;
@@ -51,14 +54,18 @@ html.light {
   color-scheme: light;
 }
 
-/* Tweaks so existing buttons/pills that hardcode `#1a1400` for foreground
-   adapt automatically — these used to assume amber bg. */
-html.light .btn-primary { color: var(--accent-on); }
-html.light .btn-primary:hover { color: var(--accent-on); }
-/* Sidebar active indicator stays amber; in light mode the amber is darker. */
-html.light .brand .x { color: var(--accent); }
-/* Bootstrap shim adjustments for light mode (used on non-redesigned pages). */
-html.light .btn-yellow { color: var(--accent-on); }
+/* Light-mode targeted overrides for elements that hardcoded dark colors in
+   per-page <style> blocks (can't reach them from a theme variable). */
+/* Topbar (task_view.php and any sticky header in the design) — was
+   rgba(10,10,10,0.85). In light mode use a translucent white instead. */
+html.light .topbar { background: rgba(255, 255, 255, 0.85); }
+/* Dashboard calendar: out-of-month cells were #060606 which renders as a
+   black square against a white page. Flip to a soft gray. */
+html.light .cal-cell.dim { background: #eaecf0; }
+/* The dashboard's "today" tint and its border were rgba yellow with very
+   low alpha — readable on dark, almost invisible on white. Bump the alpha. */
+html.light .cal-cell.today { background: rgba(250,204,21,0.10); }
+html.light .cal-cell.today::before { border-color: rgba(250,204,21,0.55); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
