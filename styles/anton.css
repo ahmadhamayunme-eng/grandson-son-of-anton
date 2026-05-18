@@ -334,24 +334,43 @@ textarea.input { resize: vertical; min-height: 64px; }
 
 /* ===== Theme toggle (fixed top-right on every page) =====
    Rendered by partials/header.php for designed pages and inlined in
-   login.php so it's present even on the unauthenticated screen. */
-.theme-toggle {
-  position: fixed;
-  top: 12px;
-  right: 14px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+   login.php so it's present even on the unauthenticated screen.
+   `!important` on positioning so it can't be clobbered by any page-level
+   $pageHeadExtra `button { ... }` selectors or Bootstrap's reboot. */
+.theme-toggle,
+button.theme-toggle {
+  position: fixed !important;
+  top: 16px !important;
+  right: 18px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
   background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 1000;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-card);
+  z-index: 9999 !important;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  font: inherit;
+  line-height: 1;
+  pointer-events: auto;
+}
+html.light .theme-toggle,
+html.light button.theme-toggle {
+  box-shadow: 0 4px 14px rgba(24,24,27,0.10), 0 0 0 1px rgba(0,0,0,0.02) inset;
+  background: #ffffff;
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 .theme-toggle:hover {
   color: var(--accent);
@@ -359,14 +378,33 @@ textarea.input { resize: vertical; min-height: 64px; }
   transform: translateY(-1px);
   background: var(--surface-2);
 }
+html.light .theme-toggle:hover {
+  background: var(--surface-2);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .theme-toggle:active { transform: scale(0.94); }
-.theme-toggle svg { width: 16px; height: 16px; transition: transform 0.3s ease; }
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  pointer-events: none;     /* clicks always hit the button, never the inner svg */
+}
 /* Show sun in dark mode (click → light); show moon in light mode (click → dark). */
 .theme-toggle .ico-moon { display: none; }
 html.light .theme-toggle .ico-sun { display: none; }
-html.light .theme-toggle .ico-moon { display: inline-block; }
+html.light .theme-toggle .ico-moon { display: block; }
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle, .theme-toggle:hover { transition: none; transform: none; }
+}
+@media (max-width: 560px) {
+  .theme-toggle, button.theme-toggle {
+    width: 40px !important; height: 40px !important;
+    top: 12px !important; right: 12px !important;
+  }
+  .theme-toggle svg { width: 18px; height: 18px; }
 }
 
 /* ===== Global page-header back-button stacking =====
