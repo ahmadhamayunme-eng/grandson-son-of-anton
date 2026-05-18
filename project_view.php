@@ -379,6 +379,51 @@ $pageHeadExtra = <<<HTML
   .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; }
   .icon-close:hover { background: var(--surface-2); color: var(--text); }
 
+  /* ===== Add Task modal (redesign — mirrors task_view.php) ===== */
+  .at-card { max-width: 760px; }
+  .at-body { padding: 22px 24px 6px; max-height: 76vh; overflow-y: auto; }
+  .at-title-field { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; padding: 4px 0 14px; border-bottom: 1px solid var(--border); transition: border-color 0.15s; font-family: inherit; }
+  .at-title-field::placeholder { color: var(--text-dim); font-weight: 600; }
+  .at-title-field:focus { border-bottom-color: var(--accent); }
+  .at-section { margin-top: 22px; }
+  .at-section-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .at-section-label svg { width: 12px; height: 12px; }
+  .at-desc { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 14px; line-height: 1.55; min-height: 100px; resize: vertical; outline: none; transition: all 0.15s; font-family: inherit; }
+  .at-desc::placeholder { color: var(--text-dim); }
+  .at-desc:focus { border-color: var(--border-strong); background: var(--bg); }
+  .at-meta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .at-field { display: flex; flex-direction: column; gap: 6px; }
+  .at-field-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 5px; }
+  .at-field-label svg { width: 12px; height: 12px; color: var(--text-dim); }
+  .at-status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .at-status-opt { padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; transition: all 0.15s; cursor: pointer; user-select: none; }
+  .at-status-opt:hover { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .at-status-opt.active { background: var(--accent-soft); border-color: rgba(250,204,21,0.4); color: var(--accent); font-weight: 500; }
+  .at-status-opt .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .at-status-opt.active .dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(250,204,21,0.18); }
+  .at-assignees { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); max-height: 240px; overflow-y: auto; padding: 6px; }
+  .at-assignee-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.12s; }
+  .at-assignee-row:hover { background: var(--surface); }
+  .at-assignee-row.selected { background: var(--surface); }
+  .at-assignee-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .at-av { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; color: #fff; letter-spacing: 0.02em; flex-shrink: 0; }
+  .at-assignee-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .at-assignee-role { font-size: 11px; color: var(--text-dim); }
+  .at-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; background: transparent; }
+  .at-assignee-row.selected .at-check { background: var(--accent); border-color: var(--accent); }
+  .at-check svg { width: 12px; height: 12px; color: #1a1400; opacity: 0; transition: opacity 0.15s; }
+  .at-assignee-row.selected .at-check svg { opacity: 1; }
+  .at-assignee-empty { padding: 18px; text-align: center; color: var(--text-dim); font-size: 12.5px; font-style: italic; }
+  .at-count-pill { font-size: 11px; background: var(--surface); color: var(--text-muted); padding: 2px 8px; border-radius: 999px; font-weight: 500; letter-spacing: 0; text-transform: none; border: 1px solid var(--border); margin-left: 6px; }
+  .at-count-pill.has { color: var(--accent); border-color: rgba(250,204,21,0.3); background: var(--accent-soft); }
+  .at-date-wrap { position: relative; }
+  .at-date-wrap input[type=date] { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; outline: none; transition: all 0.15s; font-family: inherit; color-scheme: dark; }
+  .at-date-wrap input[type=date]:focus { border-color: var(--accent); background: var(--bg); }
+  .at-phase-wrap select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; padding-right: 32px; color: var(--text); font-size: 13px; outline: none; transition: all 0.15s; font-family: inherit; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .at-phase-wrap select:focus { border-color: var(--accent); background-color: var(--bg); }
+  .at-phase-wrap select option { background: #1a1a1a; color: var(--text); }
+  @media (max-width: 640px) { .at-meta-row { grid-template-columns: 1fr; } .at-status-grid { grid-template-columns: 1fr; } }
+
   @media (max-width: 1100px) {
     .overview-grid { grid-template-columns: 1fr; }
     .summary-meta { grid-template-columns: 1fr; }
@@ -742,27 +787,99 @@ require_once __DIR__ . '/layout.php';
 </div>
 
 <div class="modal-overlay" id="addTask" onclick="if(event.target===this) this.classList.remove('open')">
-  <div class="modal-card">
+  <div class="modal-card at-card">
     <div class="modal-head">
-      <span class="modal-title">Add Task</span>
+      <span class="modal-title">New task</span>
       <button type="button" class="icon-close" onclick="document.getElementById('addTask').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     </div>
-    <form method="post">
+    <form method="post" id="addTaskForm">
       <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
       <input type="hidden" name="add_task" value="1">
-      <div class="modal-body">
-        <div class="modal-grid">
-          <div class="c-8"><label class="field-label">Title</label><input class="input" name="title" required></div>
-          <div class="c-4"><label class="field-label">Phase</label><select class="select" name="phase_id" required><?php foreach ($phases as $ph): ?><option value="<?= (int)$ph['id'] ?>"><?= h($ph['name']) ?></option><?php endforeach; ?></select></div>
-          <div class="c-12"><label class="field-label">Description</label><textarea class="input" name="description" rows="4"></textarea></div>
-          <div class="c-4"><label class="field-label">Status</label><select class="select" name="status"><?php foreach ($statuses as $s): ?><option value="<?= h($s) ?>"><?= h($s) ?></option><?php endforeach; ?></select></div>
-          <div class="c-4"><label class="field-label">Due Date</label><input class="input" type="date" name="due_date"></div>
-          <div class="c-4"><label class="field-label">Assignees</label><select class="select" name="assignees[]" multiple size="4"><?php foreach ($team as $m): ?><option value="<?= (int)$m['id'] ?>"><?= h($m['name']) ?> (<?= h($m['role_name']) ?>)</option><?php endforeach; ?></select></div>
+      <?php $defaultStatus = $statuses[0] ?? 'To Do'; ?>
+      <input type="hidden" name="status" id="atStatusInput" value="<?= h($defaultStatus) ?>">
+
+      <div class="at-body">
+        <input class="at-title-field" type="text" name="title" placeholder="Task name…" required autocomplete="off">
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line></svg>
+            Description
+          </div>
+          <textarea class="at-desc" name="description" rows="4" placeholder="Add more detail about this task…"></textarea>
+        </div>
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="9 12 11 14 15 10"></polyline></svg>
+            Status
+          </div>
+          <div class="at-status-grid" id="atStatusGrid">
+            <?php foreach ($statuses as $i => $s): ?>
+              <div class="at-status-opt<?= $i === 0 ? ' active' : '' ?>" data-status="<?= h($s) ?>" role="button" tabindex="0">
+                <span class="dot"></span>
+                <span><?= h($s) ?></span>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <div class="at-section at-meta-row">
+          <div class="at-field">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Due date
+            </span>
+            <div class="at-date-wrap"><input type="date" name="due_date"></div>
+          </div>
+          <div class="at-field at-phase-wrap">
+            <span class="at-field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+              Phase
+            </span>
+            <select name="phase_id" required>
+              <?php foreach ($phases as $ph): ?><option value="<?= (int)$ph['id'] ?>"><?= h($ph['name']) ?></option><?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+
+        <div class="at-section">
+          <div class="at-section-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg>
+            Assignees
+            <span class="at-count-pill" id="atAssigneeCount">0 selected</span>
+          </div>
+          <div class="at-assignees" id="atAssignees">
+            <?php if (empty($team)): ?>
+              <div class="at-assignee-empty">No teammates available to assign.</div>
+            <?php else: foreach ($team as $m):
+              $initials = function_exists('user_initials') ? user_initials((string)$m['name']) : strtoupper(substr((string)$m['name'], 0, 2));
+              $grad = (function($seed) {
+                $p = ['linear-gradient(135deg,#22c55e,#16a34a)','linear-gradient(135deg,#a855f7,#7c3aed)','linear-gradient(135deg,#0ea5e9,#0284c7)','linear-gradient(135deg,#f97316,#ea580c)','linear-gradient(135deg,#ec4899,#be185d)','linear-gradient(135deg,#3b82f6,#1d4ed8)','linear-gradient(135deg,#14b8a6,#0f766e)','linear-gradient(135deg,#facc15,#ca8a04)'];
+                return $p[crc32($seed) % count($p)];
+              })((string)$m['name']);
+            ?>
+              <label class="at-assignee-row" data-uid="<?= (int)$m['id'] ?>">
+                <span class="at-assignee-info">
+                  <span class="at-av" style="background:<?= h($grad) ?>"><?= h($initials) ?></span>
+                  <span>
+                    <span class="at-assignee-name"><?= h($m['name']) ?></span><br>
+                    <span class="at-assignee-role"><?= h($m['role_name']) ?></span>
+                  </span>
+                </span>
+                <span class="at-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+                <input type="checkbox" name="assignees[]" value="<?= (int)$m['id'] ?>" hidden>
+              </label>
+            <?php endforeach; endif; ?>
+          </div>
         </div>
       </div>
+
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" onclick="document.getElementById('addTask').classList.remove('open')">Cancel</button>
-        <button class="btn btn-primary save-flash" type="submit">Create Task</button>
+        <button class="btn btn-primary save-flash" type="submit">Create task</button>
       </div>
     </form>
   </div>
@@ -817,6 +934,71 @@ require_once __DIR__ . '/layout.php';
     });
   }, { rootMargin: '-50% 0px -40% 0px', threshold: 0 });
   sections.forEach(s => obs.observe(s));
+
+  // ===== Add Task modal interactivity =====
+  (function () {
+    const statusGrid = document.getElementById('atStatusGrid');
+    const statusInput = document.getElementById('atStatusInput');
+    if (statusGrid && statusInput) {
+      statusGrid.addEventListener('click', (e) => {
+        const opt = e.target.closest('.at-status-opt');
+        if (!opt) return;
+        statusGrid.querySelectorAll('.at-status-opt').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        statusInput.value = opt.dataset.status || '';
+      });
+      statusGrid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const opt = e.target.closest('.at-status-opt');
+        if (!opt) return;
+        e.preventDefault();
+        opt.click();
+      });
+    }
+
+    const assigneeWrap = document.getElementById('atAssignees');
+    const assigneeCount = document.getElementById('atAssigneeCount');
+    function refreshAssigneeCount() {
+      if (!assigneeWrap || !assigneeCount) return;
+      const n = assigneeWrap.querySelectorAll('input[type=checkbox]:checked').length;
+      assigneeCount.textContent = n + ' selected';
+      assigneeCount.classList.toggle('has', n > 0);
+    }
+    if (assigneeWrap) {
+      assigneeWrap.querySelectorAll('.at-assignee-row').forEach(row => {
+        const cb = row.querySelector('input[type=checkbox]');
+        if (!cb) return;
+        if (cb.checked) row.classList.add('selected');
+        cb.addEventListener('change', () => {
+          row.classList.toggle('selected', cb.checked);
+          refreshAssigneeCount();
+        });
+      });
+      refreshAssigneeCount();
+    }
+
+    // Reset modal state when it closes so a fresh open starts clean.
+    const overlay = document.getElementById('addTask');
+    const form = document.getElementById('addTaskForm');
+    if (overlay && form) {
+      const observer = new MutationObserver(() => {
+        if (!overlay.classList.contains('open')) {
+          // Closed — reset for next open.
+          form.reset();
+          if (assigneeWrap) {
+            assigneeWrap.querySelectorAll('.at-assignee-row').forEach(r => r.classList.remove('selected'));
+            refreshAssigneeCount();
+          }
+          if (statusGrid && statusInput) {
+            const opts = statusGrid.querySelectorAll('.at-status-opt');
+            opts.forEach((o, i) => o.classList.toggle('active', i === 0));
+            statusInput.value = opts[0] ? (opts[0].dataset.status || '') : '';
+          }
+        }
+      });
+      observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+    }
+  })();
 </script>
 
 <?php require_once __DIR__ . '/layout_end.php'; ?>
