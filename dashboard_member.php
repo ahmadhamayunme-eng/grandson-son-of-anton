@@ -74,22 +74,29 @@ function member_status_chip(string $status): string {
 ?>
 
 <style>
-  .member-shell { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: linear-gradient(130deg, rgba(14,14,14,.93), rgba(9,9,9,.95)); box-shadow: 0 28px 70px rgba(0,0,0,.42); padding: 22px; }
-  .member-title { margin: 0 0 16px; font-size: 2rem; font-weight: 600; }
-  .kpi-card { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(110deg, rgba(23,23,23,.92), rgba(14,14,14,.9)); padding: 14px 16px; min-height: 94px; }
-  .kpi-label { color: rgba(236,236,236,.72); font-size: .9rem; margin-bottom: 6px; }
-  .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
-  .panel { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: linear-gradient(120deg, rgba(24,24,24,.88), rgba(16,16,16,.88)); }
-  .panel-head { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 1.25rem; font-weight: 600; }
-  .row-item { display: flex; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  /* All theme-sensitive colors go through the anton.css token system so this
+     page flips between light and dark automatically. No hardcoded rgba()
+     surfaces — that was the bug the user flagged. */
+  .member-shell { border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-card); padding: 22px; margin: 22px 32px; }
+  .member-title { margin: 0 0 16px; font-size: 2rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .kpi-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); padding: 14px 16px; min-height: 94px; }
+  .kpi-label { color: var(--text-muted); font-size: .9rem; margin-bottom: 6px; }
+  .kpi-value { font-size: 2rem; font-weight: 600; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
+  .panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+  .panel-head { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 1.25rem; font-weight: 600; color: var(--text); }
+  .row-item { display: flex; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .row-item:last-child { border-bottom: 0; }
-  .item-title { color: #f0f0f3; text-decoration: none; font-weight: 500; font-size: 1.04rem; }
-  .item-meta { color: rgba(236,236,240,.62); font-size: .9rem; }
+  .item-title { color: var(--text); text-decoration: none; font-weight: 500; font-size: 1.04rem; }
+  .item-title:hover { color: var(--accent); }
+  .item-meta { color: var(--text-muted); font-size: .9rem; }
   .chip { border-radius: 999px; padding: 3px 10px; font-size: .78rem; border: 1px solid transparent; align-self: center; }
-  .chip-yellow { background: rgba(246,212,105,.14); border-color: rgba(246,212,105,.36); color: #ffcc00; }
-  .chip-green { background: rgba(85,203,144,.14); border-color: rgba(85,203,144,.3); color: #7ae7af; }
-  .chip-red { background: rgba(243,111,117,.14); border-color: rgba(243,111,117,.34); color: #ff9aa0; }
-  .chip-purple { background: rgba(175,175,175,.16); border-color: rgba(175,175,175,.32); color: #d0d0d0; }
+  .chip-yellow { background: var(--accent-soft); border-color: rgba(250,204,21,0.36); color: var(--accent); }
+  .chip-green { background: var(--success-soft); border-color: rgba(34,197,94,0.30); color: var(--success); }
+  .chip-red { background: var(--danger-soft); border-color: rgba(239,68,68,0.30); color: var(--danger); }
+  .chip-purple { background: rgba(168,85,247,0.14); border-color: rgba(168,85,247,0.30); color: #a855f7; }
+  html.light .chip-yellow { color: #92400e; }       /* yellow text wouldn't read on the soft tint; use amber-800 in light mode for the chip text only */
+  /* Make sure the "No tasks" Bootstrap helper reads correctly in light mode. */
+  html.light .member-shell .text-muted { color: var(--text-muted) !important; }
 </style>
 
 <div class="member-shell">
