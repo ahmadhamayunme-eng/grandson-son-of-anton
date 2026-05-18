@@ -4,6 +4,9 @@ require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/helpers.php';
 if (auth_user()) redirect('dashboard.php');
 
+// Cache-buster for anton.css so the browser is forced to refresh on every
+// deploy of the stylesheet, regardless of what's sitting in disk cache.
+$_antonCssV = @filemtime(__DIR__ . '/styles/anton.css') ?: '1';
 $error = null;
 $prefillEmail = trim((string)($_POST['email'] ?? ''));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -35,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/anton.css">
+  <link rel="stylesheet" href="styles/anton.css?v=<?= h((string)$_antonCssV) ?>">
   <style>
     /* Self-contained auth layout — does NOT use the sidebar `.app` grid. */
     html, body { background: var(--bg); }

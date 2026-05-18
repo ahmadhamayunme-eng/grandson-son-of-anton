@@ -3,6 +3,10 @@ require_once __DIR__ . '/../lib/helpers.php';
 $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../config.php') : ['app'=>['name'=>'AntonX']];
 $pageTitle = $pageTitle ?? ($config['app']['name'] ?? 'AntonX');
 $pageHeadExtra = $pageHeadExtra ?? '';
+// Cache-buster for anton.css: changes every time the file is edited, so the
+// browser is forced to re-fetch on every deploy. Without this, stylesheet
+// changes silently get masked by browser cache even after a "hard refresh".
+$_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -42,7 +46,7 @@ $pageHeadExtra = $pageHeadExtra ?? '';
     .alert-success { background: var(--success-soft); border-color: rgba(34,197,94,0.25); color: #86efac; }
     .alert-danger { background: var(--danger-soft); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
   </style>
-  <link rel="stylesheet" href="styles/anton.css">
+  <link rel="stylesheet" href="styles/anton.css?v=<?=h((string)$_antonCssV)?>">
   <?=$pageHeadExtra?>
 </head>
 <body>
