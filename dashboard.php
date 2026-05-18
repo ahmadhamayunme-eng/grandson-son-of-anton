@@ -138,29 +138,16 @@ foreach ($tasks as $t) {
   $calendarMap[$d][] = $t;
 }
 
-// Fetch workspace-defined active (non-terminal) statuses so the panel is not
-// broken when workspaces use custom status names.
-$_wsStatuses = dash_safe_rows($pdo,
-  "SELECT name FROM task_statuses
-   WHERE workspace_id=?
-     AND LOWER(name) NOT LIKE '%approved%'
-     AND LOWER(name) NOT LIKE '%submitted%'
-   ORDER BY sort_order", [$ws]);
-$_activeStatuses = array_column($_wsStatuses, 'name');
-if (empty($_activeStatuses)) {
-  $_activeStatuses = ['To Do', 'In Progress', 'Completed (Needs Manager Review)'];
-}
-$_statusIn    = implode(',', array_fill(0, count($_activeStatuses), '?'));
-
-$workingNow = dash_safe_rows($pdo, "SELECT u.id, u.name, u.role,
+$workingNow = dash_safe_rows($pdo, "SELECT u.id, u.name,
     COUNT(DISTINCT ta.task_id) AS task_count
   FROM task_assignees ta
   JOIN users u ON u.id=ta.user_id
   JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
-  WHERE t.status IN ($_statusIn)
-  GROUP BY u.id, u.name, u.role
+  WHERE LOWER(t.status) NOT LIKE '%submitted%'
+    AND LOWER(t.status) NOT LIKE '%approved%'
+  GROUP BY u.id, u.name
   ORDER BY task_count DESC, u.name ASC
-  LIMIT 8", array_merge([$ws], $_activeStatuses));
+  LIMIT 8", [$ws]);
 
 $workerTasks = [];
 if ($workingNow) {
@@ -172,8 +159,9 @@ if ($workingNow) {
      JOIN users u ON u.id=ta.user_id
      JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
      WHERE u.id IN ($in)
-       AND t.status IN ($_statusIn)
-     ORDER BY t.due_date ASC", array_merge([$ws], $ids, $_activeStatuses));
+       AND LOWER(t.status) NOT LIKE '%submitted%'
+       AND LOWER(t.status) NOT LIKE '%approved%'
+     ORDER BY t.due_date ASC", array_merge([$ws], $ids));
   foreach ($rows as $r) { $workerTasks[(int)$r['uid']][] = $r; }
 }
 
@@ -200,17 +188,20 @@ $riskBlockers = dash_safe_rows($pdo, "SELECT t.id, t.title, t.status, t.due_date
   ORDER BY (t.due_date IS NULL), t.due_date ASC
   LIMIT 10", [$ws]);
 
-$workload = dash_safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(u.role), ''), 'General') AS team,
+$workload = dash_safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(r.name), ''), 'General') AS team,
     COUNT(DISTINCT ta.task_id) AS active_tasks,
     COUNT(DISTINCT u.id) AS members,
     ROUND((COUNT(DISTINCT ta.task_id) / NULLIF(COUNT(DISTINCT u.id) * 5, 0)) * 100, 0) AS capacity
   FROM users u
+  LEFT JOIN roles r ON r.id=u.role_id
   LEFT JOIN task_assignees ta ON ta.user_id=u.id
-  LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=? AND t.status IN ($_statusIn)
+  LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
+    AND LOWER(t.status) NOT LIKE '%submitted%'
+    AND LOWER(t.status) NOT LIKE '%approved%'
   WHERE u.workspace_id=? AND u.is_active=1
   GROUP BY team
   ORDER BY active_tasks DESC
-  LIMIT 6", array_merge([$ws], $_activeStatuses, [$ws]));
+  LIMIT 6", [$ws, $ws]);
 
 $pageTitle = 'Dashboard';
 $activeKey = 'dashboard';
