@@ -1,4 +1,7 @@
-/* anton x — shared design system */
+/* anton x — shared design system
+   Default tokens = DARK mode. Light mode overrides live in `html.light` below.
+   Theme is controlled by an `html.light` class set by the inline init script
+   in partials/header.php and login.php (FOUC-safe, runs before paint). */
 :root {
   --bg: #0a0a0a;
   --surface: #111111;
@@ -11,13 +14,51 @@
   --text-dim: #5a5a5a;
   --accent: #FACC15;
   --accent-hover: #fbd84a;
+  --accent-on: #1a1400;            /* foreground color when sitting ON top of --accent */
   --accent-soft: rgba(250, 204, 21, 0.12);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.14);
   --success: #22c55e;
   --success-soft: rgba(34, 197, 94, 0.14);
   --info-soft: rgba(120, 120, 120, 0.14);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.25);
+  color-scheme: dark;
 }
+
+/* ===== LIGHT MODE TOKENS =====
+   Same variable names, different values. Anything in the design system that
+   references these variables flips automatically. */
+html.light {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f1f1f3;
+  --surface-hover: #ececef;
+  --border: #e5e5e8;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --text-muted: #5a5a63;
+  --text-dim: #8e8e95;
+  --accent: #b45309;               /* amber-700: still recognizable amber, readable on white */
+  --accent-hover: #92400e;         /* amber-800 */
+  --accent-on: #ffffff;            /* white text on the darker amber */
+  --accent-soft: rgba(180, 83, 9, 0.10);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.10);
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.10);
+  --info-soft: rgba(24, 24, 27, 0.06);
+  --shadow-card: 0 2px 8px rgba(24,24,27,0.06);
+  color-scheme: light;
+}
+
+/* Tweaks so existing buttons/pills that hardcode `#1a1400` for foreground
+   adapt automatically — these used to assume amber bg. */
+html.light .btn-primary { color: var(--accent-on); }
+html.light .btn-primary:hover { color: var(--accent-on); }
+/* Sidebar active indicator stays amber; in light mode the amber is darker. */
+html.light .brand .x { color: var(--accent); }
+/* Bootstrap shim adjustments for light mode (used on non-redesigned pages). */
+html.light .btn-yellow { color: var(--accent-on); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -290,6 +331,43 @@ textarea.input { resize: vertical; min-height: 64px; }
 /* ===== Save flash ===== */
 .save-flash { transition: transform 0.1s; }
 .save-flash:active { transform: scale(0.97); }
+
+/* ===== Theme toggle (fixed top-right on every page) =====
+   Rendered by partials/header.php for designed pages and inlined in
+   login.php so it's present even on the unauthenticated screen. */
+.theme-toggle {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-card);
+}
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  background: var(--surface-2);
+}
+.theme-toggle:active { transform: scale(0.94); }
+.theme-toggle svg { width: 16px; height: 16px; transition: transform 0.3s ease; }
+/* Show sun in dark mode (click → light); show moon in light mode (click → dark). */
+.theme-toggle .ico-moon { display: none; }
+html.light .theme-toggle .ico-sun { display: none; }
+html.light .theme-toggle .ico-moon { display: inline-block; }
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle, .theme-toggle:hover { transition: none; transform: none; }
+}
 
 /* ===== Global page-header back-button stacking =====
    Force the back button to render ABOVE the page title on every page.

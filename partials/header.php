@@ -8,6 +8,19 @@ $pageHeadExtra = $pageHeadExtra ?? '';
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- FOUC-safe theme init: runs BEFORE any CSS link so the right palette is
+       applied on the first paint. Reads `anton-theme` from localStorage; if
+       absent, falls back to the user's OS preference. -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('anton-theme');
+        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        var theme = saved || (prefersLight ? 'light' : 'dark');
+        if (theme === 'light') document.documentElement.classList.add('light');
+      } catch (e) {}
+    })();
+  </script>
   <title>anton x — <?=h($pageTitle)?></title>
   <link rel="icon" type="image/png" href="partials/antonx-favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,4 +46,10 @@ $pageHeadExtra = $pageHeadExtra ?? '';
   <?=$pageHeadExtra?>
 </head>
 <body>
+<!-- Theme toggle (fixed top-right, visible on every designed page). Icon swap and
+     localStorage persistence are handled in partials/footer.php. -->
+<button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle dark / light mode">
+  <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>
+  <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+</button>
 <div class="app" data-screen-label="<?=h($pageTitle)?>">
