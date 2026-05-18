@@ -183,10 +183,24 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
   font-size: 22px;
   letter-spacing: -0.02em;
+  text-decoration: none;
+  color: inherit;
 }
 .brand .x {
   color: var(--accent);
   margin-left: 4px;
+}
+.brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 130px;
+  height: auto;
+  object-fit: contain;
+}
+/* The PNG ships with white "anton" + yellow "X" for dark mode. In light mode,
+   invert + hue-rotate flips the white to black while keeping the X yellow. */
+html.light .brand-logo {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 .nav {
