@@ -3,264 +3,409 @@ session_start();
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/helpers.php';
 if (auth_user()) redirect('dashboard.php');
+
 $error = null;
+$prefillEmail = trim((string)($_POST['email'] ?? ''));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
   $email = trim($_POST['email'] ?? '');
   $pass = $_POST['password'] ?? '';
   if (auth_login($email, $pass, false)) redirect('dashboard.php');
-  $error = 'Invalid credentials.';
+  $error = 'Invalid email or password. Try again.';
 }
-include __DIR__ . '/partials/header.php';
-?>
-<style>
-  .login-page {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 32px 16px;
-    background-color: #050505;
-    background-image:
-      radial-gradient(circle at 50% 15%, rgba(255,255,255,0.06), transparent 52%),
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 6px);
-  }
+?><!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>anton x — Sign in</title>
+  <link rel="icon" type="image/png" href="partials/antonx-favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/anton.css">
+  <style>
+    /* Self-contained auth layout — does NOT use the sidebar `.app` grid. */
+    html, body { background: var(--bg); }
+    .auth-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px 16px;
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(900px 540px at 50% -10%, rgba(250,204,21,0.06), transparent 70%),
+        radial-gradient(700px 420px at 0% 100%, rgba(168,85,247,0.05), transparent 65%),
+        radial-gradient(700px 420px at 100% 100%, rgba(59,130,246,0.04), transparent 65%);
+    }
+    /* Subtle grid pattern for visual texture, matches dark surface aesthetic. */
+    .auth-shell::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 40%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 40%, transparent 100%);
+      pointer-events: none;
+    }
+    .auth-card {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 32px 28px;
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(255,255,255,0.02) inset;
+    }
+    .auth-brand {
+      display: flex; align-items: center; justify-content: center; gap: 2px;
+      font-weight: 700; font-size: 28px; letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+    .auth-brand .x {
+      color: var(--accent);
+      margin-left: 4px;
+    }
+    .auth-eyebrow {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .auth-eyebrow::before {
+      content: '';
+      width: 4px; height: 4px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(250,204,21,0.18);
+    }
+    .auth-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .auth-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+    }
 
-  .login-card {
-    width: 100%;
-    max-width: 520px;
-    border-radius: 14px;
-    padding: 30px 34px 24px;
-    background: linear-gradient(105deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015) 35%, rgba(255,255,255,0.04));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 28px 100px rgba(0, 0, 0, 0.68);
-    backdrop-filter: blur(2px);
-  }
+    .auth-field { margin-bottom: 14px; }
+    .auth-label {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11.5px; font-weight: 500; color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .input-shell {
+      position: relative;
+      display: flex; align-items: center;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: all 0.15s;
+    }
+    .input-shell:focus-within {
+      border-color: var(--accent);
+      background: var(--bg);
+      box-shadow: 0 0 0 3px rgba(250,204,21,0.12);
+    }
+    .input-shell svg.leading {
+      width: 16px; height: 16px;
+      color: var(--text-dim);
+      margin-left: 14px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .input-shell:focus-within svg.leading { color: var(--accent); }
+    .auth-input {
+      flex: 1;
+      background: transparent;
+      border: 0; outline: 0;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 13px 14px;
+      letter-spacing: -0.005em;
+    }
+    .auth-input::placeholder { color: var(--text-dim); }
+    /* Suppress browser autofill yellow */
+    .auth-input:-webkit-autofill,
+    .auth-input:-webkit-autofill:hover,
+    .auth-input:-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--text);
+      -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+      caret-color: var(--text);
+      transition: background-color 9999s ease-out 0s;
+    }
+    .pw-toggle {
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      color: var(--text-dim);
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.12s;
+      margin-right: 6px;
+      background: none; border: 0; cursor: pointer; flex-shrink: 0;
+    }
+    .pw-toggle:hover { color: var(--text); background: var(--surface); }
+    .pw-toggle svg { width: 16px; height: 16px; }
 
-  .login-brand {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 28px;
-  }
+    .auth-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 4px 0 18px;
+    }
+    .auth-row .remember {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .auth-row .remember input { display: none; }
+    .auth-row .remember .box {
+      width: 16px; height: 16px;
+      border: 1.5px solid var(--border-strong);
+      background: var(--bg);
+      border-radius: 4px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+    .auth-row .remember .box svg {
+      width: 11px; height: 11px;
+      color: #1a1400;
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .auth-row .remember input:checked ~ .box {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .auth-row .remember input:checked ~ .box svg { opacity: 1; }
+    .forgot-link {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.12s;
+    }
+    .forgot-link:hover { color: var(--accent); }
 
-  .login-brand img {
-    width: 170px;
-    height: auto;
-    display: block;
-  }
+    .auth-submit {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #1a1400;
+      font-size: 14px;
+      font-weight: 600;
+      border: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .auth-submit:hover { background: var(--accent-hover); }
+    .auth-submit:active { transform: scale(0.98); }
+    .auth-submit svg { width: 14px; height: 14px; }
+    .auth-submit[disabled] {
+      opacity: 0.7;
+      cursor: wait;
+    }
+    .auth-submit .spinner {
+      display: none;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(26,20,0,0.25);
+      border-top-color: #1a1400;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    .auth-submit.loading .label-arrow { display: none; }
+    .auth-submit.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-  .login-form-group {
-    margin-bottom: 14px;
-  }
+    .auth-error {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 11px 13px;
+      background: var(--danger-soft);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px;
+      color: #fca5a5;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .auth-error svg {
+      width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px;
+    }
 
-  .login-label {
-    display: block;
-    color: #f2f2f2;
-    font-size: 19px;
-    font-weight: 500;
-    margin-bottom: 8px;
-  }
+    .caps-hint {
+      font-size: 11.5px;
+      color: var(--accent);
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(250,204,21,0.25);
+      border-radius: 7px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .caps-hint svg { width: 11px; height: 11px; }
+    .caps-hint.show { display: inline-flex; }
 
-  .input-shell {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 54px;
-    border-radius: 8px;
-    padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    background: linear-gradient(90deg, rgba(255,255,255,0.09), rgba(255,255,255,0.05));
-  }
+    .auth-foot {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .auth-foot .kbd {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin: 0 2px;
+    }
+    .auth-foot a { color: var(--text-muted); text-decoration: none; transition: color 0.12s; }
+    .auth-foot a:hover { color: var(--accent); }
 
-  .input-shell svg {
-    width: 20px;
-    height: 20px;
-    flex: 0 0 auto;
-    color: #b8b8b8;
-  }
+    @media (max-width: 480px) {
+      .auth-card { padding: 26px 22px 22px; }
+      .auth-title { font-size: 19px; }
+    }
+  </style>
+</head>
+<body>
 
-  .login-input {
-    border: 0;
-    outline: 0;
-    width: 100%;
-    background: transparent;
-    color: #f3f3f3;
-    font-size: 18px;
-    font-weight: 400;
-    line-height: 1;
-  }
+<div class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-brand" aria-label="anton x">anton<span class="x">x</span></div>
 
-  .login-input::placeholder { color: #fff; opacity: 1; }
-  .login-input:-webkit-autofill,
-  .login-input:-webkit-autofill:hover,
-  .login-input:-webkit-autofill:focus,
-  .login-input:-webkit-autofill:active {
-    -webkit-text-fill-color: #f3f3f3;
-    -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
-    box-shadow: 0 0 0px 1000px rgba(255,255,255,0.03) inset;
-    caret-color: #f3f3f3;
-    transition: background-color 9999s ease-out 0s;
-  }
+    <div class="auth-eyebrow">Welcome back</div>
+    <h1 class="auth-title">Sign in to your workspace</h1>
+    <p class="auth-sub">Use your work email and password to continue.</p>
 
-  .password-toggle {
-    border: 0;
-    background: transparent;
-    color: #b8b8b8;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    cursor: pointer;
-  }
-  .password-toggle:hover { color: #f0cb47; }
-  .password-toggle:focus { outline: none; color: #f0cb47; }
-  .password-toggle svg { width: 20px; height: 20px; }
+    <?php if ($error): ?>
+      <div class="auth-error" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span><?= h($error) ?></span>
+      </div>
+    <?php endif; ?>
 
+    <form method="post" id="loginForm" autocomplete="on" novalidate>
+      <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
 
-  .login-links {
-    display: flex;
-    justify-content: flex-end;
-    margin: 2px 0 16px;
-  }
-
-  .login-links a {
-    color: #b7b7b7;
-    text-decoration: none;
-    font-size: 18px;
-  }
-
-  .login-submit {
-    width: 100%;
-    min-height: 54px;
-    border-radius: 8px;
-    border: 0;
-    background: linear-gradient(180deg, #f4d85e, #ebc53e);
-    color: #121212;
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 14px;
-  }
-
-  .login-sep {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin: 0 0 16px;
-  }
-
-  .login-signup {
-    text-align: center;
-    font-size: 18px;
-    color: #bdbdbd;
-  }
-
-  .login-signup a {
-    color: #f0cb47;
-    text-decoration: none;
-    font-weight: 600;
-  }
-
-  .login-alert {
-    margin-bottom: 14px;
-    border-radius: 8px;
-  }
-
-  @media (max-width: 900px) {
-    .login-card { max-width: 500px; }
-    .login-brand { margin-bottom: 24px; }
-    .login-brand img { width: 156px; }
-    .login-label { font-size: 18px; }
-    .input-shell { min-height: 50px; }
-    .login-input { font-size: 14px; }
-    .login-links a { font-size: 17px; }
-    .login-submit { min-height: 50px; font-size: 18px; }
-    .login-signup { font-size: 18px; }
-  }
-
-  @media (max-width: 640px) {
-    .login-card { padding: 24px 16px 18px; border-radius: 12px; }
-    .login-brand { margin-bottom: 18px; }
-    .login-brand img { width: 142px; }
-    .login-label { font-size: 16px; margin-bottom: 6px; }
-    .input-shell { min-height: 46px; padding: 0 12px; }
-    .input-shell svg { width: 18px; height: 18px; }
-    .login-input { font-size: 13px; }
-    .login-links a { font-size: 16px; }
-    .login-submit { min-height: 46px; font-size: 16px; margin-bottom: 14px; }
-    .login-signup { font-size: 16px; }
-  }
-</style>
-
-<div class="login-page">
-  <div class="login-card">
-    <div class="login-brand" aria-label="AntonX">
-      <img src="partials/antonx-logo.png" alt="AntonX">
-    </div>
-
-    <?php if ($error): ?><div class="alert alert-danger login-alert"><?=h($error)?></div><?php endif; ?>
-
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-
-      <div class="login-form-group">
-        <label class="login-label" for="login-email">Email</label>
+      <div class="auth-field">
+        <label class="auth-label" for="login-email">Email</label>
         <div class="input-shell">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M3 6.75C3 5.78 3.79 5 4.75 5H19.25C20.22 5 21 5.78 21 6.75V17.25C21 18.22 20.22 19 19.25 19H4.75C3.79 19 3 18.22 3 17.25V6.75Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M4 7L12 13L20 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <input class="login-input" id="login-email" name="email" type="email" placeholder="Email" autocomplete="email" required>
+          <svg class="leading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+          <input class="auth-input" id="login-email" name="email" type="email" placeholder="you@company.com" value="<?= h($prefillEmail) ?>" autocomplete="email" autofocus required>
         </div>
       </div>
 
-      <div class="login-form-group">
-        <label class="login-label" for="login-password">Password</label>
+      <div class="auth-field" style="margin-bottom: 6px;">
+        <label class="auth-label" for="login-password">
+          Password
+          <a class="forgot-link" href="forgot_password.php">Forgot?</a>
+        </label>
         <div class="input-shell">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M8.5 11V8.5C8.5 6.57 10.07 5 12 5C13.93 5 15.5 6.57 15.5 8.5V11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          <input class="login-input" id="login-password" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
-          <button class="password-toggle" type="button" aria-label="Show password" data-toggle-password="login-password" data-show-label="Show password" data-hide-label="Hide password">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/>
-              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
-            </svg>
+          <svg class="leading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+          <input class="auth-input" id="login-password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+          <button class="pw-toggle" type="button" id="pwToggle" aria-label="Show password">
+            <svg id="pwEye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </button>
         </div>
+        <div class="caps-hint" id="capsHint" role="status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l8 9H4l8-9z"></path><line x1="4" y1="17" x2="20" y2="17"></line><line x1="4" y1="20" x2="20" y2="20"></line></svg>
+          Caps Lock is on
+        </div>
       </div>
 
-      <div class="login-links">
-        <a href="forgot_password.php">Forgot password?</a>
+      <div class="auth-row">
+        <label class="remember">
+          <input type="checkbox" name="remember" value="1">
+          <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
+          Keep me signed in
+        </label>
       </div>
 
-      <button class="login-submit" type="submit">Sign In</button>
+      <button class="auth-submit" type="submit" id="submitBtn">
+        <span class="label-arrow" style="display:inline-flex;align-items:center;gap:8px;">
+          Sign in
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
     </form>
 
+    <div class="auth-foot">
+      Press <span class="kbd">Enter</span> to sign in · powered by <a href="https://speedxmarketing.com" target="_blank" rel="noopener">SpeedX</a>
+    </div>
   </div>
 </div>
 
 <script>
-  (function(){
-    function eyeSvg(){
-      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.2 12C3.9 8.6 7.4 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C20.1 15.4 16.6 17.7 12 17.7C7.4 17.7 3.9 15.4 2.2 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>';
-    }
-    function eyeOffSvg(){
-      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.2 3.2L20.8 20.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 6.4C11 6.33 11.5 6.3 12 6.3C16.6 6.3 20.1 8.6 21.8 12C21 13.6 19.8 15 18.3 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.1 14.1C13.6 14.6 12.9 15 12 15C10.3 15 9 13.7 9 12C9 11.1 9.4 10.4 9.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.1 7.6C4.5 8.6 3.2 10.1 2.2 12C3.9 15.4 7.4 17.7 12 17.7C13.8 17.7 15.4 17.3 16.8 16.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-    }
+  // Password show/hide
+  const pwInput = document.getElementById('login-password');
+  const pwToggle = document.getElementById('pwToggle');
+  const eyeOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+  const eyeOff  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a18.5 18.5 0 014.06-5.94"></path><path d="M9.9 4.24A10.93 10.93 0 0112 4c7 0 11 8 11 8a18.45 18.45 0 01-2.16 3.19"></path><path d="M14.12 14.12a3 3 0 11-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+  pwToggle.addEventListener('click', () => {
+    const shown = pwInput.type === 'text';
+    pwInput.type = shown ? 'password' : 'text';
+    pwToggle.innerHTML = shown ? eyeOpen : eyeOff;
+    pwToggle.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+  });
 
-    document.querySelectorAll('[data-toggle-password]').forEach(function(btn){
-      var input = document.getElementById(btn.getAttribute('data-toggle-password'));
-      if (!input) return;
-      btn.addEventListener('click', function(){
-        var hidden = input.type === 'password';
-        input.type = hidden ? 'text' : 'password';
-        btn.innerHTML = hidden ? eyeOffSvg() : eyeSvg();
-        btn.setAttribute('aria-label', hidden ? (btn.dataset.hideLabel || 'Hide password') : (btn.dataset.showLabel || 'Show password'));
-      });
-    });
-  })();
+  // Caps Lock detection
+  const capsHint = document.getElementById('capsHint');
+  function checkCaps(e) {
+    if (e.getModifierState && e.getModifierState('CapsLock')) {
+      capsHint.classList.add('show');
+    } else {
+      capsHint.classList.remove('show');
+    }
+  }
+  pwInput.addEventListener('keyup', checkCaps);
+  pwInput.addEventListener('keydown', checkCaps);
+  pwInput.addEventListener('blur', () => capsHint.classList.remove('show'));
+
+  // Loading state on submit (re-enabled on a failed POST that returns to this page)
+  const form = document.getElementById('loginForm');
+  const submitBtn = document.getElementById('submitBtn');
+  form.addEventListener('submit', () => {
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+  });
+
+  // Auto-focus password if email is prefilled and present
+  window.addEventListener('DOMContentLoaded', () => {
+    const emailEl = document.getElementById('login-email');
+    if (emailEl.value.trim() !== '') pwInput.focus();
+  });
 </script>
 
-<?php include __DIR__ . '/partials/footer.php'; ?>
+</body>
+</html>
