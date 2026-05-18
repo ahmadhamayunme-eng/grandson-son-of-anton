@@ -138,15 +138,29 @@ foreach ($tasks as $t) {
   $calendarMap[$d][] = $t;
 }
 
+// Fetch workspace-defined active (non-terminal) statuses so the panel is not
+// broken when workspaces use custom status names.
+$_wsStatuses = dash_safe_rows($pdo,
+  "SELECT name FROM task_statuses
+   WHERE workspace_id=?
+     AND LOWER(name) NOT LIKE '%approved%'
+     AND LOWER(name) NOT LIKE '%submitted%'
+   ORDER BY sort_order", [$ws]);
+$_activeStatuses = array_column($_wsStatuses, 'name');
+if (empty($_activeStatuses)) {
+  $_activeStatuses = ['To Do', 'In Progress', 'Completed (Needs Manager Review)'];
+}
+$_statusIn    = implode(',', array_fill(0, count($_activeStatuses), '?'));
+
 $workingNow = dash_safe_rows($pdo, "SELECT u.id, u.name, u.role,
     COUNT(DISTINCT ta.task_id) AS task_count
   FROM task_assignees ta
   JOIN users u ON u.id=ta.user_id
   JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
-  WHERE t.status IN ('To Do','In Progress','Completed (Needs Manager Review)')
+  WHERE t.status IN ($_statusIn)
   GROUP BY u.id, u.name, u.role
   ORDER BY task_count DESC, u.name ASC
-  LIMIT 8", [$ws]);
+  LIMIT 8", array_merge([$ws], $_activeStatuses));
 
 $workerTasks = [];
 if ($workingNow) {
@@ -158,8 +172,8 @@ if ($workingNow) {
      JOIN users u ON u.id=ta.user_id
      JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=?
      WHERE u.id IN ($in)
-       AND t.status IN ('To Do','In Progress','Completed (Needs Manager Review)')
-     ORDER BY t.due_date ASC", array_merge([$ws], $ids));
+       AND t.status IN ($_statusIn)
+     ORDER BY t.due_date ASC", array_merge([$ws], $ids, $_activeStatuses));
   foreach ($rows as $r) { $workerTasks[(int)$r['uid']][] = $r; }
 }
 
@@ -192,11 +206,11 @@ $workload = dash_safe_rows($pdo, "SELECT COALESCE(NULLIF(TRIM(u.role), ''), 'Gen
     ROUND((COUNT(DISTINCT ta.task_id) / NULLIF(COUNT(DISTINCT u.id) * 5, 0)) * 100, 0) AS capacity
   FROM users u
   LEFT JOIN task_assignees ta ON ta.user_id=u.id
-  LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=? AND t.status IN ('To Do','In Progress','Completed (Needs Manager Review)')
+  LEFT JOIN tasks t ON t.id=ta.task_id AND t.workspace_id=? AND t.status IN ($_statusIn)
   WHERE u.workspace_id=? AND u.is_active=1
   GROUP BY team
   ORDER BY active_tasks DESC
-  LIMIT 6", [$ws, $ws]);
+  LIMIT 6", array_merge([$ws], $_activeStatuses, [$ws]));
 
 $pageTitle = 'Dashboard';
 $activeKey = 'dashboard';
