@@ -125,9 +125,12 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
           <div class="chat-section-empty">No channels yet</div>
         <?php else: ?>
           <?php foreach ($userChannels as $c):
-            $active = $currentChannel && (int)$currentChannel['id'] === (int)$c['id'];
+            $active   = $currentChannel && (int)$currentChannel['id'] === (int)$c['id'];
+            $unjoined = !((int)($c['is_member'] ?? 0));
           ?>
-            <a class="chat-row<?= $active ? ' active' : '' ?>" href="/chat/?c=<?= h(urlencode($c['slug'])) ?>">
+            <a class="chat-row<?= $active ? ' active' : '' ?><?= $unjoined ? ' chat-row-unjoined' : '' ?>"
+               href="/chat/?c=<?= h(urlencode($c['slug'])) ?>"
+               title="<?= $unjoined ? 'You haven\'t joined this channel yet' : '' ?>">
               <span class="chat-row-prefix" aria-hidden="true"><?= $c['is_private'] ? '🔒' : '#' ?></span><?= h($c['slug']) ?>
             </a>
           <?php endforeach; ?>
