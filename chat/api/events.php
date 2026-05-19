@@ -98,10 +98,12 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
             m.edited_at     AS message_edited_at,
             m.deleted_at    AS message_deleted_at,
             m.parent_message_id AS message_parent_id,
-            u.name          AS author_name
+            u.name          AS author_name,
+            ch.slug         AS channel_slug
      FROM chat_events e
-     LEFT JOIN chat_messages m ON m.id = e.message_id
-     LEFT JOIN users u         ON u.id = m.user_id
+     LEFT JOIN chat_messages m  ON m.id  = e.message_id
+     LEFT JOIN users u          ON u.id  = m.user_id
+     LEFT JOIN chat_channels ch ON ch.id = e.channel_id
      WHERE e.workspace_id = ?
        AND e.id > ?
        AND (

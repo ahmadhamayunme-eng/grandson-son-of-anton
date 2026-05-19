@@ -552,6 +552,124 @@ function chat_format_file_size(int $bytes): string {
   return round($bytes / (1024 * 1024 * 1024), 1) . ' GB';
 }
 
+// ===== Unread counts & presence (Phase 8) ================================
+
+/**
+ * Unread counts for the user, computed from last_read_message_id on each
+ * channel / DM membership. Excludes their own messages, soft-deleted
+ * messages, and thread replies (we only badge top-level activity).
+ *
+ * Returns:
+ *   [ 'channels' => [channel_id => count, ...],
+ *     'dms'      => [conversation_id => count, ...] ]
+ * Entries with count 0 are omitted to keep the JSON small.
+ */
+function chat_unread_counts_for_user(int $workspaceId, int $userId): array {
+  $pdo = db();
+
+  $stmt = $pdo->prepare(
+    "SELECT cm.channel_id,
+            (SELECT COUNT(*) FROM chat_messages m
+             WHERE m.channel_id = cm.channel_id
+               AND m.parent_message_id IS NULL
+               AND m.deleted_at IS NULL
+               AND m.user_id != ?
+               AND m.id > IFNULL(cm.last_read_message_id, 0)
+            ) AS unread
+     FROM chat_channel_members cm
+     JOIN chat_channels c ON c.id = cm.channel_id
+     WHERE cm.user_id = ? AND c.workspace_id = ? AND c.archived_at IS NULL"
+  );
+  $stmt->execute([$userId, $userId, $workspaceId]);
+  $channels = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $n = (int)$r['unread'];
+    if ($n > 0) $channels[(int)$r['channel_id']] = $n;
+  }
+
+  $stmt = $pdo->prepare(
+    "SELECT dm.conversation_id,
+            (SELECT COUNT(*) FROM chat_messages m
+             WHERE m.conversation_id = dm.conversation_id
+               AND m.parent_message_id IS NULL
+               AND m.deleted_at IS NULL
+               AND m.user_id != ?
+               AND m.id > IFNULL(dm.last_read_message_id, 0)
+            ) AS unread
+     FROM chat_direct_conversation_members dm
+     JOIN chat_direct_conversations c ON c.id = dm.conversation_id
+     WHERE dm.user_id = ? AND c.workspace_id = ?"
+  );
+  $stmt->execute([$userId, $userId, $workspaceId]);
+  $dms = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $n = (int)$r['unread'];
+    if ($n > 0) $dms[(int)$r['conversation_id']] = $n;
+  }
+
+  return ['channels' => $channels, 'dms' => $dms];
+}
+
+/**
+ * Set the membership's last_read_message_id to the current MAX(id) of
+ * the channel. Idempotent — running again is a no-op. Used both on
+ * page load (auto-read the currently-viewed channel) and from the
+ * mark_read endpoint when SSE delivers a message to the open channel.
+ */
+function chat_mark_channel_read(int $channelId, int $userId): void {
+  $stmt = db()->prepare(
+    'UPDATE chat_channel_members
+     SET last_read_message_id = IFNULL((
+       SELECT MAX(id) FROM chat_messages WHERE channel_id = ?
+     ), last_read_message_id)
+     WHERE channel_id = ? AND user_id = ?'
+  );
+  $stmt->execute([$channelId, $channelId, $userId]);
+}
+
+function chat_mark_dm_read(int $conversationId, int $userId): void {
+  $stmt = db()->prepare(
+    'UPDATE chat_direct_conversation_members
+     SET last_read_message_id = IFNULL((
+       SELECT MAX(id) FROM chat_messages WHERE conversation_id = ?
+     ), last_read_message_id)
+     WHERE conversation_id = ? AND user_id = ?'
+  );
+  $stmt->execute([$conversationId, $conversationId, $userId]);
+}
+
+/**
+ * Bump the user's last_seen_at to now(). Called from /chat/api/presence.php
+ * every ~30s while the page is open. Upserts via ON DUPLICATE KEY so a
+ * brand-new user's row is created on first ping.
+ */
+function chat_presence_ping(int $userId): void {
+  $stmt = db()->prepare(
+    'INSERT INTO chat_user_presence (user_id, last_seen_at)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE last_seen_at = VALUES(last_seen_at)'
+  );
+  $stmt->execute([$userId, now()]);
+}
+
+/**
+ * Online/offline map for every active user in the workspace.
+ *   [ user_id => 1 if last_seen_at within 90s, 0 otherwise ]
+ * The 90s threshold matches the spec.
+ */
+function chat_presence_map(int $workspaceId): array {
+  $stmt = db()->prepare(
+    "SELECT u.id, IF(p.last_seen_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND), 1, 0) AS online
+     FROM users u
+     LEFT JOIN chat_user_presence p ON p.user_id = u.id
+     WHERE u.workspace_id = ? AND u.is_active = 1"
+  );
+  $stmt->execute([$workspaceId]);
+  $map = [];
+  foreach ($stmt->fetchAll() as $r) $map[(int)$r['id']] = (int)$r['online'];
+  return $map;
+}
+
 /**
  * Validate a staged upload: it must exist, belong to this user, and
  * still be unattached (message_id IS NULL). Used by msg_action_send
