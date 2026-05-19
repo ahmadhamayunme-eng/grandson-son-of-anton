@@ -1,0 +1,141 @@
+/* Anton Chat — Slack-style layout.
+   Reuses AntonX design tokens (--bg, --surface, --accent, --text, ...) from
+   styles/anton.css, so dark/light mode flips automatically with the existing
+   theme toggle. Only chat-specific classes are defined here. */
+
+/* Match the body font used by AntonX (header.php sets this for the rest of
+   the app; we set it ourselves here since chat doesn't include header.php). */
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* Chat fills the viewport — no body scroll, only the inner panes scroll. */
+html, body { overflow: hidden; }
+
+/* Override anton.css's bare ".main { display:flex; ... }" so the chat shell
+   gets the full viewport height. chat.css only loads on /chat/* pages, so
+   the override is naturally scoped. */
+.main { height: 100vh; padding: 0; overflow: hidden; }
+
+/* ===== Two-pane shell ===== */
+.chat-shell {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ===== Left: chat sidebar (workspace, channels, DMs) ===== */
+.chat-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-ws {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.chat-ws-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.chat-ws-user {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.chat-ws-sep { color: var(--text-dim); margin: 0 4px; }
+.chat-ws-role { color: var(--text-dim); }
+
+.chat-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.chat-section { padding: 8px 0; }
+.chat-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.chat-section-empty {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Channel / DM rows. Not used in Phase 1, but the classes are here so Phase 2
+   can drop in markup without restyling. */
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.chat-row:hover { background: var(--surface-hover); }
+.chat-row.active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  color: var(--text);
+}
+.chat-row.unread { font-weight: 600; }
+.chat-row .chat-row-prefix { color: var(--text-muted); }
+.chat-row .chat-row-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ===== Right: main chat pane ===== */
+.chat-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  padding: 32px;
+  max-width: 480px;
+}
+.chat-empty-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.chat-empty-sub {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

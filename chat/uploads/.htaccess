@@ -1,0 +1,16 @@
+# Anton Chat uploads — files in this tree are user-supplied and must NEVER be
+# executed or browsed directly. They're served through chat/api/file.php which
+# checks auth + permissions and then streams the bytes.
+
+Options -Indexes
+
+# Apache 2.4+
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+
+# Apache 2.2 fallback (still possible on shared hosts)
+<IfModule !mod_authz_core.c>
+  Order deny,allow
+  Deny from all
+</IfModule>
