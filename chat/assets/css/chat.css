@@ -50,6 +50,33 @@ html, body { overflow: hidden; }
 .chat-ws-sep { color: var(--text-dim); margin: 0 4px; }
 .chat-ws-role { color: var(--text-dim); }
 
+/* Search trigger in the chat sidebar (Phase 7) — looks like an input,
+   but clicking opens the search modal instead. */
+.chat-sidebar-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: text;
+  text-align: left;
+}
+.chat-sidebar-search-trigger svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.chat-sidebar-search-trigger:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 .chat-nav {
   flex: 1;
   overflow-y: auto;
@@ -1040,6 +1067,157 @@ html.light .chat-reply-count { color: #3f3f46; }
   overflow: hidden;
 }
 .chat-emoji-popup[hidden] { display: none !important; }
+/* ===== Search modal (Phase 7) ===== */
+.chat-modal-search-dialog { width: min(720px, calc(100% - 32px)); }
+
+.chat-search-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-search-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-search-filter > span { padding-left: 2px; }
+.chat-search-filter select,
+.chat-search-filter input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  min-width: 140px;
+  outline: none;
+}
+.chat-search-filter select:focus,
+.chat-search-filter input[type="date"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.chat-search-filter-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  padding-bottom: 6px;
+  align-self: flex-end;
+}
+.chat-search-filter-checkbox input { margin: 0; }
+
+.chat-search-results {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 4px -4px 0;
+  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-search-empty,
+.chat-search-loading,
+.chat-search-error {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.chat-search-error { color: var(--danger); }
+
+.chat-search-result {
+  padding: 10px 10px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.chat-search-result:hover {
+  background: var(--surface-hover);
+}
+.chat-search-result.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.chat-search-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.chat-search-result-context {
+  color: var(--text);
+  font-weight: 600;
+}
+.chat-search-result-context-prefix { color: var(--text-muted); margin-right: 2px; }
+.chat-search-result-author {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+  margin-right: 4px;
+}
+.chat-search-result-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-search-result-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text);
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chat-search-result-text p { margin: 0; }
+.chat-search-result-text p + p { margin-top: 4px; }
+.chat-search-result-text a { color: var(--accent); text-decoration: underline; }
+html.light .chat-search-result-text a { color: #3f3f46; text-decoration-color: var(--accent); }
+
+/* Flash highlight on a message when navigated to from a search result. */
+.chat-msg-highlight {
+  background: var(--accent-soft) !important;
+  animation: chat-msg-flash 1.6s ease-out 1;
+  border-radius: 4px;
+}
+@keyframes chat-msg-flash {
+  0%   { background: var(--accent); }
+  100% { background: var(--accent-soft); }
+}
+
 .chat-emoji-popup emoji-picker {
   /* Tokens documented at https://github.com/nolanlawson/emoji-picker-element */
   --background: var(--surface);
