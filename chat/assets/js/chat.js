@@ -52,7 +52,14 @@
   }
   function apiPost(action, file, body) {
     var fd = new FormData();
-    Object.keys(body || {}).forEach(function (k) { fd.append(k, body[k]); });
+    Object.keys(body || {}).forEach(function (k) {
+      var v = body[k];
+      if (Array.isArray(v)) {
+        v.forEach(function (item) { fd.append(k + '[]', item); });
+      } else if (v !== undefined && v !== null) {
+        fd.append(k, v);
+      }
+    });
     return fetch('/chat/api/' + file + '?action=' + encodeURIComponent(action), {
       method: 'POST',
       credentials: 'same-origin',
@@ -106,6 +113,7 @@
     var edited  = msg.edited_at  != null;
     var reactions = msg.reactions || [];
     var replyCt   = parseInt(msg.reply_count, 10) || 0;
+    var files     = msg.files || [];
 
     var avatar = '';
     if (!grouped) {
@@ -119,14 +127,38 @@
            + '</div>';
     }
 
-    var textHtml;
+    var textBlockHtml = '';
     if (deleted) {
-      textHtml = '<em>This message was deleted.</em>';
+      textBlockHtml = '<div class="chat-msg-text chat-msg-deleted"><em>This message was deleted.</em></div>';
     } else {
-      // Prefer server-rendered content_html (handles @mentions etc.). Fall
-      // back to plain escape + nl2br if it's a bare message.
-      textHtml = msg.content_html || nl2br(msg.content || '');
-      if (edited) textHtml += ' <span class="chat-msg-edited">(edited)</span>';
+      var inner = msg.content_html || nl2br(msg.content || '');
+      var hasText = inner !== '' && inner !== '<br>';
+      if (hasText) {
+        if (edited) inner += ' <span class="chat-msg-edited">(edited)</span>';
+        textBlockHtml = '<div class="chat-msg-text">' + inner + '</div>';
+      }
+    }
+
+    var filesHtml = '';
+    if (!deleted && files.length) {
+      filesHtml = '<div class="chat-msg-files">' + files.map(function (f) {
+        if (f.is_image) {
+          return '<a class="chat-file chat-file-image" href="/chat/api/file.php?id=' + f.id
+               + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(f.name) + '">'
+               +   '<img src="/chat/api/file.php?id=' + f.id + '" alt="' + escapeHtml(f.name) + '" loading="lazy">'
+               + '</a>';
+        }
+        return '<a class="chat-file chat-file-other" href="/chat/api/file.php?id=' + f.id
+             + '" target="_blank" rel="noopener noreferrer" download="' + escapeHtml(f.name) + '">'
+             +   '<span class="chat-file-icon" aria-hidden="true">'
+             +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>'
+             +   '</span>'
+             +   '<span class="chat-file-info">'
+             +     '<span class="chat-file-name">' + escapeHtml(f.name) + '</span>'
+             +     '<span class="chat-file-size">' + escapeHtml(formatBytes(parseInt(f.size, 10) || 0)) + '</span>'
+             +   '</span>'
+             + '</a>';
+      }).join('') + '</div>';
     }
 
     var reactionsHtml = '';
@@ -170,11 +202,18 @@
          + ' data-msg-id="' + msg.id + '" data-user-id="' + msg.user_id + '" data-msg-ts="' + ts + '">'
          +   '<div class="chat-msg-avatar">' + avatar + '</div>'
          +   '<div class="chat-msg-body">' + meta
-         +     '<div class="chat-msg-text' + (deleted ? ' chat-msg-deleted' : '') + '">' + textHtml + '</div>'
-         +     reactionsHtml + replyBtnHtml
+         +     textBlockHtml
+         +     filesHtml + reactionsHtml + replyBtnHtml
          +   '</div>'
          +   actionsHtml
          + '</div>';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024)                return bytes + ' B';
+    if (bytes < 1024 * 1024)         return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024)  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   }
 
   function buildMessageEl(msg, grouped) {
@@ -209,7 +248,9 @@
     composer.addEventListener('submit', function (e) {
       e.preventDefault();
       var text = (input.value || '').trim();
-      if (!text || (!CURRENT_CHANNEL_ID && !CURRENT_CONVERSATION_ID)) return;
+      var fileIds = pendingFilesFor('chatComposerPending');
+      if (!text && !fileIds.length) return;
+      if (!CURRENT_CHANNEL_ID && !CURRENT_CONVERSATION_ID) return;
 
       var sendBtn = composer.querySelector('.chat-composer-send');
       if (sendBtn) sendBtn.disabled = true;
@@ -218,6 +259,7 @@
       var sendBody = { content: text };
       if (CURRENT_CHANNEL_ID)      sendBody.channel_id      = CURRENT_CHANNEL_ID;
       if (CURRENT_CONVERSATION_ID) sendBody.conversation_id = CURRENT_CONVERSATION_ID;
+      if (fileIds.length)          sendBody.file_ids        = fileIds;
 
       apiPost('send', 'messages.php', sendBody)
         .then(function (res) {
@@ -230,12 +272,12 @@
           var prev = lastMsgInfo();
           var grouped = prev && prev.userId === msg.user_id &&
                         ((Math.floor(new Date(msg.created_at.replace(' ', 'T')).getTime() / 1000) - prev.ts) < 300);
-          // If the channel was empty, remove the "beginning of #X" placeholder.
           var emptyState = msgList.querySelector('.chat-msgs-empty');
           if (emptyState) emptyState.remove();
           msgList.appendChild(buildMessageEl(msg, grouped));
           input.value = '';
           autoresize(input);
+          clearPending('chatComposerPending');
           scrollMsgsToBottom();
           input.focus();
         })
@@ -699,7 +741,11 @@
       edited_at:    ev.message_edited_at,
       deleted_at:   ev.message_deleted_at,
       reactions:    [],
-      reply_count:  0
+      reply_count:  0,
+      // The SSE handler in events.php attaches the file list for each
+      // message id. Older events (pre-Phase-6) won't have it.
+      files:        Array.isArray(ev.message_files) ? ev.message_files
+                                                    : (ev.payload && Array.isArray(ev.payload.files) ? ev.payload.files : [])
     };
   }
 
@@ -888,10 +934,13 @@
       e.preventDefault();
       if (!threadParentId || !threadInput) return;
       var text = (threadInput.value || '').trim();
-      if (!text) return;
+      var fileIds = pendingFilesFor('chatThreadPending');
+      if (!text && !fileIds.length) return;
       var btn = threadComposer.querySelector('.chat-composer-send');
       if (btn) btn.disabled = true;
-      apiPost('send', 'messages.php', { parent_message_id: threadParentId, content: text })
+      var sendBody = { parent_message_id: threadParentId, content: text };
+      if (fileIds.length) sendBody.file_ids = fileIds;
+      apiPost('send', 'messages.php', sendBody)
         .then(function (res) {
           if (btn) btn.disabled = false;
           if (!res.ok) {
@@ -899,7 +948,6 @@
             return;
           }
           var msg = res.data.message;
-          // Append locally; SSE echo will be deduped by data-msg-id.
           if (threadList && !threadList.querySelector('.chat-msg[data-msg-id="' + msg.id + '"]')) {
             var divider = threadList.querySelector('.chat-thread-divider');
             if (divider && /No replies yet/.test(divider.textContent)) {
@@ -910,6 +958,7 @@
           }
           threadInput.value = '';
           autoresize(threadInput);
+          clearPending('chatThreadPending');
           threadInput.focus();
           bumpReplyCount(threadParentId);
         });
@@ -1088,12 +1137,202 @@
     if (e.key === 'Escape') closeEmojiPicker();
   });
 
+  // ===== Composer formatting toolbar + file uploads (Phase 6) =========
+
+  function wrapSelection(textarea, prefix, suffix) {
+    suffix = (suffix == null) ? prefix : suffix;
+    var start = textarea.selectionStart;
+    var end   = textarea.selectionEnd;
+    var text  = textarea.value;
+    var selected = text.substring(start, end);
+    var wrapped  = prefix + selected + suffix;
+    textarea.value = text.substring(0, start) + wrapped + text.substring(end);
+    if (selected.length === 0) {
+      textarea.selectionStart = textarea.selectionEnd = start + prefix.length;
+    } else {
+      textarea.selectionStart = start + prefix.length;
+      textarea.selectionEnd   = end   + prefix.length;
+    }
+    textarea.focus();
+    autoresize(textarea);
+  }
+
+  function insertLink(textarea) {
+    var url = prompt('Link URL:');
+    if (!url) return;
+    url = url.trim();
+    if (!/^(https?:\/\/|mailto:|\/)/i.test(url)) url = 'https://' + url;
+    var start = textarea.selectionStart;
+    var end   = textarea.selectionEnd;
+    var text  = textarea.value;
+    var label = text.substring(start, end) || 'link';
+    var inserted = '[' + label + '](' + url + ')';
+    textarea.value = text.substring(0, start) + inserted + text.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + inserted.length;
+    textarea.focus();
+    autoresize(textarea);
+  }
+
+  function applyFormat(textareaId, format) {
+    var textarea = document.getElementById(textareaId);
+    if (!textarea) return;
+    switch (format) {
+      case 'bold':   wrapSelection(textarea, '**');         break;
+      case 'italic': wrapSelection(textarea, '*');          break;
+      case 'strike': wrapSelection(textarea, '~~');         break;
+      case 'code':   wrapSelection(textarea, '`');          break;
+      case 'link':   insertLink(textarea);                  break;
+    }
+  }
+
+  // Delegated toolbar click handler.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-format]');
+    if (!btn) return;
+    var toolbar = btn.closest('.chat-composer-toolbar');
+    if (!toolbar) return;
+    e.preventDefault();
+    applyFormat(toolbar.getAttribute('data-target'), btn.getAttribute('data-format'));
+  });
+
+  // Ctrl+B / Ctrl+I shortcuts on composer textareas.
+  function attachFormatShortcuts(textarea) {
+    if (!textarea) return;
+    textarea.addEventListener('keydown', function (e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === 'b' || e.key === 'B') { e.preventDefault(); wrapSelection(textarea, '**'); }
+      else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); wrapSelection(textarea, '*'); }
+    });
+  }
+  attachFormatShortcuts($('#chatComposerInput'));
+  attachFormatShortcuts($('#chatThreadInput'));
+
+  // ---- File uploads ----------------------------------------------------
+  // pendingFilesByPendingId: map of pending container id -> array of file ids
+  // that have uploaded and are waiting to be claimed by a message send.
+  var pendingFilesByPendingId = {};
+
+  function pendingFilesFor(pendingId) {
+    if (!pendingFilesByPendingId[pendingId]) pendingFilesByPendingId[pendingId] = [];
+    return pendingFilesByPendingId[pendingId];
+  }
+
+  function clearPending(pendingId) {
+    var el = document.getElementById(pendingId);
+    if (el) { el.innerHTML = ''; el.hidden = true; }
+    pendingFilesByPendingId[pendingId] = [];
+  }
+
+  function uploadFile(file, pendingId) {
+    var pendingEl = document.getElementById(pendingId);
+    if (!pendingEl) return;
+    pendingEl.hidden = false;
+
+    var tempId = 'tmp-' + Math.random().toString(36).slice(2);
+    var isImage = file.type && file.type.indexOf('image/') === 0;
+    var thumbHtml = isImage
+      ? '<img src="' + URL.createObjectURL(file) + '" alt="">'
+      : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+
+    pendingEl.insertAdjacentHTML('beforeend',
+      '<div class="chat-pending-file chat-pending-file-uploading" data-tmp-id="' + tempId + '">' +
+        '<span class="chat-pending-file-thumb">' + thumbHtml + '</span>' +
+        '<span class="chat-pending-file-info">' +
+          '<span class="chat-pending-file-name">' + escapeHtml(file.name) + '</span>' +
+          '<span class="chat-pending-file-meta">Uploading…</span>' +
+        '</span>' +
+        '<button type="button" class="chat-pending-file-remove" data-action="remove-pending-file" data-tmp-id="' + tempId + '" data-pending-id="' + pendingId + '">×</button>' +
+      '</div>');
+
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch('/chat/api/upload.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' },
+      body: fd
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+    }).then(function (res) {
+      var pill = pendingEl.querySelector('[data-tmp-id="' + tempId + '"]');
+      if (!res.ok) {
+        if (pill) {
+          pill.classList.remove('chat-pending-file-uploading');
+          pill.classList.add('chat-pending-file-error');
+          var meta = pill.querySelector('.chat-pending-file-meta');
+          if (meta) meta.textContent = (res.data && res.data.message) || 'Upload failed';
+        }
+        return;
+      }
+      var f = res.data.file;
+      pendingFilesFor(pendingId).push(f.id);
+      if (pill) {
+        pill.classList.remove('chat-pending-file-uploading');
+        pill.setAttribute('data-file-id', f.id);
+        var meta = pill.querySelector('.chat-pending-file-meta');
+        if (meta) meta.textContent = formatBytes(parseInt(f.size, 10) || 0);
+        var rm = pill.querySelector('.chat-pending-file-remove');
+        if (rm) rm.setAttribute('data-file-id', f.id);
+      }
+    }).catch(function () {
+      var pill = pendingEl.querySelector('[data-tmp-id="' + tempId + '"]');
+      if (pill) {
+        pill.classList.remove('chat-pending-file-uploading');
+        pill.classList.add('chat-pending-file-error');
+        var meta = pill.querySelector('.chat-pending-file-meta');
+        if (meta) meta.textContent = 'Network error';
+      }
+    });
+  }
+
+  function removePendingFile(btn) {
+    var pill = btn.closest('.chat-pending-file');
+    if (!pill) return;
+    var pendingId = btn.getAttribute('data-pending-id');
+    var fileId    = parseInt(btn.getAttribute('data-file-id'), 10);
+    if (pendingId && fileId) {
+      pendingFilesByPendingId[pendingId] = pendingFilesFor(pendingId).filter(function (x) { return x !== fileId; });
+    }
+    var parent = pill.parentElement;
+    pill.remove();
+    if (parent && parent.children.length === 0) parent.hidden = true;
+  }
+
+  // Wire up the hidden file inputs.
+  ['chatComposerFileInput', 'chatThreadFileInput'].forEach(function (id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    var pendingId = input.getAttribute('data-pending-id');
+    input.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(this.files || []);
+      files.forEach(function (f) { uploadFile(f, pendingId); });
+      this.value = '';  // allow re-selecting the same file
+    });
+  });
+
+  // Delegated handler: paperclip button → open the matching file input;
+  // remove-pending pill button → drop the upload from the pending list.
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-action]');
+    if (!t) return;
+    var action = t.getAttribute('data-action');
+    if (action === 'attach-file') {
+      e.preventDefault();
+      var inputId = t.getAttribute('data-file-input-id');
+      var input = inputId ? document.getElementById(inputId) : null;
+      if (input) input.click();
+    } else if (action === 'remove-pending-file') {
+      e.preventDefault();
+      removePendingFile(t);
+    }
+  });
+
   if (window.console && console.log) {
     var where = CURRENT_CHANNEL_ID
       ? ('channel #' + CURRENT_CHANNEL_SLUG + ' (id ' + CURRENT_CHANNEL_ID + ')')
       : (CURRENT_CONVERSATION_ID
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : '(no channel)');
-    console.log('[Anton Chat] Phase 5 loaded', where);
+    console.log('[Anton Chat] Phase 6 loaded', where);
   }
 })();
