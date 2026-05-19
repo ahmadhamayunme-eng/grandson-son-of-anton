@@ -207,19 +207,17 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       </div>
 
       <?php if ($isMember): ?>
-        <form class="chat-composer" id="chatComposer" data-channel-id="<?= (int)$currentChannel['id'] ?>" autocomplete="off">
-          <textarea
-            class="chat-composer-input"
-            id="chatComposerInput"
-            name="content"
-            placeholder="Message #<?= h($currentChannel['slug']) ?>"
-            rows="1"
-            maxlength="40000"
-            required></textarea>
-          <button type="submit" class="chat-composer-send" aria-label="Send">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          </button>
-        </form>
+        <?php
+          $composerId  = 'chatComposer';
+          $inputId     = 'chatComposerInput';
+          $pendingId   = 'chatComposerPending';
+          $fileInputId = 'chatComposerFileInput';
+          $placeholder = 'Message #' . $currentChannel['slug'];
+          $channelId   = (int)$currentChannel['id'];
+          $conversationId = null;
+          $parentMessageId = null;
+          include __DIR__ . '/includes/composer_partial.php';
+        ?>
       <?php else: ?>
         <div class="chat-join-prompt">
           You're not in <span class="chat-join-channel">#<?= h($currentChannel['slug']) ?></span>.
@@ -252,19 +250,17 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
         ?>
       </div>
 
-      <form class="chat-composer" id="chatComposer" data-conversation-id="<?= (int)$currentDm['id'] ?>" autocomplete="off">
-        <textarea
-          class="chat-composer-input"
-          id="chatComposerInput"
-          name="content"
-          placeholder="Message <?= h(chat_dm_display_name($currentDm)) ?>"
-          rows="1"
-          maxlength="40000"
-          required></textarea>
-        <button type="submit" class="chat-composer-send" aria-label="Send">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        </button>
-      </form>
+      <?php
+        $composerId      = 'chatComposer';
+        $inputId         = 'chatComposerInput';
+        $pendingId       = 'chatComposerPending';
+        $fileInputId     = 'chatComposerFileInput';
+        $placeholder     = 'Message ' . chat_dm_display_name($currentDm);
+        $channelId       = null;
+        $conversationId  = (int)$currentDm['id'];
+        $parentMessageId = null;
+        include __DIR__ . '/includes/composer_partial.php';
+      ?>
     <?php elseif (empty($userChannels) && empty($userDms)): ?>
       <div class="chat-empty">
         <div class="chat-empty-title">Welcome to Anton Chat.</div>
@@ -297,19 +293,17 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     <div class="chat-thread-list" id="chatThreadList">
       <div class="chat-modal-loading">Loading…</div>
     </div>
-    <form class="chat-composer" id="chatThreadComposer" autocomplete="off">
-      <textarea
-        class="chat-composer-input"
-        id="chatThreadInput"
-        name="content"
-        placeholder="Reply…"
-        rows="1"
-        maxlength="40000"
-        required></textarea>
-      <button type="submit" class="chat-composer-send" aria-label="Send reply">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-      </button>
-    </form>
+    <?php
+      $composerId      = 'chatThreadComposer';
+      $inputId         = 'chatThreadInput';
+      $pendingId       = 'chatThreadPending';
+      $fileInputId     = 'chatThreadFileInput';
+      $placeholder     = 'Reply…';
+      $channelId       = null;
+      $conversationId  = null;
+      $parentMessageId = null;  // JS sets the data attribute at runtime when opening a thread.
+      include __DIR__ . '/includes/composer_partial.php';
+    ?>
   </aside>
 </div>
 

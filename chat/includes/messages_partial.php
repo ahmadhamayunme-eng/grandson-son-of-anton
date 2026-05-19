@@ -23,6 +23,7 @@ if (empty($currentMessages)): ?>
     $edited    = $m['edited_at']  !== null;
     $reactions = $m['reactions']   ?? [];
     $replyCt   = (int)($m['reply_count'] ?? 0);
+    $files     = $m['files']       ?? [];
 ?>
   <div class="chat-msg<?= $grouped ? ' chat-msg-grouped' : '' ?>" data-msg-id="<?= (int)$m['id'] ?>" data-user-id="<?= (int)$m['user_id'] ?>" data-msg-ts="<?= (int)$msgTs ?>">
     <div class="chat-msg-avatar">
@@ -37,15 +38,42 @@ if (empty($currentMessages)): ?>
           <span class="chat-msg-time"><?= h(chat_format_message_time($m['created_at'])) ?></span>
         </div>
       <?php endif; ?>
-      <?php // .chat-msg-text uses white-space: pre-wrap, so no whitespace inside the div. ?>
-      <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>"><?php
-        if ($deleted) {
-          echo '<em>This message was deleted.</em>';
-        } else {
-          echo $m['content_html'] ?? nl2br(h((string)($m['content'] ?? '')));
-          if ($edited) echo ' <span class="chat-msg-edited">(edited)</span>';
-        }
-      ?></div>
+      <?php // .chat-msg-text holds the rendered markdown HTML — block tags
+            // (p, blockquote, pre, ul...) get their own whitespace handling
+            // from CSS; no source-code indentation goes inside this div. ?>
+      <?php $hasContent = !$deleted && (($m['content_html'] ?? '') !== '' || ($m['content'] ?? '') !== ''); ?>
+      <?php if ($deleted): ?>
+        <div class="chat-msg-text chat-msg-deleted"><em>This message was deleted.</em></div>
+      <?php elseif ($hasContent): ?>
+        <div class="chat-msg-text"><?= $m['content_html'] ?? nl2br(h((string)($m['content'] ?? ''))) ?><?php if ($edited): ?> <span class="chat-msg-edited">(edited)</span><?php endif; ?></div>
+      <?php endif; ?>
+      <?php if (!$deleted && !empty($files)): ?>
+        <div class="chat-msg-files">
+          <?php foreach ($files as $file):
+            $fid   = (int)$file['id'];
+            $fname = (string)$file['name'];
+            $fmime = (string)($file['mime'] ?? $file['mime_type'] ?? '');
+            $fsize = (int)($file['size'] ?? $file['size_bytes'] ?? 0);
+            $isImg = !empty($file['is_image']);
+          ?>
+            <?php if ($isImg): ?>
+              <a class="chat-file chat-file-image" href="/chat/api/file.php?id=<?= $fid ?>" target="_blank" rel="noopener noreferrer" title="<?= h($fname) ?>">
+                <img src="/chat/api/file.php?id=<?= $fid ?>" alt="<?= h($fname) ?>" loading="lazy">
+              </a>
+            <?php else: ?>
+              <a class="chat-file chat-file-other" href="/chat/api/file.php?id=<?= $fid ?>" target="_blank" rel="noopener noreferrer" download="<?= h($fname) ?>">
+                <span class="chat-file-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                </span>
+                <span class="chat-file-info">
+                  <span class="chat-file-name"><?= h($fname) ?></span>
+                  <span class="chat-file-size"><?= h(chat_format_file_size($fsize)) ?></span>
+                </span>
+              </a>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
       <?php if (!empty($reactions)): ?>
         <div class="chat-reactions" data-msg-id="<?= (int)$m['id'] ?>">
           <?php foreach ($reactions as $rx):

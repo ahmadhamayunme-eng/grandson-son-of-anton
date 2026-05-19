@@ -140,6 +140,22 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
     }
   }
   unset($r);
+
+  // Attach file lists. Single batch query for every message_id referenced
+  // in this set of events, so an SSE poll never grows beyond two queries.
+  $msgIds = [];
+  foreach ($rows as $r) {
+    if ($r['message_id'] !== null) $msgIds[] = (int)$r['message_id'];
+  }
+  if (!empty($msgIds)) {
+    $filesByMsg = chat_load_files_for_messages($msgIds);
+    foreach ($rows as &$r) {
+      $mid = $r['message_id'] !== null ? (int)$r['message_id'] : null;
+      $r['message_files'] = ($mid !== null && isset($filesByMsg[$mid])) ? $filesByMsg[$mid] : [];
+    }
+    unset($r);
+  }
+
   return $rows;
 }
 

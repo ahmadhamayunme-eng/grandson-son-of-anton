@@ -274,26 +274,157 @@ img.chat-avatar { object-fit: cover; }
   color: var(--text);
   word-wrap: break-word;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
+
+/* Markdown block elements rendered inside .chat-msg-text. Tight default
+   spacing so a single-paragraph message doesn't get extra padding. */
+.chat-msg-text > *:first-child { margin-top: 0; }
+.chat-msg-text > *:last-child  { margin-bottom: 0; }
+.chat-msg-text p           { margin: 0; }
+.chat-msg-text p + p       { margin-top: 6px; }
+.chat-msg-text ul,
+.chat-msg-text ol          { margin: 4px 0 4px 22px; padding: 0; }
+.chat-msg-text li          { margin: 0; }
+.chat-msg-text blockquote  {
+  margin: 6px 0;
+  padding: 2px 10px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.chat-msg-text code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+}
+.chat-msg-text pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 6px 0;
+  white-space: pre;
+}
+.chat-msg-text pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+}
+.chat-msg-text a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+html.light .chat-msg-text a { color: #3f3f46; text-decoration-color: var(--accent); }
+.chat-msg-text a:hover { text-decoration-thickness: 2px; }
+.chat-msg-text strong { font-weight: 700; }
+.chat-msg-text em     { font-style: italic; }
+.chat-msg-text s      { color: var(--text-muted); }
 .chat-msg-deleted { color: var(--text-dim); }
 .chat-msg-edited { color: var(--text-dim); font-size: 11px; margin-left: 4px; }
 
-/* Composer (bottom of the channel pane) */
+/* Composer (bottom of the channel pane). Phase 6 added the formatting
+   toolbar above and the attach/send action row below — so the composer is
+   now a vertical flex container instead of a single row. */
 .chat-composer {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
-  padding: 12px 16px 16px;
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  padding: 8px 16px 14px;
   background: var(--bg);
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;  /* mention popup anchors against this */
 }
+.chat-composer-toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px 2px;
+}
+.chat-composer-fmt {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  min-width: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-composer-fmt:hover { background: var(--surface-hover); color: var(--text); }
+.chat-composer-fmt b, .chat-composer-fmt i, .chat-composer-fmt s { font-style: inherit; }
+.chat-composer-fmt b { font-weight: 700; }
+.chat-composer-fmt i { font-style: italic; }
+.chat-composer-fmt-code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; }
+
+.chat-composer-pending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 2px;
+}
+.chat-composer-pending[hidden] { display: none; }
+
+.chat-pending-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 6px 4px 8px;
+  font-size: 12px;
+  max-width: 220px;
+}
+.chat-pending-file-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.chat-pending-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.chat-pending-file-info { display: flex; flex-direction: column; min-width: 0; }
+.chat-pending-file-name {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.chat-pending-file-meta { color: var(--text-muted); font-size: 11px; }
+.chat-pending-file-remove {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+.chat-pending-file-remove:hover { color: var(--danger); }
+.chat-pending-file-uploading { opacity: 0.65; }
+.chat-pending-file-error { border-color: rgba(239,68,68,0.35); background: var(--danger-soft); }
+
 .chat-composer-input {
-  flex: 1;
   resize: none;
   min-height: 40px;
-  max-height: 200px;
+  max-height: 240px;
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -303,14 +434,36 @@ img.chat-avatar { object-fit: cover; }
   font-size: 14.5px;
   line-height: 1.45;
   outline: none;
+  margin-top: 4px;
 }
 .chat-composer-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+
+.chat-composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 6px;
+}
+.chat-composer-attach {
+  background: transparent;
+  border: 0;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-composer-attach:hover { background: var(--surface-hover); color: var(--text); }
+.chat-composer-attach svg { width: 18px; height: 18px; }
+
 .chat-composer-send {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: 0;
   background: var(--accent);
@@ -320,7 +473,7 @@ img.chat-avatar { object-fit: cover; }
   align-items: center;
   justify-content: center;
 }
-.chat-composer-send svg { width: 18px; height: 18px; }
+.chat-composer-send svg { width: 16px; height: 16px; }
 .chat-composer-send:hover { background: var(--accent-hover); }
 .chat-composer-send:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -612,6 +765,71 @@ html.light .chat-modal::backdrop {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ===== Message file attachments (Phase 6) ===== */
+.chat-msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.chat-file {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text);
+}
+.chat-file-image {
+  display: block;
+  max-width: 360px;
+  max-height: 240px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.chat-file-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  height: auto;
+  width: auto;
+  object-fit: contain;
+}
+.chat-file-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 8px 12px 8px 8px;
+  min-width: 220px;
+  max-width: 320px;
+}
+.chat-file-other:hover { background: var(--surface-hover); }
+.chat-file-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.chat-file-icon svg { width: 18px; height: 18px; }
+.chat-file-info { display: flex; flex-direction: column; min-width: 0; }
+.chat-file-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-file-size { font-size: 11px; color: var(--text-muted); }
 
 /* ===== Hover actions on messages (Phase 5) ===== */
 .chat-msg { position: relative; }

@@ -138,8 +138,26 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
   $parentMessageId = (int)($_POST['parent_message_id'] ?? 0);
   $content         = trim((string)($_POST['content']   ?? ''));
 
-  if ($content === '')          chat_json_error('bad_request', 'Message is empty.', 400);
-  if (strlen($content) > 40000) chat_json_error('too_long',    'Message exceeds 40,000 characters.', 400);
+  // file_ids[] — optional staged uploads to attach to this message.
+  $rawFileIds = $_POST['file_ids'] ?? [];
+  if (!is_array($rawFileIds)) $rawFileIds = [];
+  $fileIds = [];
+  foreach ($rawFileIds as $r) {
+    $n = (int)$r;
+    if ($n > 0 && !in_array($n, $fileIds, true)) $fileIds[] = $n;
+  }
+
+  // Allow a message that is files-only OR text-only OR both, but not empty.
+  if ($content === '' && empty($fileIds)) chat_json_error('bad_request', 'Message is empty.', 400);
+  if (strlen($content) > 40000)           chat_json_error('too_long',    'Message exceeds 40,000 characters.', 400);
+
+  // Validate each staged file belongs to the current user and is still
+  // unattached. Fail-fast if any aren't owned.
+  foreach ($fileIds as $fid) {
+    if (!chat_user_owns_staged_file($fid, $uid, $ws)) {
+      chat_json_error('bad_file', 'One or more attached files are not yours or already attached.', 400);
+    }
+  }
 
   // Thread reply: derive channel/DM scope from the parent (and verify access).
   if ($parentMessageId > 0) {
@@ -195,13 +213,44 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
 
     chat_parse_and_store_mentions($messageId, $content, $ws);
 
+    // Claim any staged file uploads — set their message_id atomically.
+    $attachedFiles = [];
+    if (!empty($fileIds)) {
+      $placeholders = implode(',', array_fill(0, count($fileIds), '?'));
+      $upd = $pdo->prepare(
+        "UPDATE chat_files SET message_id = ? WHERE id IN ($placeholders)
+         AND user_id = ? AND workspace_id = ? AND message_id IS NULL"
+      );
+      $upd->execute(array_merge([$messageId], $fileIds, [$uid, $ws]));
+
+      // Load the now-attached files for the response + event payload.
+      $sel = $pdo->prepare(
+        "SELECT id, original_name, mime_type, size_bytes
+         FROM chat_files WHERE id IN ($placeholders) AND message_id = ?"
+      );
+      $sel->execute(array_merge($fileIds, [$messageId]));
+      foreach ($sel->fetchAll() as $f) {
+        $attachedFiles[] = [
+          'id'       => (int)$f['id'],
+          'name'     => $f['original_name'],
+          'mime'     => $f['mime_type'],
+          'size'     => (int)$f['size_bytes'],
+          'is_image' => strpos((string)$f['mime_type'], 'image/') === 0 ? 1 : 0,
+        ];
+      }
+    }
+
+    $payload = [];
+    if ($parentMessageId > 0) $payload['parent_message_id'] = $parentMessageId;
+    if (!empty($attachedFiles)) $payload['files'] = $attachedFiles;
+
     chat_emit_event(
       $ws, 'message',
       $channelId      > 0 ? $channelId      : null,
       $conversationId > 0 ? $conversationId : null,
       $messageId,
       $uid,
-      $parentMessageId > 0 ? ['parent_message_id' => $parentMessageId] : null
+      empty($payload) ? null : $payload
     );
 
     $pdo->commit();
@@ -218,11 +267,12 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
     'user_id'           => $uid,
     'author_name'       => $user['name'],
     'content'           => $content,
-    'content_html'      => chat_render_message_content($content, $ws),
+    'content_html'      => $content === '' ? '' : chat_render_message_content($content, $ws),
     'created_at'        => $now,
     'edited_at'         => null,
     'deleted_at'        => null,
     'reactions'         => [],
     'reply_count'       => 0,
+    'files'             => $attachedFiles,
   ]], 201);
 }

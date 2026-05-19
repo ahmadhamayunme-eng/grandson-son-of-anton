@@ -1,5 +1,11 @@
 <?php
 // Helpers used across the Anton Chat module.
+
+// Parsedown is vendored at chat/lib/Parsedown.php. Optional — chat falls
+// back to chat_markdown_simple() if the file isn't present.
+if (file_exists(__DIR__ . '/../lib/Parsedown.php')) {
+  require_once __DIR__ . '/../lib/Parsedown.php';
+}
 //
 // Pure(ish) functions: queries are allowed, side-effect ordering is the
 // caller's responsibility. Callers are expected to have already required
@@ -343,16 +349,118 @@ function chat_workspace_users_by_first_name(int $workspaceId): array {
 }
 
 /**
- * Render a message's raw content as HTML-safe markup, wrapping recognised
- * @mentions in <span class="chat-mention">. Phase 6 will extend this with
- * markdown (bold, italic, code, links). For now it's escape + @mentions
- * + nl2br.
+ * Render a message's raw content as HTML-safe markup. Two stages:
+ *   1. Markdown via Parsedown (safe mode + breaks enabled + escaped raw HTML).
+ *      Falls back to a small regex-based formatter if Parsedown isn't
+ *      vendored, so chat works either way.
+ *   2. Wrap recognised @mentions in <span class="chat-mention">, skipping
+ *      anything inside <code>, <pre>, and existing <a> tags.
  */
 function chat_render_message_content(string $content, int $workspaceId): string {
-  $escaped = h($content);
-  $users   = chat_workspace_users_by_first_name($workspaceId);
+  $html  = chat_markdown($content);
+  $users = chat_workspace_users_by_first_name($workspaceId);
+  return chat_apply_mentions_outside_protected($html, $users);
+}
 
-  $rendered = preg_replace_callback(
+/**
+ * Markdown → HTML. Prefers Parsedown when available; falls back to a
+ * minimal regex parser that covers bold / italic / strike / code /
+ * inline code / blockquote / link / auto-link / nl2br.
+ */
+function chat_markdown(string $text): string {
+  if (class_exists('Parsedown')) {
+    static $parsedown = null;
+    if ($parsedown === null) {
+      $parsedown = new Parsedown();
+      $parsedown->setSafeMode(true);
+      $parsedown->setMarkupEscaped(true);
+      $parsedown->setBreaksEnabled(true);
+    }
+    $html = $parsedown->text($text);
+    // Parsedown's safe-mode link rendering already drops dangerous URL
+    // schemes. Add target=_blank + rel=noopener so AntonX users opening
+    // links don't get window.opener back-channel access to the chat tab.
+    $html = preg_replace_callback('#<a\b([^>]*)>#i', function ($m) {
+      $attrs = $m[1];
+      if (stripos($attrs, 'target=') === false) $attrs .= ' target="_blank"';
+      if (stripos($attrs, 'rel=')    === false) $attrs .= ' rel="noopener noreferrer"';
+      return '<a' . $attrs . '>';
+    }, $html);
+    return $html;
+  }
+  return chat_markdown_simple($text);
+}
+
+/**
+ * Fallback markdown renderer used when Parsedown isn't vendored. Handles
+ * the same subset of markdown Slack supports, regex-only — fragile on
+ * edge cases like nested formatting, but adequate for short chat lines.
+ */
+function chat_markdown_simple(string $text): string {
+  $text = h($text);
+
+  // Fenced code blocks (protect their content first).
+  $text = preg_replace_callback('/```([\s\S]*?)```/', function ($m) {
+    return '<pre><code>' . trim($m[1], "\n") . '</code></pre>';
+  }, $text);
+
+  // Inline code.
+  $text = preg_replace('/`([^`\n]+)`/', '<code>$1</code>', $text);
+
+  // Bold (** or __), then italic (* or _), then strikethrough (~~).
+  $text = preg_replace('/\*\*([^*\n]+)\*\*/',          '<strong>$1</strong>', $text);
+  $text = preg_replace('/__([^_\n]+)__/',              '<strong>$1</strong>', $text);
+  $text = preg_replace('/(?<!\*)\*([^*\n]+)\*(?!\*)/', '<em>$1</em>',         $text);
+  $text = preg_replace('/(?<!_)_([^_\n]+)_(?!_)/',     '<em>$1</em>',         $text);
+  $text = preg_replace('/~~([^~\n]+)~~/',              '<s>$1</s>',           $text);
+
+  // Markdown links [label](url) — http(s) and mailto only.
+  $text = preg_replace_callback(
+    '/\[([^\]\n]+)\]\(((?:https?:|mailto:)[^\s)]+)\)/',
+    function ($m) {
+      return '<a href="' . htmlspecialchars($m[2], ENT_QUOTES) . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>';
+    },
+    $text
+  );
+
+  // Line-level blockquote (one or more leading "> ").
+  $text = preg_replace('/^&gt;\s?(.*)$/m', '<blockquote>$1</blockquote>', $text);
+  $text = preg_replace('#</blockquote>\n<blockquote>#', '<br>', $text);
+
+  // Auto-link bare URLs (skip if already inside an href).
+  $text = preg_replace(
+    '#(?<![">\w])(https?://[^\s<>"]+)#',
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+    $text
+  );
+
+  // Newlines → <br>, then restore real newlines inside <pre>.
+  $text = nl2br($text);
+  $text = preg_replace_callback('#<pre>(.*?)</pre>#s', function ($m) {
+    return '<pre>' . str_replace(['<br />', '<br>'], "\n", $m[1]) . '</pre>';
+  }, $text);
+
+  return $text;
+}
+
+/**
+ * Apply @mention wrapping to an HTML string, but only outside content that
+ * shouldn't be touched (<code>, <pre>, <a>). Lets us run mentions AFTER
+ * markdown without trampling code blocks or replacing email autolinks.
+ */
+function chat_apply_mentions_outside_protected(string $html, array $users): string {
+  $pattern = '#(<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<a\b[^>]*>.*?</a>)#si';
+  $parts = preg_split($pattern, $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+  $result = '';
+  foreach ($parts as $i => $part) {
+    if ($i % 2 === 0) $result .= chat_replace_mentions_in_html($part, $users);
+    else              $result .= $part;
+  }
+  return $result;
+}
+
+function chat_replace_mentions_in_html(string $html, array $users): string {
+  return preg_replace_callback(
     '/(^|[^a-z0-9_])@(channel|here|everyone|[a-z][a-z0-9_-]*)(?![a-z0-9_])/i',
     function ($m) use ($users) {
       $prefix = $m[1];
@@ -367,18 +475,15 @@ function chat_render_message_content(string $content, int $workspaceId): string 
       }
       return $prefix . '@' . h($token);  // unknown — render plain
     },
-    $escaped
+    $html
   );
-
-  return nl2br($rendered);
 }
 
 /**
- * Attach content_html, reactions, and reply_count to a batch of message
- * rows fetched from chat_messages. Soft-deleted messages get content
- * blanked and no decorations. Used both by chat/api/messages.php (list
- * action) and chat/index.php (initial server render) so both paths
- * produce identically-shaped rows.
+ * Attach content_html, reactions, reply_count, and files to a batch of
+ * message rows fetched from chat_messages. Soft-deleted messages get
+ * content + files blanked and no decorations. Used both by
+ * chat/api/messages.php (list action) and chat/index.php (initial render).
  */
 function chat_decorate_messages(array $rows, int $workspaceId): array {
   if (empty($rows)) return $rows;
@@ -386,20 +491,80 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
   foreach ($rows as $r) { $ids[] = (int)$r['id']; }
   $reactionsByMsg = chat_load_reactions_for_messages($ids);
   $replyCounts    = chat_load_reply_counts($ids);
+  $filesByMsg     = chat_load_files_for_messages($ids);
 
   foreach ($rows as &$r) {
     $deleted = $r['deleted_at'] !== null;
     if ($deleted) {
       $r['content']      = '';
       $r['content_html'] = '';
+      $r['files']        = [];
     } else {
       $r['content_html'] = chat_render_message_content((string)$r['content'], $workspaceId);
+      $r['files']        = $filesByMsg[(int)$r['id']] ?? [];
     }
     $r['reactions']   = $reactionsByMsg[(int)$r['id']] ?? [];
     $r['reply_count'] = (int)($replyCounts[(int)$r['id']] ?? 0);
   }
   unset($r);
   return $rows;
+}
+
+// ===== File attachments (Phase 6) =========================================
+
+/**
+ * Files attached to a batch of messages — map of message_id => array of
+ * { id, name, mime, size, is_image }. Soft-deleted messages have their
+ * files omitted by chat_decorate_messages.
+ */
+function chat_load_files_for_messages(array $messageIds): array {
+  if (empty($messageIds)) return [];
+  $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+  $stmt = db()->prepare(
+    "SELECT id, message_id, original_name, mime_type, size_bytes
+     FROM chat_files
+     WHERE message_id IN ($placeholders)
+     ORDER BY id ASC"
+  );
+  $stmt->execute($messageIds);
+  $byMessage = [];
+  foreach ($stmt->fetchAll() as $f) {
+    $mid = (int)$f['message_id'];
+    if (!isset($byMessage[$mid])) $byMessage[$mid] = [];
+    $byMessage[$mid][] = [
+      'id'       => (int)$f['id'],
+      'name'     => $f['original_name'],
+      'mime'     => $f['mime_type'],
+      'size'     => (int)$f['size_bytes'],
+      'is_image' => strpos((string)$f['mime_type'], 'image/') === 0 ? 1 : 0,
+    ];
+  }
+  return $byMessage;
+}
+
+/**
+ * Pretty human-readable file size (e.g. "2.3 MB").
+ */
+function chat_format_file_size(int $bytes): string {
+  if ($bytes < 1024)              return $bytes . ' B';
+  if ($bytes < 1024 * 1024)       return round($bytes / 1024, 1) . ' KB';
+  if ($bytes < 1024 * 1024 * 1024) return round($bytes / (1024 * 1024), 1) . ' MB';
+  return round($bytes / (1024 * 1024 * 1024), 1) . ' GB';
+}
+
+/**
+ * Validate a staged upload: it must exist, belong to this user, and
+ * still be unattached (message_id IS NULL). Used by msg_action_send
+ * before claiming the files as part of a new message.
+ */
+function chat_user_owns_staged_file(int $fileId, int $userId, int $workspaceId): bool {
+  $stmt = db()->prepare(
+    'SELECT 1 FROM chat_files
+     WHERE id = ? AND user_id = ? AND workspace_id = ? AND message_id IS NULL
+     LIMIT 1'
+  );
+  $stmt->execute([$fileId, $userId, $workspaceId]);
+  return (bool)$stmt->fetchColumn();
 }
 
 /**
