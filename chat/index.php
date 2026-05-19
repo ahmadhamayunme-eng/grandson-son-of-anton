@@ -35,6 +35,13 @@ $workspaceName = (string)($stmt->fetchColumn() ?: 'Workspace');
 // Channels the user is in (for the sidebar).
 $userChannels = chat_load_user_channels($ws, $uid);
 
+// Max event id at page-render time — passed to the SSE client so the very
+// first connect starts from "now" instead of replaying old events. Reconnects
+// after that use the Last-Event-ID header.
+$stmt = $pdo->prepare('SELECT IFNULL(MAX(id), 0) FROM chat_events WHERE workspace_id = ?');
+$stmt->execute([$ws]);
+$lastEventId = (int)$stmt->fetchColumn();
+
 // Selected channel: ?c=<slug>. If none specified but the user has
 // channels, redirect to the first one — same default-landing behaviour
 // as Slack. If the channel doesn't exist or isn't visible, fall through
@@ -290,7 +297,8 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     csrf: <?= json_encode(csrf_token()) ?>,
     currentUserId: <?= (int)$uid ?>,
     currentChannelId: <?= $currentChannel ? (int)$currentChannel['id'] : 'null' ?>,
-    currentChannelSlug: <?= $currentChannel ? json_encode($currentChannel['slug']) : 'null' ?>
+    currentChannelSlug: <?= $currentChannel ? json_encode($currentChannel['slug']) : 'null' ?>,
+    lastEventId: <?= (int)$lastEventId ?>
   };
 </script>
 <script>

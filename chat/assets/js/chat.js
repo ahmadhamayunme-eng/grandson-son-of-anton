@@ -323,8 +323,144 @@
       });
   }
 
+  // ===== Live updates (Phase 3) — SSE with polling fallback ===========
+  //
+  // EventSource holds a connection to /chat/api/events.php for ~25s, the
+  // server closes, and the browser auto-reconnects with a Last-Event-ID
+  // header so we resume exactly where we left off. If three SSE attempts
+  // fail in quick succession (e.g. a proxy strips the stream), JS quietly
+  // switches to JSON polling every 3 seconds against the same endpoint.
+
+  var sse = null;
+  var pollTimer = null;
+  var sseFailures = 0;
+  var sseOpenedAt = 0;
+  var lastEventId = parseInt(boot.lastEventId || 0, 10);
+  var modeIsPolling = false;
+
+  function isNearBottom(el, threshold) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight < (threshold || 40);
+  }
+
+  function startSse() {
+    if (modeIsPolling) return;
+    try {
+      sse = new EventSource('/chat/api/events.php?since=' + lastEventId);
+    } catch (e) {
+      switchToPolling();
+      return;
+    }
+    sseOpenedAt = Date.now();
+    sse.addEventListener('open', function () { sseFailures = 0; });
+    sse.addEventListener('error', function () {
+      // EventSource fires 'error' on real failures AND on the server's
+      // normal 25-second close. Distinguish by how long this attempt ran.
+      var openMs = Date.now() - sseOpenedAt;
+      if (openMs > 5000) {
+        // Long enough that this was a healthy session — let the browser
+        // reconnect normally.
+        sseFailures = 0;
+        return;
+      }
+      sseFailures++;
+      if (sseFailures >= 3) {
+        try { sse.close(); } catch (e) {}
+        switchToPolling();
+      }
+    });
+
+    // Our server always sets `event: <type>`, so we subscribe per-type.
+    // 'message' is also the EventSource default name when no `event:`
+    // line is sent, but our server always names it explicitly.
+    sse.addEventListener('message',                handleEvent);
+    sse.addEventListener('channel_created',        handleEvent);
+    sse.addEventListener('channel_member_added',   handleEvent);
+    sse.addEventListener('channel_member_removed', handleEvent);
+    sse.addEventListener('message_edited',         handleEvent);
+    sse.addEventListener('message_deleted',        handleEvent);
+  }
+
+  function switchToPolling() {
+    if (modeIsPolling) return;
+    modeIsPolling = true;
+    if (window.console && console.warn) {
+      console.warn('[Anton Chat] SSE failed 3 times — falling back to polling');
+    }
+    pollTimer = setInterval(pollOnce, 3000);
+    pollOnce();
+  }
+
+  function pollOnce() {
+    fetch('/chat/api/events.php?poll=1&since=' + lastEventId, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.events)) return;
+        data.events.forEach(function (ev) { handleEvent(ev); });
+        if (typeof data.last_event_id === 'number') {
+          lastEventId = Math.max(lastEventId, data.last_event_id);
+        }
+      })
+      .catch(function () { /* swallow — next tick will retry */ });
+  }
+
+  // Accepts either an EventSource MessageEvent (evt.data is a JSON string)
+  // or a pre-parsed event object (from pollOnce). Normalizes and dispatches.
+  function handleEvent(evt) {
+    var ev;
+    if (evt && typeof evt.data === 'string') {
+      try { ev = JSON.parse(evt.data); } catch (e) { return; }
+    } else {
+      ev = evt;
+    }
+    if (!ev || !ev.event_type) return;
+    if (ev.event_id) lastEventId = Math.max(lastEventId, parseInt(ev.event_id, 10));
+
+    switch (ev.event_type) {
+      case 'message':
+        onMessageEvent(ev);
+        break;
+      // Other event types are received but not rendered yet — Phase 5
+      // (mentions) and Phase 8 (unread, presence) wire these up.
+      default:
+        break;
+    }
+  }
+
+  function onMessageEvent(ev) {
+    // Only append to the visible pane if we're on the right channel.
+    if (!msgList || parseInt(ev.channel_id, 10) !== CURRENT_CHANNEL_ID) return;
+    // Dedup: if we already have this message in the DOM (e.g. we just sent
+    // it ourselves and appended it locally), don't double-render.
+    if (msgList.querySelector('[data-msg-id="' + ev.message_id + '"]')) return;
+
+    var msg = {
+      id:          ev.message_id,
+      user_id:     parseInt(ev.message_user_id, 10),
+      author_name: ev.author_name,
+      content:     ev.message_content || '',
+      created_at:  ev.message_created_at,
+      edited_at:   ev.message_edited_at,
+      deleted_at:  ev.message_deleted_at
+    };
+
+    var wasAtBottom = isNearBottom(msgList, 60);
+    var prev = lastMsgInfo();
+    var grouped = prev && prev.userId === msg.user_id &&
+                  ((Math.floor(new Date(msg.created_at.replace(' ', 'T')).getTime() / 1000) - prev.ts) < 300);
+
+    var empty = msgList.querySelector('.chat-msgs-empty');
+    if (empty) empty.remove();
+    msgList.appendChild(buildMessageEl(msg, grouped));
+    if (wasAtBottom) scrollMsgsToBottom();
+  }
+
+  // Kick off the live stream.
+  startSse();
+
   if (window.console && console.log) {
-    console.log('[Anton Chat] Phase 2 loaded',
+    console.log('[Anton Chat] Phase 3 loaded',
       CURRENT_CHANNEL_ID ? ('channel #' + CURRENT_CHANNEL_SLUG + ' (id ' + CURRENT_CHANNEL_ID + ')') : '(no channel)');
   }
 })();
