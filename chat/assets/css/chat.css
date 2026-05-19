@@ -612,3 +612,229 @@ html.light .chat-modal::backdrop {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ===== Hover actions on messages (Phase 5) ===== */
+.chat-msg { position: relative; }
+.chat-msg-actions {
+  position: absolute;
+  top: -10px;
+  right: 24px;
+  display: none;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.chat-msg:hover .chat-msg-actions { display: flex; }
+.chat-msg-action {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-msg-action:hover { background: var(--surface-hover); color: var(--text); }
+.chat-msg-action svg { width: 18px; height: 18px; display: block; }
+
+/* ===== Reactions (Phase 5) ===== */
+.chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.chat-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2px 8px 2px 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.chat-reaction:hover { background: var(--surface-hover); }
+.chat-reaction-mine {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.chat-reaction-emoji { font-size: 14px; }
+.chat-reaction-count { font-weight: 600; }
+
+/* "X replies" badge on a thread parent */
+.chat-reply-count {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+html.light .chat-reply-count { color: #3f3f46; }
+.chat-reply-count:hover { text-decoration: underline; }
+
+/* ===== @mentions in rendered content (Phase 5) ===== */
+.chat-mention {
+  background: var(--accent-soft);
+  color: var(--text);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chat-mention-special { /* @channel / @here / @everyone */ }
+
+/* ===== Thread panel (Phase 5) ===== */
+.chat-thread {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-thread[hidden] { display: none !important; }
+.chat-thread-header {
+  height: 56px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.chat-thread-title { font-size: 16px; font-weight: 700; margin: 0; color: var(--text); }
+.chat-thread-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+.chat-thread-close:hover { background: var(--surface-hover); color: var(--text); }
+.chat-thread-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.chat-thread-divider {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-thread-divider::before,
+.chat-thread-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ===== @mention autocomplete popup (Phase 5) ===== */
+.chat-mention-popup {
+  position: fixed;
+  z-index: 100;
+  width: 280px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  padding: 4px;
+}
+.chat-mention-popup[hidden] { display: none !important; }
+.chat-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.chat-mention-item:hover { background: var(--surface-hover); }
+.chat-mention-item.active { background: var(--accent-soft); }
+.chat-mention-item-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.chat-mention-item-avatar-special {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.chat-mention-item-name {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-mention-item-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ===== Emoji picker popup (Phase 5) — wraps the <emoji-picker> web
+   component the page loaded at runtime. ===== */
+.chat-emoji-popup {
+  position: fixed;
+  z-index: 1000;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.chat-emoji-popup[hidden] { display: none !important; }
+.chat-emoji-popup emoji-picker {
+  /* Tokens documented at https://github.com/nolanlawson/emoji-picker-element */
+  --background: var(--surface);
+  --border-color: var(--border);
+  --border-size: 0;
+  --button-active-background: var(--accent-soft);
+  --button-hover-background: var(--surface-hover);
+  --indicator-color: var(--accent);
+  --input-border-color: var(--border-strong);
+  --input-font-color: var(--text);
+  --input-placeholder-color: var(--text-muted);
+  --outline-color: var(--accent);
+  --text-color: var(--text);
+  height: 360px;
+  width: 320px;
+}

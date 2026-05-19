@@ -60,14 +60,14 @@ if ($currentSlug !== '') {
   if ($ch && chat_user_can_see_channel($ch, $uid, $ws)) {
     $currentChannel  = $ch;
     $isMember        = chat_user_is_channel_member((int)$ch['id'], $uid);
-    $currentMessages = chat_load_recent_messages((int)$ch['id'], 50);
+    $currentMessages = chat_decorate_messages(chat_load_recent_messages((int)$ch['id'], 50), $ws);
     $memberCount     = chat_channel_member_count((int)$ch['id']);
   }
 } elseif ($currentDmId > 0) {
   $dm = chat_load_dm_by_id($ws, $uid, $currentDmId);
   if ($dm) {
     $currentDm       = $dm;
-    $currentMessages = chat_load_dm_messages((int)$dm['id'], 50);
+    $currentMessages = chat_decorate_messages(chat_load_dm_messages((int)$dm['id'], 50), $ws);
     $memberCount     = chat_dm_member_count((int)$dm['id']);
   }
 }
@@ -117,6 +117,8 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/anton.css?v=<?= h((string)$_antonCssV) ?>">
   <link rel="stylesheet" href="chat/assets/css/chat.css?v=<?= h((string)$_chatCssV) ?>">
+  <!-- Emoji picker (Phase 5). Web component; instantiated on demand by chat.js. -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1.21.0/index.js"></script>
 </head>
 <body>
 <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle dark / light mode">
@@ -197,48 +199,11 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       </header>
 
       <div class="chat-msgs" id="chatMsgs" data-channel-id="<?= (int)$currentChannel['id'] ?>">
-        <?php if (empty($currentMessages)): ?>
-          <div class="chat-msgs-empty">
-            <div class="chat-msgs-empty-title">This is the beginning of #<?= h($currentChannel['slug']) ?>.</div>
-            <div class="chat-msgs-empty-sub">Be the first to say something.</div>
-          </div>
-        <?php else: ?>
-          <?php
-            $prevAuthor = null; $prevTs = 0;
-            foreach ($currentMessages as $m):
-              $msgTs   = strtotime($m['created_at']);
-              $grouped = ($m['user_id'] === $prevAuthor) && (($msgTs - $prevTs) < 300);
-              $deleted = $m['deleted_at'] !== null;
-              $edited  = $m['edited_at']  !== null;
-          ?>
-            <div class="chat-msg<?= $grouped ? ' chat-msg-grouped' : '' ?>" data-msg-id="<?= (int)$m['id'] ?>" data-user-id="<?= (int)$m['user_id'] ?>" data-msg-ts="<?= (int)$msgTs ?>">
-              <div class="chat-msg-avatar">
-                <?php if (!$grouped): ?>
-                  <?= user_avatar_html((int)$m['user_id'], $m['author_name'], 'chat-avatar') ?>
-                <?php endif; ?>
-              </div>
-              <div class="chat-msg-body">
-                <?php if (!$grouped): ?>
-                  <div class="chat-msg-meta">
-                    <span class="chat-msg-name"><?= h($m['author_name']) ?></span>
-                    <span class="chat-msg-time"><?= h(chat_format_message_time($m['created_at'])) ?></span>
-                  </div>
-                <?php endif; ?>
-                <?php // Keep this on one rendered line: .chat-msg-text uses
-                      // white-space: pre-wrap so any indentation inside the
-                      // div becomes visible whitespace in the message. ?>
-                <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>"><?= $deleted
-                  ? '<em>This message was deleted.</em>'
-                  : nl2br(h($m['content'])) . ($edited ? ' <span class="chat-msg-edited">(edited)</span>' : '')
-                ?></div>
-              </div>
-            </div>
-          <?php
-              $prevAuthor = $m['user_id'];
-              $prevTs     = $msgTs;
-            endforeach;
-          ?>
-        <?php endif; ?>
+        <?php
+          $emptyTitle = 'This is the beginning of #' . $currentChannel['slug'] . '.';
+          $emptySub   = 'Be the first to say something.';
+          include __DIR__ . '/includes/messages_partial.php';
+        ?>
       </div>
 
       <?php if ($isMember): ?>
@@ -280,45 +245,11 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       </header>
 
       <div class="chat-msgs" id="chatMsgs" data-conversation-id="<?= (int)$currentDm['id'] ?>">
-        <?php if (empty($currentMessages)): ?>
-          <div class="chat-msgs-empty">
-            <div class="chat-msgs-empty-title">This is the beginning of your conversation with <?= h(chat_dm_display_name($currentDm)) ?>.</div>
-            <div class="chat-msgs-empty-sub">Say hi.</div>
-          </div>
-        <?php else: ?>
-          <?php
-            $prevAuthor = null; $prevTs = 0;
-            foreach ($currentMessages as $m):
-              $msgTs   = strtotime($m['created_at']);
-              $grouped = ($m['user_id'] === $prevAuthor) && (($msgTs - $prevTs) < 300);
-              $deleted = $m['deleted_at'] !== null;
-              $edited  = $m['edited_at']  !== null;
-          ?>
-            <div class="chat-msg<?= $grouped ? ' chat-msg-grouped' : '' ?>" data-msg-id="<?= (int)$m['id'] ?>" data-user-id="<?= (int)$m['user_id'] ?>" data-msg-ts="<?= (int)$msgTs ?>">
-              <div class="chat-msg-avatar">
-                <?php if (!$grouped): ?>
-                  <?= user_avatar_html((int)$m['user_id'], $m['author_name'], 'chat-avatar') ?>
-                <?php endif; ?>
-              </div>
-              <div class="chat-msg-body">
-                <?php if (!$grouped): ?>
-                  <div class="chat-msg-meta">
-                    <span class="chat-msg-name"><?= h($m['author_name']) ?></span>
-                    <span class="chat-msg-time"><?= h(chat_format_message_time($m['created_at'])) ?></span>
-                  </div>
-                <?php endif; ?>
-                <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>"><?= $deleted
-                  ? '<em>This message was deleted.</em>'
-                  : nl2br(h($m['content'])) . ($edited ? ' <span class="chat-msg-edited">(edited)</span>' : '')
-                ?></div>
-              </div>
-            </div>
-          <?php
-              $prevAuthor = $m['user_id'];
-              $prevTs     = $msgTs;
-            endforeach;
-          ?>
-        <?php endif; ?>
+        <?php
+          $emptyTitle = 'This is the beginning of your conversation with ' . chat_dm_display_name($currentDm) . '.';
+          $emptySub   = 'Say hi.';
+          include __DIR__ . '/includes/messages_partial.php';
+        ?>
       </div>
 
       <form class="chat-composer" id="chatComposer" data-conversation-id="<?= (int)$currentDm['id'] ?>" autocomplete="off">
@@ -354,7 +285,43 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       </div>
     <?php endif; ?>
   </section>
+
+  <!-- Thread panel — slides in on the right when a user clicks "Reply in
+       thread" or a "N replies" count. JS hydrates it via the messages.php
+       ?action=list&parent_message_id=... endpoint. -->
+  <aside class="chat-thread" id="chatThread" hidden>
+    <header class="chat-thread-header">
+      <h2 class="chat-thread-title">Thread</h2>
+      <button type="button" class="chat-thread-close" data-action="close-thread" aria-label="Close thread">×</button>
+    </header>
+    <div class="chat-thread-list" id="chatThreadList">
+      <div class="chat-modal-loading">Loading…</div>
+    </div>
+    <form class="chat-composer" id="chatThreadComposer" autocomplete="off">
+      <textarea
+        class="chat-composer-input"
+        id="chatThreadInput"
+        name="content"
+        placeholder="Reply…"
+        rows="1"
+        maxlength="40000"
+        required></textarea>
+      <button type="submit" class="chat-composer-send" aria-label="Send reply">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </form>
+  </aside>
 </div>
+
+<!-- @mention autocomplete — one popup, JS positions it above the active
+     composer (main or thread). Page-level so it isn't clipped by the
+     composer's overflow. -->
+<div class="chat-mention-popup" id="chatMentionPopup" hidden></div>
+
+<!-- Emoji picker holder — JS lazily instantiates an <emoji-picker> inside
+     this container when the user opens the picker, and positions it near
+     the clicked "Add reaction" button. -->
+<div class="chat-emoji-popup" id="chatEmojiPopup" hidden></div>
 
 <!-- ===== Modals ===== -->
 <dialog class="chat-modal" id="modalCreateChannel" aria-labelledby="modalCreateChannelTitle">
