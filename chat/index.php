@@ -137,6 +137,11 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       <div class="chat-ws-user"><?= h($user['name']) ?> <span class="chat-ws-sep">·</span> <span class="chat-ws-role"><?= h($user['role_name'] ?? 'Member') ?></span></div>
     </header>
 
+    <button type="button" class="chat-sidebar-search-trigger" data-action="open-search" aria-label="Search messages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <span>Search messages…</span>
+    </button>
+
     <nav class="chat-nav">
       <section class="chat-section">
         <div class="chat-section-head">
@@ -356,6 +361,51 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     <div class="chat-modal-body" id="browseChannelsList">
       <div class="chat-modal-loading">Loading…</div>
     </div>
+    <div class="chat-modal-actions">
+      <button type="button" class="chat-btn" data-action="close-modal">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="chat-modal chat-modal-wide chat-modal-search-dialog" id="modalSearch" aria-labelledby="modalSearchTitle">
+  <div class="chat-modal-form">
+    <h2 class="chat-modal-title" id="modalSearchTitle">Search messages</h2>
+
+    <div class="chat-search-controls">
+      <input type="text" id="searchInput" class="chat-modal-search" placeholder="Type to search…" autocomplete="off">
+
+      <div class="chat-search-filters">
+        <label class="chat-search-filter">
+          <span>From</span>
+          <select id="searchFrom">
+            <option value="">Anyone</option>
+          </select>
+        </label>
+        <label class="chat-search-filter">
+          <span>In</span>
+          <select id="searchIn">
+            <option value="">Everywhere</option>
+          </select>
+        </label>
+        <label class="chat-search-filter">
+          <span>After</span>
+          <input type="date" id="searchAfter">
+        </label>
+        <label class="chat-search-filter">
+          <span>Before</span>
+          <input type="date" id="searchBefore">
+        </label>
+        <label class="chat-search-filter chat-search-filter-checkbox">
+          <input type="checkbox" id="searchHasFile">
+          <span>Has file</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="chat-search-results" id="searchResults">
+      <div class="chat-search-empty">Start typing or pick a filter to search across every channel and DM you can see.</div>
+    </div>
+
     <div class="chat-modal-actions">
       <button type="button" class="chat-btn" data-action="close-modal">Close</button>
     </div>

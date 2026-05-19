@@ -342,6 +342,10 @@
         e.preventDefault();
         openNewDmModal();
         break;
+      case 'open-search':
+        e.preventDefault();
+        openSearchModal();
+        break;
       case 'add-reaction':
         e.preventDefault();
         openEmojiPicker(t, parseInt(t.getAttribute('data-msg-id'), 10));
@@ -1327,12 +1331,216 @@
     }
   });
 
+  // ===== Message search (Phase 7) =====================================
+
+  var searchContextLoaded = false;
+  var searchDebounceTimer = null;
+  var searchInflight       = null;
+
+  function openSearchModal() {
+    openDialog('modalSearch');
+    if (!searchContextLoaded) loadSearchContext();
+    var input = $('#searchInput');
+    if (input) requestAnimationFrame(function () { input.focus(); });
+  }
+
+  function loadSearchContext() {
+    apiGet('context', 'search.php', {}).then(function (res) {
+      if (!res.ok) return;
+      var d = res.data || {};
+      var fromSel = $('#searchFrom');
+      var inSel   = $('#searchIn');
+
+      if (fromSel) {
+        var opts = ['<option value="">Anyone</option>'];
+        (d.people || []).forEach(function (p) {
+          opts.push('<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>');
+        });
+        fromSel.innerHTML = opts.join('');
+      }
+
+      if (inSel) {
+        var html = ['<option value="">Everywhere</option>'];
+        if ((d.channels || []).length) {
+          html.push('<optgroup label="Channels">');
+          d.channels.forEach(function (c) {
+            var prefix = parseInt(c.is_private, 10) ? '🔒 ' : '# ';
+            html.push('<option value="c:' + c.id + '">' + escapeHtml(prefix + c.slug) + '</option>');
+          });
+          html.push('</optgroup>');
+        }
+        if ((d.conversations || []).length) {
+          html.push('<optgroup label="Direct Messages">');
+          d.conversations.forEach(function (c) {
+            html.push('<option value="d:' + c.id + '">' + escapeHtml(c.display) + '</option>');
+          });
+          html.push('</optgroup>');
+        }
+        inSel.innerHTML = html.join('');
+      }
+
+      searchContextLoaded = true;
+    });
+  }
+
+  function scheduleSearch() {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(runSearch, 220);
+  }
+
+  function runSearch() {
+    var resultsEl = $('#searchResults');
+    if (!resultsEl) return;
+
+    var q       = ($('#searchInput')   || {}).value || '';
+    var from    = ($('#searchFrom')    || {}).value || '';
+    var inSel   = ($('#searchIn')      || {}).value || '';
+    var after   = ($('#searchAfter')   || {}).value || '';
+    var before  = ($('#searchBefore')  || {}).value || '';
+    var hasFile = ($('#searchHasFile') || {}).checked;
+
+    var qs = { q: q.trim() };
+    if (from)    qs.from  = from;
+    if (after)   qs.after  = after;
+    if (before)  qs.before = before;
+    if (hasFile) qs.has_file = 1;
+    if (inSel) {
+      var m = /^([cd]):(\d+)$/.exec(inSel);
+      if (m) {
+        if (m[1] === 'c') qs.channel_id      = m[2];
+        else              qs.conversation_id = m[2];
+      }
+    }
+
+    // Treat "nothing to search" as the empty state.
+    if (!qs.q && !qs.from && !qs.channel_id && !qs.conversation_id && !qs.after && !qs.before && !qs.has_file) {
+      resultsEl.innerHTML = '<div class="chat-search-empty">Start typing or pick a filter.</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = '<div class="chat-search-loading">Searching…</div>';
+    // Abort any prior in-flight search so a fast typist doesn't see results
+    // out of order.
+    if (searchInflight && typeof searchInflight.abort === 'function') {
+      try { searchInflight.abort(); } catch (e) {}
+    }
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    searchInflight = ctrl;
+
+    var url = '/chat/api/search.php?action=query&' + Object.keys(qs).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(qs[k]);
+    }).join('&');
+
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (ctrl !== searchInflight) return;  // a newer search supersedes
+        if (!data) {
+          resultsEl.innerHTML = '<div class="chat-search-error">Search failed.</div>';
+          return;
+        }
+        renderSearchResults(data);
+      })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        resultsEl.innerHTML = '<div class="chat-search-error">Network error.</div>';
+      });
+  }
+
+  function renderSearchResults(data) {
+    var resultsEl = $('#searchResults');
+    if (!resultsEl) return;
+    var results = data.results || [];
+    if (!results.length) {
+      resultsEl.innerHTML = '<div class="chat-search-empty">No messages match.</div>';
+      return;
+    }
+    resultsEl.innerHTML = results.map(buildSearchResultHtml).join('');
+  }
+
+  function buildSearchResultHtml(r) {
+    var contextHtml;
+    if (r.channel_id) {
+      var prefix = parseInt(r.channel_is_private, 10) ? '🔒' : '#';
+      contextHtml = '<span class="chat-search-result-context"><span class="chat-search-result-context-prefix">' + prefix + '</span>' + escapeHtml(String(r.channel_slug || '')) + '</span>';
+    } else if (r.conversation_id) {
+      contextHtml = '<span class="chat-search-result-context">@' + escapeHtml(String(r.dm_display || 'DM')) + '</span>';
+    } else {
+      contextHtml = '';
+    }
+
+    var time = escapeHtml(formatTime(r.created_at));
+    var threadBadge = r.parent_message_id ? '<span class="chat-search-result-badge">Thread</span>' : '';
+    var fileBadge   = parseInt(r.has_file, 10) ? '<span class="chat-search-result-badge">Has file</span>' : '';
+
+    var href;
+    if (r.channel_id) {
+      // For thread replies the parent lives in the channel feed; jump to
+      // the parent so the user sees context.
+      var targetId = r.parent_message_id || r.id;
+      href = '/chat/?c=' + encodeURIComponent(String(r.channel_slug || '')) + '#msg-' + targetId;
+    } else {
+      var targetId2 = r.parent_message_id || r.id;
+      href = '/chat/?d=' + r.conversation_id + '#msg-' + targetId2;
+    }
+
+    var content = r.content_html || nl2br(r.content || '');
+
+    return '<a class="chat-search-result" href="' + escapeHtml(href) + '" data-msg-id="' + r.id + '">'
+         +   '<div class="chat-search-result-meta">'
+         +     contextHtml
+         +     '<span class="chat-search-result-sep">·</span>'
+         +     '<span class="chat-search-result-time">' + time + '</span>'
+         +     threadBadge + fileBadge
+         +   '</div>'
+         +   '<div class="chat-search-result-msg">'
+         +     '<span class="chat-search-result-author">' + escapeHtml(r.author_name) + '</span>'
+         +     '<span class="chat-search-result-text">' + content + '</span>'
+         +   '</div>'
+         + '</a>';
+  }
+
+  // Wire up search-modal inputs.
+  var sInput   = $('#searchInput');
+  var sFrom    = $('#searchFrom');
+  var sIn      = $('#searchIn');
+  var sAfter   = $('#searchAfter');
+  var sBefore  = $('#searchBefore');
+  var sHasFile = $('#searchHasFile');
+  [sInput, sFrom, sIn, sAfter, sBefore, sHasFile].forEach(function (el) {
+    if (!el) return;
+    var ev = (el === sInput) ? 'input' : 'change';
+    el.addEventListener(ev, scheduleSearch);
+  });
+
+  // ===== Scroll-to-message on URL hash (#msg-N), used by search results.
+  function scrollToHashMessage() {
+    var hash = String(window.location.hash || '');
+    var m = /^#msg-(\d+)$/.exec(hash);
+    if (!m) return;
+    var el = document.querySelector('.chat-msg[data-msg-id="' + m[1] + '"]');
+    if (!el || !msgList) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Flash highlight, then clean up.
+    el.classList.add('chat-msg-highlight');
+    setTimeout(function () { el.classList.remove('chat-msg-highlight'); }, 1800);
+  }
+  if (window.location.hash) {
+    // Wait until the message list has scrolled to bottom (the existing
+    // scrollMsgsToBottom() call at load time) before jumping to the hash.
+    setTimeout(scrollToHashMessage, 60);
+  }
+
   if (window.console && console.log) {
     var where = CURRENT_CHANNEL_ID
       ? ('channel #' + CURRENT_CHANNEL_SLUG + ' (id ' + CURRENT_CHANNEL_ID + ')')
       : (CURRENT_CONVERSATION_ID
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : '(no channel)');
-    console.log('[Anton Chat] Phase 6 loaded', where);
+    console.log('[Anton Chat] Phase 7 loaded', where);
   }
 })();
