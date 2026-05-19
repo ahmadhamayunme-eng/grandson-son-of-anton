@@ -89,6 +89,20 @@ elseif ($currentDm)    $pageTitle = chat_dm_display_name($currentDm);
 else                   $pageTitle = 'Chat';
 $activeKey = 'chat';
 
+// Phase 8 — presence + unread counts.
+// Refresh this user's presence on every page render so opening the tab
+// counts as activity even before the JS ping fires.
+chat_presence_ping($uid);
+
+// Auto-mark-read the channel/DM the user is currently viewing.
+if ($currentChannel && $isMember) chat_mark_channel_read((int)$currentChannel['id'], $uid);
+if ($currentDm)                   chat_mark_dm_read((int)$currentDm['id'],    $uid);
+
+// Compute unread badges + workspace presence map AFTER mark-read so the
+// current view shows zero unread on first paint.
+$unreadCounts = chat_unread_counts_for_user($ws, $uid);
+$presenceMap  = chat_presence_map($ws);
+
 $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
 $_chatCssV  = @filemtime(__DIR__ . '/assets/css/chat.css') ?: '1';
 $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
@@ -154,11 +168,14 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
           <?php foreach ($userChannels as $c):
             $active   = $currentChannel && (int)$currentChannel['id'] === (int)$c['id'];
             $unjoined = !((int)($c['is_member'] ?? 0));
+            $unread   = (int)($unreadCounts['channels'][(int)$c['id']] ?? 0);
           ?>
-            <a class="chat-row<?= $active ? ' active' : '' ?><?= $unjoined ? ' chat-row-unjoined' : '' ?>"
+            <a class="chat-row<?= $active ? ' active' : '' ?><?= $unjoined ? ' chat-row-unjoined' : '' ?><?= $unread > 0 ? ' chat-row-unread' : '' ?>"
                href="/chat/?c=<?= h(urlencode($c['slug'])) ?>"
+               data-channel-id="<?= (int)$c['id'] ?>"
                title="<?= $unjoined ? 'You haven\'t joined this channel yet' : '' ?>">
-              <span class="chat-row-prefix" aria-hidden="true"><?= $c['is_private'] ? '🔒' : '#' ?></span><?= h($c['slug']) ?>
+              <span class="chat-row-prefix" aria-hidden="true"><?= $c['is_private'] ? '🔒' : '#' ?></span><span class="chat-row-name"><?= h($c['slug']) ?></span>
+              <?php if ($unread > 0): ?><span class="chat-row-badge" data-unread-badge><?= $unread > 99 ? '99+' : $unread ?></span><?php endif; ?>
             </a>
           <?php endforeach; ?>
         <?php endif; ?>
@@ -176,11 +193,25 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
           <?php foreach ($userDms as $d):
             $active = $currentDm && (int)$currentDm['id'] === (int)$d['id'];
             $name   = chat_dm_display_name($d);
+            $unread = (int)($unreadCounts['dms'][(int)$d['id']] ?? 0);
+            // 1-on-1 DMs: show presence dot for the other person.
+            $otherIds = !empty($d['other_user_ids']) ? array_map('intval', explode(',', (string)$d['other_user_ids'])) : [];
+            $showDot  = !((int)$d['is_group']) && count($otherIds) === 1;
+            $otherId  = $showDot ? (int)$otherIds[0] : 0;
+            $otherOnline = $showDot && !empty($presenceMap[$otherId]);
           ?>
-            <a class="chat-row<?= $active ? ' active' : '' ?>"
+            <a class="chat-row<?= $active ? ' active' : '' ?><?= $unread > 0 ? ' chat-row-unread' : '' ?>"
                href="/chat/?d=<?= (int)$d['id'] ?>"
+               data-conversation-id="<?= (int)$d['id'] ?>"
                title="<?= h($name) ?>">
-              <span class="chat-row-prefix" aria-hidden="true">@</span><?= h($name) ?>
+              <span class="chat-row-prefix chat-row-prefix-dm" aria-hidden="true">
+                <?php if ($showDot): ?>
+                  <span class="chat-presence-dot<?= $otherOnline ? ' chat-presence-online' : '' ?>" data-user-id="<?= $otherId ?>"></span>
+                <?php else: ?>
+                  @
+                <?php endif; ?>
+              </span><span class="chat-row-name"><?= h($name) ?></span>
+              <?php if ($unread > 0): ?><span class="chat-row-badge" data-unread-badge><?= $unread > 99 ? '99+' : $unread ?></span><?php endif; ?>
             </a>
           <?php endforeach; ?>
         <?php endif; ?>
@@ -446,7 +477,9 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     currentChannelId: <?= $currentChannel ? (int)$currentChannel['id'] : 'null' ?>,
     currentChannelSlug: <?= $currentChannel ? json_encode($currentChannel['slug']) : 'null' ?>,
     currentConversationId: <?= $currentDm ? (int)$currentDm['id'] : 'null' ?>,
-    lastEventId: <?= (int)$lastEventId ?>
+    lastEventId: <?= (int)$lastEventId ?>,
+    unreadCounts: <?= json_encode($unreadCounts) ?>,
+    presenceMap:  <?= json_encode($presenceMap) ?>
   };
 </script>
 <script>

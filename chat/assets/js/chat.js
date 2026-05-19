@@ -702,19 +702,39 @@
     // payload, which the server sets for thread replies in msg_action_send.
     var parentId = (ev.payload && ev.payload.parent_message_id)
       ? parseInt(ev.payload.parent_message_id, 10) : null;
+
+    // Browser notification — DMs + @mentions only. maybeNotify decides
+    // whether the user is currently looking at the message; if so it skips.
+    if (!parentId) maybeNotify(ev);
+
     if (parentId) {
       onThreadReplyEvent(ev, parentId);
       return;
     }
 
-    // Top-level message: only append to the visible pane if the event is
-    // for the current channel OR the current DM conversation.
-    if (!msgList) return;
-    var eventChannelId = ev.channel_id != null ? parseInt(ev.channel_id, 10) : null;
+    // Top-level message routing + unread accounting.
+    var eventChannelId = ev.channel_id      != null ? parseInt(ev.channel_id, 10)      : null;
     var eventConvId    = ev.conversation_id != null ? parseInt(ev.conversation_id, 10) : null;
-    var matchesChannel = CURRENT_CHANNEL_ID && eventChannelId === CURRENT_CHANNEL_ID;
-    var matchesDm      = CURRENT_CONVERSATION_ID && eventConvId === CURRENT_CONVERSATION_ID;
-    if (!matchesChannel && !matchesDm) return;
+    var msgUserId      = parseInt(ev.message_user_id, 10);
+
+    var matchesChannel = CURRENT_CHANNEL_ID      && eventChannelId === CURRENT_CHANNEL_ID;
+    var matchesDm      = CURRENT_CONVERSATION_ID && eventConvId    === CURRENT_CONVERSATION_ID;
+    var inThisView     = matchesChannel || matchesDm;
+
+    // Unread bookkeeping (skip my own messages).
+    if (msgUserId !== CURRENT_USER_ID) {
+      if (inThisView && !document.hidden) {
+        // Visible → mark_read on the server so the counter doesn't drift.
+        markReadOnServer(matchesChannel
+          ? { channel_id: CURRENT_CHANNEL_ID }
+          : { conversation_id: CURRENT_CONVERSATION_ID });
+      } else {
+        if (eventChannelId) bumpChannelUnread(eventChannelId);
+        else if (eventConvId) bumpDmUnread(eventConvId);
+      }
+    }
+
+    if (!msgList || !inThisView) return;
     // Dedup: if we already have this message in the DOM (e.g. we just sent
     // it ourselves and appended it locally), don't double-render.
     if (msgList.querySelector('[data-msg-id="' + ev.message_id + '"]')) return;
@@ -1517,6 +1537,141 @@
     el.addEventListener(ev, scheduleSearch);
   });
 
+  // ===== Notifications, presence, unread counts (Phase 8) =============
+
+  var unreadCounts = (boot.unreadCounts && typeof boot.unreadCounts === 'object')
+    ? boot.unreadCounts : { channels: {}, dms: {} };
+  var presenceMap  = boot.presenceMap || {};
+
+  // --- Presence heartbeat + poll --------------------------------------
+  function pingPresence() {
+    if (document.hidden) return;  // don't spam while tab is in background
+    fetch('/chat/api/presence.php?action=ping', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': CSRF }
+    }).catch(function () { /* swallow */ });
+  }
+  pingPresence();
+  setInterval(pingPresence, 30000);
+
+  function refreshPresence() {
+    apiGet('list', 'presence.php', {}).then(function (res) {
+      if (!res.ok || !res.data || typeof res.data.presence !== 'object') return;
+      presenceMap = res.data.presence;
+      applyPresenceDots();
+    }).catch(function () { /* swallow */ });
+  }
+  function applyPresenceDots() {
+    document.querySelectorAll('.chat-presence-dot[data-user-id]').forEach(function (el) {
+      var id = parseInt(el.getAttribute('data-user-id'), 10);
+      if (presenceMap[id] === 1) el.classList.add('chat-presence-online');
+      else                       el.classList.remove('chat-presence-online');
+    });
+  }
+  applyPresenceDots();
+  setInterval(refreshPresence, 30000);
+
+  // --- Unread badges --------------------------------------------------
+  function setUnreadBadge(rowSelector, count) {
+    var row = document.querySelector(rowSelector);
+    if (!row) return;
+    var existing = row.querySelector('[data-unread-badge]');
+    if (count <= 0) {
+      if (existing) existing.remove();
+      row.classList.remove('chat-row-unread');
+      return;
+    }
+    var text = count > 99 ? '99+' : String(count);
+    row.classList.add('chat-row-unread');
+    if (existing) {
+      existing.textContent = text;
+    } else {
+      var span = document.createElement('span');
+      span.className = 'chat-row-badge';
+      span.setAttribute('data-unread-badge', '');
+      span.textContent = text;
+      row.appendChild(span);
+    }
+  }
+
+  function bumpChannelUnread(channelId) {
+    var count = (unreadCounts.channels[channelId] || 0) + 1;
+    unreadCounts.channels[channelId] = count;
+    setUnreadBadge('.chat-row[data-channel-id="' + channelId + '"]', count);
+  }
+  function bumpDmUnread(conversationId) {
+    var count = (unreadCounts.dms[conversationId] || 0) + 1;
+    unreadCounts.dms[conversationId] = count;
+    setUnreadBadge('.chat-row[data-conversation-id="' + conversationId + '"]', count);
+  }
+
+  function markReadOnServer(target) {
+    var fd = new FormData();
+    if (target.channel_id)      fd.append('channel_id',      target.channel_id);
+    if (target.conversation_id) fd.append('conversation_id', target.conversation_id);
+    fetch('/chat/api/state.php?action=mark_read', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': CSRF },
+      body: fd
+    }).catch(function () { /* swallow */ });
+  }
+
+  // --- Browser notifications -----------------------------------------
+  // Ask for permission once on load. If the user already granted or
+  // denied, this is a no-op. We don't beg later.
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    try { Notification.requestPermission(); } catch (e) {}
+  }
+
+  function stripHtmlForNotif(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = String(html || '');
+    return (tmp.textContent || tmp.innerText || '').trim();
+  }
+
+  function maybeNotify(ev) {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+
+    var msgUserId = parseInt(ev.message_user_id, 10);
+    if (!msgUserId || msgUserId === CURRENT_USER_ID) return;
+
+    var inThisView = false;
+    if (ev.channel_id      && parseInt(ev.channel_id, 10)      === CURRENT_CHANNEL_ID)       inThisView = true;
+    if (ev.conversation_id && parseInt(ev.conversation_id, 10) === CURRENT_CONVERSATION_ID)  inThisView = true;
+    if (inThisView && !document.hidden) return;
+
+    var isDM = ev.conversation_id != null;
+    var html = ev.message_content_html || '';
+    var mentionsMe = isDM ||
+      html.indexOf('data-user-id="' + CURRENT_USER_ID + '"') !== -1 ||
+      html.indexOf('class="chat-mention chat-mention-special"') !== -1;  // @channel/@here/@everyone
+    if (!mentionsMe) return;
+
+    var title = (ev.author_name ? ev.author_name : 'New message') + ' — Anton Chat';
+    var body  = stripHtmlForNotif(html || ev.message_content || '');
+    if (body.length > 140) body = body.substring(0, 140) + '…';
+
+    try {
+      var n = new Notification(title, {
+        body:  body,
+        icon:  '/partials/antonx-favicon.png',
+        tag:   'chat-' + (ev.event_id || Date.now())
+      });
+      n.onclick = function () {
+        window.focus();
+        if (ev.channel_id && ev.channel_slug) {
+          window.location.href = '/chat/?c=' + encodeURIComponent(ev.channel_slug);
+        } else if (ev.conversation_id) {
+          window.location.href = '/chat/?d=' + ev.conversation_id;
+        }
+        n.close();
+      };
+    } catch (e) { /* ignore — some browsers throw on Notification() with bad args */ }
+  }
+
   // ===== Scroll-to-message on URL hash (#msg-N), used by search results.
   function scrollToHashMessage() {
     var hash = String(window.location.hash || '');
@@ -1541,6 +1696,6 @@
       : (CURRENT_CONVERSATION_ID
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : '(no channel)');
-    console.log('[Anton Chat] Phase 7 loaded', where);
+    console.log('[Anton Chat] Phase 8 loaded', where);
   }
 })();

@@ -144,8 +144,35 @@ html, body { overflow: hidden; }
   color: var(--text);
   font-weight: 600;
 }
-.chat-row-prefix { color: var(--text-muted); width: 14px; text-align: center; font-weight: 500; }
+.chat-row-prefix { color: var(--text-muted); width: 14px; text-align: center; font-weight: 500; flex-shrink: 0; }
 .chat-row.active .chat-row-prefix { color: var(--text); }
+.chat-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Unread badge + bold name when a channel/DM has unread messages. */
+.chat-row.chat-row-unread .chat-row-name { font-weight: 700; color: var(--text); }
+.chat-row-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+/* Presence dot — green when last_seen within 90s. Used in DM sidebar
+   rows (Phase 8) and could also live on message author avatars later. */
+.chat-row-prefix-dm { display: inline-flex; align-items: center; justify-content: center; }
+.chat-presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  display: inline-block;
+}
+.chat-presence-dot.chat-presence-online { background: var(--success); }
 
 /* Public channel you haven't joined yet — visible in sidebar, dimmer to
    signal it's discoverable but not "yours". Clicking still works; the
