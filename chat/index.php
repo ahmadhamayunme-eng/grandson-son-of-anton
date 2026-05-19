@@ -188,13 +188,13 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
                     <span class="chat-msg-time"><?= h(chat_format_message_time($m['created_at'])) ?></span>
                   </div>
                 <?php endif; ?>
-                <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>">
-                  <?php if ($deleted): ?>
-                    <em>This message was deleted.</em>
-                  <?php else: ?>
-                    <?= nl2br(h($m['content'])) ?><?php if ($edited): ?> <span class="chat-msg-edited">(edited)</span><?php endif; ?>
-                  <?php endif; ?>
-                </div>
+                <?php // Keep this on one rendered line: .chat-msg-text uses
+                      // white-space: pre-wrap so any indentation inside the
+                      // div becomes visible whitespace in the message. ?>
+                <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>"><?= $deleted
+                  ? '<em>This message was deleted.</em>'
+                  : nl2br(h($m['content'])) . ($edited ? ' <span class="chat-msg-edited">(edited)</span>' : '')
+                ?></div>
               </div>
             </div>
           <?php
