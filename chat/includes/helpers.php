@@ -60,17 +60,30 @@ function chat_normalize_slug(string $raw): ?string {
 // ===== Server-side queries used by chat/index.php =========================
 
 /**
- * Channels the user is a member of, for the sidebar.
+ * Channels to render in the user's sidebar: every public channel in the
+ * workspace, plus every private channel the user is a member of. Each
+ * row carries an `is_member` flag (0/1) so the UI can dim channels the
+ * user hasn't joined yet but is allowed to see.
+ *
+ * Discovery model differs from Slack: with only 10–30 users we want
+ * public channels obviously visible in everyone's sidebar, not buried
+ * behind a Browse modal. Clicking an unjoined channel still shows the
+ * "Join channel" prompt — joining isn't automatic.
  */
 function chat_load_user_channels(int $workspaceId, int $userId): array {
   $stmt = db()->prepare(
-    'SELECT c.id, c.slug, c.topic, c.is_private
+    'SELECT c.id, c.slug, c.topic, c.is_private,
+            EXISTS(SELECT 1 FROM chat_channel_members WHERE channel_id = c.id AND user_id = ?) AS is_member
      FROM chat_channels c
-     JOIN chat_channel_members m ON m.channel_id = c.id AND m.user_id = ?
-     WHERE c.workspace_id = ? AND c.archived_at IS NULL
+     WHERE c.workspace_id = ?
+       AND c.archived_at IS NULL
+       AND (
+         c.is_private = 0
+         OR c.id IN (SELECT channel_id FROM chat_channel_members WHERE user_id = ?)
+       )
      ORDER BY c.slug ASC'
   );
-  $stmt->execute([$userId, $workspaceId]);
+  $stmt->execute([$userId, $workspaceId, $userId]);
   return $stmt->fetchAll();
 }
 

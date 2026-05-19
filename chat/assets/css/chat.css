@@ -120,6 +120,14 @@ html, body { overflow: hidden; }
 .chat-row-prefix { color: var(--text-muted); width: 14px; text-align: center; font-weight: 500; }
 .chat-row.active .chat-row-prefix { color: var(--text); }
 
+/* Public channel you haven't joined yet — visible in sidebar, dimmer to
+   signal it's discoverable but not "yours". Clicking still works; the
+   pane shows the Join prompt. */
+.chat-row-unjoined { color: var(--text-muted); }
+.chat-row-unjoined .chat-row-prefix { color: var(--text-dim); }
+.chat-row-unjoined:hover { color: var(--text); }
+.chat-row.active.chat-row-unjoined { color: var(--text); }
+
 /* ===== Right: main chat pane ===== */
 .chat-pane {
   flex: 1;
