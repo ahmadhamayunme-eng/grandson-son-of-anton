@@ -18,6 +18,7 @@
   var CURRENT_USER_ID = boot.currentUserId || 0;
   var CURRENT_CHANNEL_ID = boot.currentChannelId || null;
   var CURRENT_CHANNEL_SLUG = boot.currentChannelSlug || null;
+  var CURRENT_CONVERSATION_ID = boot.currentConversationId || null;
 
   // ===== Small helpers =====
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -148,12 +149,17 @@
     composer.addEventListener('submit', function (e) {
       e.preventDefault();
       var text = (input.value || '').trim();
-      if (!text || !CURRENT_CHANNEL_ID) return;
+      if (!text || (!CURRENT_CHANNEL_ID && !CURRENT_CONVERSATION_ID)) return;
 
       var sendBtn = composer.querySelector('.chat-composer-send');
       if (sendBtn) sendBtn.disabled = true;
 
-      apiPost('send', 'messages.php', { channel_id: CURRENT_CHANNEL_ID, content: text })
+      // Route to channel OR DM based on which target is set in CHAT_BOOT.
+      var sendBody = { content: text };
+      if (CURRENT_CHANNEL_ID)      sendBody.channel_id      = CURRENT_CHANNEL_ID;
+      if (CURRENT_CONVERSATION_ID) sendBody.conversation_id = CURRENT_CONVERSATION_ID;
+
+      apiPost('send', 'messages.php', sendBody)
         .then(function (res) {
           if (sendBtn) sendBtn.disabled = false;
           if (!res.ok) {
@@ -229,6 +235,10 @@
       case 'join-channel':
         e.preventDefault();
         joinAndOpen(parseInt(t.getAttribute('data-channel-id'), 10), t.getAttribute('data-channel-slug'), t);
+        break;
+      case 'open-new-dm':
+        e.preventDefault();
+        openNewDmModal();
         break;
     }
   });
@@ -321,6 +331,136 @@
         if (button) button.disabled = false;
         alert('Network error — could not join.');
       });
+  }
+
+  // ===== New direct message (Phase 4) ================================
+  // Modal that lists workspace users and lets the user pick 1 (1-on-1) or
+  // 2–7 (group). On submit, POSTs to dms.php; 1-on-1 is idempotent via
+  // dm_key, group always creates a new conversation. Navigates to
+  // /chat/?d=<id> on success.
+
+  var peopleCache = null;
+  var selectedUserIds = [];
+
+  function openNewDmModal() {
+    selectedUserIds = [];
+    peopleCache = null;
+    updateNewDmFooter();
+    var errEl = $('#newDmErr');
+    if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+    var search = $('#newDmSearch');
+    if (search) search.value = '';
+    openDialog('modalNewDm');
+    loadPeopleList('');
+    if (search) requestAnimationFrame(function () { search.focus(); });
+  }
+
+  function loadPeopleList(filter) {
+    var listEl = $('#newDmPeopleList');
+    if (!listEl) return;
+    if (peopleCache !== null) { renderPeopleList(filter); return; }
+    listEl.innerHTML = '<div class="chat-modal-loading">Loading…</div>';
+    apiGet('people', 'dms.php', {})
+      .then(function (res) {
+        if (!res.ok) {
+          listEl.innerHTML = '<div class="chat-modal-loading">Failed to load.</div>';
+          return;
+        }
+        peopleCache = res.data.people || [];
+        renderPeopleList(filter);
+      })
+      .catch(function () {
+        listEl.innerHTML = '<div class="chat-modal-loading">Network error.</div>';
+      });
+  }
+
+  function renderPeopleList(filter) {
+    var listEl = $('#newDmPeopleList');
+    if (!listEl || !peopleCache) return;
+    var people = peopleCache;
+    if (filter) {
+      var f = filter.toLowerCase();
+      people = people.filter(function (p) { return String(p.name).toLowerCase().indexOf(f) !== -1; });
+    }
+    if (!people.length) {
+      listEl.innerHTML = '<div class="chat-modal-loading">No people match.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    people.forEach(function (p) {
+      var row = document.createElement('label');
+      row.className = 'chat-people-row';
+      var checked = selectedUserIds.indexOf(p.id) !== -1;
+      row.innerHTML =
+        '<input type="checkbox" data-user-id="' + p.id + '"' + (checked ? ' checked' : '') + '>' +
+        '<span class="chat-people-avatar">' + escapeHtml(initialsOf(p.name)) + '</span>' +
+        '<span class="chat-people-name">' + escapeHtml(p.name) + '</span>';
+      var cb = row.querySelector('input[type=checkbox]');
+      cb.addEventListener('change', function () {
+        var uid = parseInt(this.getAttribute('data-user-id'), 10);
+        if (this.checked) {
+          if (selectedUserIds.indexOf(uid) === -1) selectedUserIds.push(uid);
+        } else {
+          selectedUserIds = selectedUserIds.filter(function (x) { return x !== uid; });
+        }
+        updateNewDmFooter();
+      });
+      listEl.appendChild(row);
+    });
+  }
+
+  function updateNewDmFooter() {
+    var meta = $('#newDmSelectedCount');
+    var btn  = $('#newDmStartBtn');
+    var n = selectedUserIds.length;
+    if (meta) {
+      if (n === 0)      meta.textContent = 'No one selected';
+      else if (n === 1) meta.textContent = '1 person selected · 1-on-1 DM';
+      else              meta.textContent = n + ' people selected · group DM (' + (n + 1) + ' total with you)';
+    }
+    if (btn) {
+      btn.disabled = n === 0 || n > 7;
+      btn.textContent = n > 1 ? 'Start group DM' : 'Start DM';
+    }
+  }
+
+  var newDmSearch = $('#newDmSearch');
+  if (newDmSearch) {
+    newDmSearch.addEventListener('input', function () {
+      renderPeopleList(this.value.trim());
+    });
+  }
+
+  var newDmStartBtn = $('#newDmStartBtn');
+  if (newDmStartBtn) {
+    newDmStartBtn.addEventListener('click', function () {
+      if (!selectedUserIds.length) return;
+      var errEl = $('#newDmErr');
+      if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+      newDmStartBtn.disabled = true;
+
+      // FormData with user_ids[] entries — same shape PHP expects.
+      var fd = new FormData();
+      selectedUserIds.forEach(function (uid) { fd.append('user_ids[]', uid); });
+      fetch('/chat/api/dms.php?action=create', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' },
+        body: fd
+      }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+          if (!res.ok) {
+            newDmStartBtn.disabled = false;
+            if (errEl) { errEl.textContent = (res.data && res.data.message) || 'Could not start the DM.'; errEl.hidden = false; }
+            return;
+          }
+          window.location.href = '/chat/?d=' + res.data.conversation.id;
+        })
+        .catch(function () {
+          newDmStartBtn.disabled = false;
+          if (errEl) { errEl.textContent = 'Network error. Try again.'; errEl.hidden = false; }
+        });
+    });
   }
 
   // ===== Live updates (Phase 3) — SSE with polling fallback ===========
@@ -429,8 +569,14 @@
   }
 
   function onMessageEvent(ev) {
-    // Only append to the visible pane if we're on the right channel.
-    if (!msgList || parseInt(ev.channel_id, 10) !== CURRENT_CHANNEL_ID) return;
+    // Only append to the visible pane if the event is for the current
+    // channel OR the current DM conversation.
+    if (!msgList) return;
+    var eventChannelId = ev.channel_id != null ? parseInt(ev.channel_id, 10) : null;
+    var eventConvId    = ev.conversation_id != null ? parseInt(ev.conversation_id, 10) : null;
+    var matchesChannel = CURRENT_CHANNEL_ID && eventChannelId === CURRENT_CHANNEL_ID;
+    var matchesDm      = CURRENT_CONVERSATION_ID && eventConvId === CURRENT_CONVERSATION_ID;
+    if (!matchesChannel && !matchesDm) return;
     // Dedup: if we already have this message in the DOM (e.g. we just sent
     // it ourselves and appended it locally), don't double-render.
     if (msgList.querySelector('[data-msg-id="' + ev.message_id + '"]')) return;
@@ -460,7 +606,11 @@
   startSse();
 
   if (window.console && console.log) {
-    console.log('[Anton Chat] Phase 3 loaded',
-      CURRENT_CHANNEL_ID ? ('channel #' + CURRENT_CHANNEL_SLUG + ' (id ' + CURRENT_CHANNEL_ID + ')') : '(no channel)');
+    var where = CURRENT_CHANNEL_ID
+      ? ('channel #' + CURRENT_CHANNEL_SLUG + ' (id ' + CURRENT_CHANNEL_ID + ')')
+      : (CURRENT_CONVERSATION_ID
+          ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
+          : '(no channel)');
+    console.log('[Anton Chat] Phase 4 loaded', where);
   }
 })();

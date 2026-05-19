@@ -104,17 +104,22 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
      LEFT JOIN users u         ON u.id = m.user_id
      WHERE e.workspace_id = ?
        AND e.id > ?
-       AND e.channel_id IN (
-         SELECT id FROM chat_channels
-         WHERE workspace_id = ? AND archived_at IS NULL
-           AND (is_private = 0 OR id IN (
-             SELECT channel_id FROM chat_channel_members WHERE user_id = ?
-           ))
+       AND (
+         e.channel_id IN (
+           SELECT id FROM chat_channels
+           WHERE workspace_id = ? AND archived_at IS NULL
+             AND (is_private = 0 OR id IN (
+               SELECT channel_id FROM chat_channel_members WHERE user_id = ?
+             ))
+         )
+         OR e.conversation_id IN (
+           SELECT conversation_id FROM chat_direct_conversation_members WHERE user_id = ?
+         )
        )
      ORDER BY e.id ASC
      LIMIT 200'
   );
-  $stmt->execute([$ws, $since, $ws, $uid]);
+  $stmt->execute([$ws, $since, $ws, $uid, $uid]);
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
     if ($r['payload'] !== null) {

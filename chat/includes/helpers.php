@@ -130,6 +130,120 @@ function chat_channel_member_count(int $channelId): int {
   return (int)$stmt->fetchColumn();
 }
 
+// ===== Direct messages (1-on-1 + group, Phase 4) =========================
+
+/**
+ * Canonical dm_key for a 1-on-1 DM: "min:max" of the two user IDs. Lets us
+ * dedupe "the DM between A and B" with a single indexed lookup. Group DMs
+ * always create a fresh row (no dedup) and store dm_key as NULL.
+ */
+function chat_dm_key_for_pair(int $userId1, int $userId2): string {
+  $a = min($userId1, $userId2);
+  $b = max($userId1, $userId2);
+  return $a . ':' . $b;
+}
+
+/**
+ * True if the user is a member of the DM conversation.
+ */
+function chat_user_is_dm_member(int $conversationId, int $userId): bool {
+  $stmt = db()->prepare(
+    'SELECT 1 FROM chat_direct_conversation_members
+     WHERE conversation_id = ? AND user_id = ? LIMIT 1'
+  );
+  $stmt->execute([$conversationId, $userId]);
+  return (bool)$stmt->fetchColumn();
+}
+
+/**
+ * DMs the user is in, for the sidebar. Each row carries a comma-separated
+ * list of the *other* members' names (GROUP_CONCAT) so the sidebar can
+ * render "Alice" / "Alice, Bob, Carol" without a second query.
+ *
+ * Ordered by most recent activity first so the user's freshest threads
+ * float to the top — matching Slack.
+ */
+function chat_load_user_dms(int $workspaceId, int $userId): array {
+  $stmt = db()->prepare(
+    "SELECT c.id, c.is_group, c.created_at,
+            (SELECT MAX(m.id)         FROM chat_messages m WHERE m.conversation_id = c.id) AS last_message_id,
+            (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.conversation_id = c.id) AS last_activity_at,
+            GROUP_CONCAT(other_u.id   ORDER BY other_u.name SEPARATOR ',')  AS other_user_ids,
+            GROUP_CONCAT(other_u.name ORDER BY other_u.name SEPARATOR ', ') AS other_user_names
+     FROM chat_direct_conversations c
+     JOIN chat_direct_conversation_members me      ON me.conversation_id = c.id AND me.user_id = ?
+     JOIN chat_direct_conversation_members other_m ON other_m.conversation_id = c.id AND other_m.user_id != ?
+     JOIN users other_u                            ON other_u.id = other_m.user_id
+     WHERE c.workspace_id = ?
+     GROUP BY c.id
+     ORDER BY (last_activity_at IS NULL), last_activity_at DESC, c.created_at DESC"
+  );
+  $stmt->execute([$userId, $userId, $workspaceId]);
+  return $stmt->fetchAll();
+}
+
+/**
+ * Single DM detail, only if the user is a member. Includes the same
+ * GROUP_CONCAT of other members the sidebar uses, so the channel header
+ * can render the display name without extra queries.
+ */
+function chat_load_dm_by_id(int $workspaceId, int $userId, int $conversationId): ?array {
+  if (!chat_user_is_dm_member($conversationId, $userId)) return null;
+  $stmt = db()->prepare(
+    "SELECT c.id, c.is_group, c.created_at, c.created_by,
+            GROUP_CONCAT(other_u.id   ORDER BY other_u.name SEPARATOR ',')  AS other_user_ids,
+            GROUP_CONCAT(other_u.name ORDER BY other_u.name SEPARATOR ', ') AS other_user_names
+     FROM chat_direct_conversations c
+     LEFT JOIN chat_direct_conversation_members other_m ON other_m.conversation_id = c.id AND other_m.user_id != ?
+     LEFT JOIN users other_u                            ON other_u.id = other_m.user_id
+     WHERE c.id = ? AND c.workspace_id = ?
+     GROUP BY c.id
+     LIMIT 1"
+  );
+  $stmt->execute([$userId, $conversationId, $workspaceId]);
+  $row = $stmt->fetch();
+  return $row ?: null;
+}
+
+/**
+ * Total member count for a DM (including the current user).
+ */
+function chat_dm_member_count(int $conversationId): int {
+  $stmt = db()->prepare('SELECT COUNT(*) FROM chat_direct_conversation_members WHERE conversation_id = ?');
+  $stmt->execute([$conversationId]);
+  return (int)$stmt->fetchColumn();
+}
+
+/**
+ * Most-recent N top-level messages in a DM, oldest first. Symmetric to
+ * chat_load_recent_messages() but keyed on conversation_id.
+ */
+function chat_load_dm_messages(int $conversationId, int $limit = 50): array {
+  $limit = max(1, min(200, $limit));
+  $stmt = db()->prepare(
+    'SELECT m.id, m.user_id, m.content, m.created_at, m.edited_at, m.deleted_at,
+            u.name AS author_name
+     FROM chat_messages m
+     JOIN users u ON u.id = m.user_id
+     WHERE m.conversation_id = ? AND m.parent_message_id IS NULL
+     ORDER BY m.id DESC
+     LIMIT ' . (int)$limit
+  );
+  $stmt->execute([$conversationId]);
+  return array_reverse($stmt->fetchAll());
+}
+
+/**
+ * Best display name for a DM: the other person's name for 1-on-1, the
+ * comma-separated other members for a group. Falls back to "Direct
+ * Message" if for some reason there are no other members in the row
+ * (shouldn't happen in practice — every conversation has at least 2).
+ */
+function chat_dm_display_name(array $dm): string {
+  $names = trim((string)($dm['other_user_names'] ?? ''));
+  return $names !== '' ? $names : 'Direct Message';
+}
+
 // ===== Event stream (used by Phase 3 SSE; written from Phase 2 onward) ====
 
 /**
