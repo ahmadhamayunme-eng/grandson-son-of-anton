@@ -126,9 +126,18 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
       $decoded = json_decode($r['payload'], true);
       $r['payload'] = $decoded === null ? $r['payload'] : $decoded;
     }
-    // Soft-deleted message: blank the content so the client can show
-    // "[deleted]" without ever seeing the original text.
-    if ($r['message_deleted_at'] !== null) $r['message_content'] = '';
+    // Soft-deleted message: blank the content so the client never sees
+    // the original text.
+    if ($r['message_deleted_at'] !== null) {
+      $r['message_content']      = '';
+      $r['message_content_html'] = '';
+    } elseif ($r['message_content'] !== null) {
+      // Pre-render @mentions etc. so SSE clients can append HTML directly
+      // without a second round trip per new message.
+      $r['message_content_html'] = chat_render_message_content((string)$r['message_content'], $ws);
+    } else {
+      $r['message_content_html'] = null;
+    }
   }
   unset($r);
   return $rows;

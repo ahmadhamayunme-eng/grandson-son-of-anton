@@ -244,6 +244,200 @@ function chat_dm_display_name(array $dm): string {
   return $names !== '' ? $names : 'Direct Message';
 }
 
+// ===== Reactions, threads, mentions (Phase 5) =============================
+
+/**
+ * Reactions for one message, grouped by emoji. user_ids is a comma-separated
+ * list of users who reacted — the client uses it to compute `me_reacted`
+ * locally (so the same payload works for every recipient via SSE).
+ */
+function chat_load_message_reactions(int $messageId): array {
+  $stmt = db()->prepare(
+    "SELECT emoji,
+            COUNT(*) AS cnt,
+            GROUP_CONCAT(user_id ORDER BY user_id SEPARATOR ',') AS user_ids
+     FROM chat_reactions
+     WHERE message_id = ?
+     GROUP BY emoji
+     ORDER BY MIN(created_at) ASC"
+  );
+  $stmt->execute([$messageId]);
+  return $stmt->fetchAll();
+}
+
+/**
+ * Reactions for a batch of messages — returns a map keyed by message_id.
+ * Used when rendering a channel/DM/thread page so we don't run one query
+ * per message.
+ */
+function chat_load_reactions_for_messages(array $messageIds): array {
+  if (empty($messageIds)) return [];
+  $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+  $stmt = db()->prepare(
+    "SELECT message_id, emoji, COUNT(*) AS cnt,
+            GROUP_CONCAT(user_id ORDER BY user_id SEPARATOR ',') AS user_ids
+     FROM chat_reactions
+     WHERE message_id IN ($placeholders)
+     GROUP BY message_id, emoji
+     ORDER BY message_id ASC, MIN(created_at) ASC"
+  );
+  $stmt->execute($messageIds);
+  $byMessage = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $mid = (int)$r['message_id'];
+    if (!isset($byMessage[$mid])) $byMessage[$mid] = [];
+    $byMessage[$mid][] = [
+      'emoji'    => $r['emoji'],
+      'count'    => (int)$r['cnt'],
+      'user_ids' => $r['user_ids'],
+    ];
+  }
+  return $byMessage;
+}
+
+/**
+ * Reply counts for a batch of parent message IDs. Map of parent_id => count.
+ * Excludes soft-deleted replies.
+ */
+function chat_load_reply_counts(array $parentIds): array {
+  if (empty($parentIds)) return [];
+  $placeholders = implode(',', array_fill(0, count($parentIds), '?'));
+  $stmt = db()->prepare(
+    "SELECT parent_message_id, COUNT(*) AS cnt
+     FROM chat_messages
+     WHERE parent_message_id IN ($placeholders) AND deleted_at IS NULL
+     GROUP BY parent_message_id"
+  );
+  $stmt->execute($parentIds);
+  $map = [];
+  foreach ($stmt->fetchAll() as $r) $map[(int)$r['parent_message_id']] = (int)$r['cnt'];
+  return $map;
+}
+
+/**
+ * Workspace users keyed by lowercased first word of their name. Used by
+ * the @mention parser and the autocomplete picker. Cached per-request so
+ * an SSE loop or a multi-message render doesn't re-query every iteration.
+ *
+ * If two users share a first name, the first one inserted wins for that
+ * token. Disambiguation is a Phase-9 polish item.
+ */
+function chat_workspace_users_by_first_name(int $workspaceId): array {
+  static $cache = [];
+  if (isset($cache[$workspaceId])) return $cache[$workspaceId];
+
+  $stmt = db()->prepare(
+    'SELECT id, name FROM users
+     WHERE workspace_id = ? AND is_active = 1
+     ORDER BY id ASC'
+  );
+  $stmt->execute([$workspaceId]);
+  $map = [];
+  foreach ($stmt->fetchAll() as $u) {
+    $first = strtolower((string)strtok($u['name'], " \t"));
+    if ($first === '' || isset($map[$first])) continue;
+    $map[$first] = ['id' => (int)$u['id'], 'name' => $u['name']];
+  }
+  $cache[$workspaceId] = $map;
+  return $map;
+}
+
+/**
+ * Render a message's raw content as HTML-safe markup, wrapping recognised
+ * @mentions in <span class="chat-mention">. Phase 6 will extend this with
+ * markdown (bold, italic, code, links). For now it's escape + @mentions
+ * + nl2br.
+ */
+function chat_render_message_content(string $content, int $workspaceId): string {
+  $escaped = h($content);
+  $users   = chat_workspace_users_by_first_name($workspaceId);
+
+  $rendered = preg_replace_callback(
+    '/(^|[^a-z0-9_])@(channel|here|everyone|[a-z][a-z0-9_-]*)(?![a-z0-9_])/i',
+    function ($m) use ($users) {
+      $prefix = $m[1];
+      $token  = strtolower($m[2]);
+      if (in_array($token, ['channel', 'here', 'everyone'], true)) {
+        return $prefix . '<span class="chat-mention chat-mention-special" data-mention="' . h($token) . '">@' . $token . '</span>';
+      }
+      if (isset($users[$token])) {
+        return $prefix
+             . '<span class="chat-mention" data-user-id="' . (int)$users[$token]['id'] . '">@'
+             . h($users[$token]['name']) . '</span>';
+      }
+      return $prefix . '@' . h($token);  // unknown — render plain
+    },
+    $escaped
+  );
+
+  return nl2br($rendered);
+}
+
+/**
+ * Attach content_html, reactions, and reply_count to a batch of message
+ * rows fetched from chat_messages. Soft-deleted messages get content
+ * blanked and no decorations. Used both by chat/api/messages.php (list
+ * action) and chat/index.php (initial server render) so both paths
+ * produce identically-shaped rows.
+ */
+function chat_decorate_messages(array $rows, int $workspaceId): array {
+  if (empty($rows)) return $rows;
+  $ids = [];
+  foreach ($rows as $r) { $ids[] = (int)$r['id']; }
+  $reactionsByMsg = chat_load_reactions_for_messages($ids);
+  $replyCounts    = chat_load_reply_counts($ids);
+
+  foreach ($rows as &$r) {
+    $deleted = $r['deleted_at'] !== null;
+    if ($deleted) {
+      $r['content']      = '';
+      $r['content_html'] = '';
+    } else {
+      $r['content_html'] = chat_render_message_content((string)$r['content'], $workspaceId);
+    }
+    $r['reactions']   = $reactionsByMsg[(int)$r['id']] ?? [];
+    $r['reply_count'] = (int)($replyCounts[(int)$r['id']] ?? 0);
+  }
+  unset($r);
+  return $rows;
+}
+
+/**
+ * Parse the message's @mention tokens and insert chat_mentions rows.
+ * Called inside the send-message transaction so the rows commit atomically
+ * with the message itself. Returns the list of inserted mentions for
+ * logging / payload.
+ */
+function chat_parse_and_store_mentions(int $messageId, string $content, int $workspaceId): array {
+  $users = chat_workspace_users_by_first_name($workspaceId);
+  $now   = now();
+  $stmt  = db()->prepare(
+    'INSERT INTO chat_mentions (message_id, mention_type, mentioned_user_id, created_at)
+     VALUES (?, ?, ?, ?)'
+  );
+
+  $inserted = [];
+  $seen     = [];
+  if (preg_match_all('/(?:^|[^a-z0-9_])@(channel|here|everyone|[a-z][a-z0-9_-]*)(?![a-z0-9_])/i', $content, $matches)) {
+    foreach ($matches[1] as $token) {
+      $token = strtolower($token);
+      if (in_array($token, ['channel', 'here', 'everyone'], true)) {
+        if (isset($seen['t:' . $token])) continue;
+        $seen['t:' . $token] = true;
+        $stmt->execute([$messageId, $token, null, $now]);
+        $inserted[] = ['type' => $token];
+      } elseif (isset($users[$token])) {
+        $uid = $users[$token]['id'];
+        if (isset($seen['u:' . $uid])) continue;
+        $seen['u:' . $uid] = true;
+        $stmt->execute([$messageId, 'user', $uid, $now]);
+        $inserted[] = ['type' => 'user', 'user_id' => $uid];
+      }
+    }
+  }
+  return $inserted;
+}
+
 // ===== Event stream (used by Phase 3 SSE; written from Phase 2 onward) ====
 
 /**

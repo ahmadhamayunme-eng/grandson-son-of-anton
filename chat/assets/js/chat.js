@@ -97,12 +97,15 @@
     };
   }
 
-  function buildMessageEl(msg, grouped) {
-    var div = document.createElement('div');
-    div.className = 'chat-msg' + (grouped ? ' chat-msg-grouped' : '');
-    div.setAttribute('data-msg-id', msg.id);
-    div.setAttribute('data-user-id', msg.user_id);
-    div.setAttribute('data-msg-ts', Math.floor(new Date(msg.created_at.replace(' ', 'T')).getTime() / 1000));
+  function buildMessageHtml(msg, grouped) {
+    // Produces the same DOM structure as chat/includes/messages_partial.php
+    // so server-rendered and JS-appended messages are visually identical
+    // (and the same data-action handlers work on both).
+    var ts = Math.floor(new Date(String(msg.created_at).replace(' ', 'T')).getTime() / 1000);
+    var deleted = msg.deleted_at != null;
+    var edited  = msg.edited_at  != null;
+    var reactions = msg.reactions || [];
+    var replyCt   = parseInt(msg.reply_count, 10) || 0;
 
     var avatar = '';
     if (!grouped) {
@@ -115,12 +118,69 @@
            +   '<span class="chat-msg-time">' + escapeHtml(formatTime(msg.created_at)) + '</span>'
            + '</div>';
     }
-    div.innerHTML =
-      '<div class="chat-msg-avatar">' + avatar + '</div>' +
-      '<div class="chat-msg-body">' + meta +
-        '<div class="chat-msg-text">' + nl2br(msg.content) + '</div>' +
+
+    var textHtml;
+    if (deleted) {
+      textHtml = '<em>This message was deleted.</em>';
+    } else {
+      // Prefer server-rendered content_html (handles @mentions etc.). Fall
+      // back to plain escape + nl2br if it's a bare message.
+      textHtml = msg.content_html || nl2br(msg.content || '');
+      if (edited) textHtml += ' <span class="chat-msg-edited">(edited)</span>';
+    }
+
+    var reactionsHtml = '';
+    if (reactions.length) {
+      reactionsHtml = '<div class="chat-reactions" data-msg-id="' + msg.id + '">' +
+        reactions.map(function (rx) {
+          var idsRaw = String(rx.user_ids || '');
+          var idsArr = idsRaw ? idsRaw.split(',').map(function (x) { return parseInt(x, 10); }) : [];
+          var me     = idsArr.indexOf(CURRENT_USER_ID) !== -1;
+          return '<button type="button" class="chat-reaction' + (me ? ' chat-reaction-mine' : '') + '"'
+               + ' data-action="toggle-reaction" data-msg-id="' + msg.id
+               + '" data-emoji="' + escapeHtml(rx.emoji) + '">'
+               +   '<span class="chat-reaction-emoji">' + escapeHtml(rx.emoji) + '</span>'
+               +   '<span class="chat-reaction-count">' + (parseInt(rx.count, 10) || 0) + '</span>'
+               + '</button>';
+        }).join('') +
       '</div>';
-    return div;
+    }
+
+    var replyBtnHtml = '';
+    if (replyCt > 0) {
+      replyBtnHtml = '<button type="button" class="chat-reply-count" data-action="open-thread" data-msg-id="' + msg.id + '">'
+                   +   replyCt + ' repl' + (replyCt === 1 ? 'y' : 'ies')
+                   + '</button>';
+    }
+
+    var actionsHtml = '';
+    if (!deleted) {
+      actionsHtml =
+        '<div class="chat-msg-actions" aria-hidden="true">'
+        +   '<button type="button" class="chat-msg-action" data-action="add-reaction" data-msg-id="' + msg.id + '" title="Add reaction">'
+        +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>'
+        +   '</button>'
+        +   '<button type="button" class="chat-msg-action" data-action="open-thread" data-msg-id="' + msg.id + '" title="Reply in thread">'
+        +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>'
+        +   '</button>'
+        + '</div>';
+    }
+
+    return '<div class="chat-msg' + (grouped ? ' chat-msg-grouped' : '') + '"'
+         + ' data-msg-id="' + msg.id + '" data-user-id="' + msg.user_id + '" data-msg-ts="' + ts + '">'
+         +   '<div class="chat-msg-avatar">' + avatar + '</div>'
+         +   '<div class="chat-msg-body">' + meta
+         +     '<div class="chat-msg-text' + (deleted ? ' chat-msg-deleted' : '') + '">' + textHtml + '</div>'
+         +     reactionsHtml + replyBtnHtml
+         +   '</div>'
+         +   actionsHtml
+         + '</div>';
+  }
+
+  function buildMessageEl(msg, grouped) {
+    var temp = document.createElement('template');
+    temp.innerHTML = buildMessageHtml(msg, grouped);
+    return temp.content.firstElementChild;
   }
 
   function scrollMsgsToBottom() {
@@ -239,6 +299,22 @@
       case 'open-new-dm':
         e.preventDefault();
         openNewDmModal();
+        break;
+      case 'add-reaction':
+        e.preventDefault();
+        openEmojiPicker(t, parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'toggle-reaction':
+        e.preventDefault();
+        toggleReaction(parseInt(t.getAttribute('data-msg-id'), 10), t.getAttribute('data-emoji'));
+        break;
+      case 'open-thread':
+        e.preventDefault();
+        openThread(parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'close-thread':
+        e.preventDefault();
+        closeThread();
         break;
     }
   });
@@ -561,16 +637,32 @@
       case 'message':
         onMessageEvent(ev);
         break;
-      // Other event types are received but not rendered yet — Phase 5
-      // (mentions) and Phase 8 (unread, presence) wire these up.
+      case 'reaction_added':
+      case 'reaction_removed':
+        if (ev.message_id && ev.payload && Array.isArray(ev.payload.reactions)) {
+          updateMessageReactions(parseInt(ev.message_id, 10), ev.payload.reactions);
+        }
+        break;
+      // Other event types received but not rendered yet — Phase 8 wires up
+      // unread + presence; dm_created may want a sidebar refresh someday.
       default:
         break;
     }
   }
 
   function onMessageEvent(ev) {
-    // Only append to the visible pane if the event is for the current
-    // channel OR the current DM conversation.
+    // Thread reply? Route to the thread panel (and bump the parent count
+    // in the main pane). Identified by parent_message_id in the event
+    // payload, which the server sets for thread replies in msg_action_send.
+    var parentId = (ev.payload && ev.payload.parent_message_id)
+      ? parseInt(ev.payload.parent_message_id, 10) : null;
+    if (parentId) {
+      onThreadReplyEvent(ev, parentId);
+      return;
+    }
+
+    // Top-level message: only append to the visible pane if the event is
+    // for the current channel OR the current DM conversation.
     if (!msgList) return;
     var eventChannelId = ev.channel_id != null ? parseInt(ev.channel_id, 10) : null;
     var eventConvId    = ev.conversation_id != null ? parseInt(ev.conversation_id, 10) : null;
@@ -581,15 +673,7 @@
     // it ourselves and appended it locally), don't double-render.
     if (msgList.querySelector('[data-msg-id="' + ev.message_id + '"]')) return;
 
-    var msg = {
-      id:          ev.message_id,
-      user_id:     parseInt(ev.message_user_id, 10),
-      author_name: ev.author_name,
-      content:     ev.message_content || '',
-      created_at:  ev.message_created_at,
-      edited_at:   ev.message_edited_at,
-      deleted_at:  ev.message_deleted_at
-    };
+    var msg = sseEventToMsg(ev);
 
     var wasAtBottom = isNearBottom(msgList, 60);
     var prev = lastMsgInfo();
@@ -602,8 +686,407 @@
     if (wasAtBottom) scrollMsgsToBottom();
   }
 
+  // Convert an SSE message event into a msg object compatible with
+  // buildMessageHtml / buildMessageEl.
+  function sseEventToMsg(ev) {
+    return {
+      id:           ev.message_id,
+      user_id:      parseInt(ev.message_user_id, 10),
+      author_name:  ev.author_name,
+      content:      ev.message_content      || '',
+      content_html: ev.message_content_html || '',
+      created_at:   ev.message_created_at,
+      edited_at:    ev.message_edited_at,
+      deleted_at:   ev.message_deleted_at,
+      reactions:    [],
+      reply_count:  0
+    };
+  }
+
   // Kick off the live stream.
   startSse();
+
+  // ===== Reactions, threads, mentions (Phase 5) =======================
+
+  // --- Reactions: emoji picker pop-up + toggle endpoint ----------------
+  var emojiPicker = null;       // lazily created <emoji-picker> element
+  var emojiTargetMsgId = null;  // which message the next pick will attach to
+
+  function openEmojiPicker(button, msgId) {
+    emojiTargetMsgId = msgId;
+    var popup = $('#chatEmojiPopup');
+    if (!popup) return;
+    if (!emojiPicker) {
+      emojiPicker = document.createElement('emoji-picker');
+      emojiPicker.addEventListener('emoji-click', function (e) {
+        var emoji = e && e.detail && e.detail.unicode;
+        if (!emoji || !emojiTargetMsgId) return;
+        toggleReaction(emojiTargetMsgId, emoji);
+        closeEmojiPicker();
+      });
+      popup.appendChild(emojiPicker);
+    }
+    popup.hidden = false;
+    // Position above the clicked button, clamped to viewport.
+    var rect = button.getBoundingClientRect();
+    var ph = popup.offsetHeight || 360;
+    var top = rect.top - ph - 6;
+    if (top < 8) top = rect.bottom + 6;
+    popup.style.top  = Math.max(8, top) + 'px';
+    popup.style.left = Math.max(8, Math.min(window.innerWidth - 332, rect.left)) + 'px';
+  }
+
+  function closeEmojiPicker() {
+    var popup = $('#chatEmojiPopup');
+    if (popup) popup.hidden = true;
+    emojiTargetMsgId = null;
+  }
+
+  function toggleReaction(msgId, emoji) {
+    if (!msgId || !emoji) return;
+    apiPost('toggle', 'reactions.php', { message_id: msgId, emoji: emoji })
+      .then(function (res) {
+        if (!res.ok) {
+          if (window.console) console.warn('reaction toggle failed', res.data);
+          return;
+        }
+        // The endpoint returns the post-toggle reactions list. SSE will
+        // also push it to everyone else.
+        updateMessageReactions(msgId, res.data.reactions || []);
+      });
+  }
+
+  // Re-render the .chat-reactions block for a message, given the full
+  // reactions array. Adds the block if it didn't exist; removes it if
+  // there are no reactions left.
+  function updateMessageReactions(msgId, reactions) {
+    // Update in both the main pane AND the thread panel if the same msg
+    // is visible in both.
+    document.querySelectorAll('.chat-msg[data-msg-id="' + msgId + '"]').forEach(function (msgEl) {
+      var body = msgEl.querySelector('.chat-msg-body');
+      if (!body) return;
+      var existing = body.querySelector('.chat-reactions');
+      if (!reactions || !reactions.length) { if (existing) existing.remove(); return; }
+
+      var html = reactions.map(function (rx) {
+        var idsRaw = String(rx.user_ids || '');
+        var idsArr = idsRaw ? idsRaw.split(',').map(function (x) { return parseInt(x, 10); }) : [];
+        var me     = idsArr.indexOf(CURRENT_USER_ID) !== -1;
+        return '<button type="button" class="chat-reaction' + (me ? ' chat-reaction-mine' : '') + '"'
+             + ' data-action="toggle-reaction" data-msg-id="' + msgId
+             + '" data-emoji="' + escapeHtml(rx.emoji) + '">'
+             +   '<span class="chat-reaction-emoji">' + escapeHtml(rx.emoji) + '</span>'
+             +   '<span class="chat-reaction-count">' + (parseInt(rx.count, 10) || 0) + '</span>'
+             + '</button>';
+      }).join('');
+
+      if (existing) {
+        existing.innerHTML = html;
+      } else {
+        var div = document.createElement('div');
+        div.className = 'chat-reactions';
+        div.setAttribute('data-msg-id', String(msgId));
+        div.innerHTML = html;
+        // Insert before .chat-reply-count if it exists, else append to body.
+        var replyBtn = body.querySelector('.chat-reply-count');
+        if (replyBtn) body.insertBefore(div, replyBtn);
+        else body.appendChild(div);
+      }
+    });
+  }
+
+  // --- Threads: side panel, fetch + render replies, send reply ---------
+  var threadParentId = null;
+  var threadPanel    = $('#chatThread');
+  var threadList     = $('#chatThreadList');
+  var threadComposer = $('#chatThreadComposer');
+  var threadInput    = $('#chatThreadInput');
+
+  function openThread(parentId) {
+    if (!threadPanel || !threadList) return;
+    threadParentId = parentId;
+    threadPanel.hidden = false;
+    threadList.innerHTML = '<div class="chat-modal-loading">Loading…</div>';
+
+    // Server returns the *replies* only — render the parent from the
+    // main-pane DOM we already have.
+    apiGet('list', 'messages.php', { parent_message_id: parentId })
+      .then(function (res) {
+        if (!res.ok) {
+          threadList.innerHTML = '<div class="chat-modal-loading">Could not load thread.</div>';
+          return;
+        }
+        var parentEl = document.querySelector('#chatMsgs .chat-msg[data-msg-id="' + parentId + '"]');
+        var parentHtml = parentEl ? parentEl.outerHTML : '<div class="chat-modal-loading">Original message unavailable.</div>';
+        var replies = res.data.messages || [];
+        var dividerLabel = replies.length === 0
+          ? 'No replies yet'
+          : (replies.length + ' repl' + (replies.length === 1 ? 'y' : 'ies'));
+        var dividerHtml = '<div class="chat-thread-divider"><span>' + escapeHtml(dividerLabel) + '</span></div>';
+        var repliesHtml = replies.map(function (m) { return buildMessageHtml(m, false); }).join('');
+        threadList.innerHTML = parentHtml + dividerHtml + repliesHtml;
+        threadList.scrollTop = threadList.scrollHeight;
+
+        if (threadComposer) threadComposer.setAttribute('data-parent-message-id', String(parentId));
+        if (threadInput) {
+          autoresize(threadInput);
+          requestAnimationFrame(function () { threadInput.focus(); });
+        }
+      })
+      .catch(function () {
+        threadList.innerHTML = '<div class="chat-modal-loading">Network error.</div>';
+      });
+  }
+
+  function closeThread() {
+    threadParentId = null;
+    if (threadPanel) threadPanel.hidden = true;
+    if (threadInput) { threadInput.value = ''; autoresize(threadInput); }
+  }
+
+  // When SSE delivers a thread reply: append to the open panel (if it's
+  // for the same parent) and bump the parent's "X replies" badge.
+  function onThreadReplyEvent(ev, parentId) {
+    if (threadParentId === parentId && threadList) {
+      var msg = sseEventToMsg(ev);
+      if (!threadList.querySelector('.chat-msg[data-msg-id="' + msg.id + '"]')) {
+        // Replace "No replies yet" divider if present.
+        var divider = threadList.querySelector('.chat-thread-divider');
+        if (divider && /No replies yet/.test(divider.textContent)) {
+          divider.innerHTML = '<span>1 reply</span>';
+        }
+        threadList.insertAdjacentHTML('beforeend', buildMessageHtml(msg, false));
+        threadList.scrollTop = threadList.scrollHeight;
+      }
+    }
+    bumpReplyCount(parentId);
+  }
+
+  function bumpReplyCount(parentId) {
+    var parentEl = document.querySelector('#chatMsgs .chat-msg[data-msg-id="' + parentId + '"]');
+    if (!parentEl) return;
+    var body = parentEl.querySelector('.chat-msg-body');
+    if (!body) return;
+    var btn = body.querySelector('.chat-reply-count');
+    if (btn) {
+      var n = (parseInt(btn.textContent, 10) || 0) + 1;
+      btn.textContent = n + ' repl' + (n === 1 ? 'y' : 'ies');
+    } else {
+      var newBtn = document.createElement('button');
+      newBtn.type = 'button';
+      newBtn.className = 'chat-reply-count';
+      newBtn.setAttribute('data-action', 'open-thread');
+      newBtn.setAttribute('data-msg-id', String(parentId));
+      newBtn.textContent = '1 reply';
+      body.appendChild(newBtn);
+    }
+  }
+
+  // Thread composer submit
+  if (threadComposer) {
+    threadComposer.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!threadParentId || !threadInput) return;
+      var text = (threadInput.value || '').trim();
+      if (!text) return;
+      var btn = threadComposer.querySelector('.chat-composer-send');
+      if (btn) btn.disabled = true;
+      apiPost('send', 'messages.php', { parent_message_id: threadParentId, content: text })
+        .then(function (res) {
+          if (btn) btn.disabled = false;
+          if (!res.ok) {
+            alert(res.data && res.data.message ? res.data.message : 'Failed to send reply.');
+            return;
+          }
+          var msg = res.data.message;
+          // Append locally; SSE echo will be deduped by data-msg-id.
+          if (threadList && !threadList.querySelector('.chat-msg[data-msg-id="' + msg.id + '"]')) {
+            var divider = threadList.querySelector('.chat-thread-divider');
+            if (divider && /No replies yet/.test(divider.textContent)) {
+              divider.innerHTML = '<span>1 reply</span>';
+            }
+            threadList.insertAdjacentHTML('beforeend', buildMessageHtml(msg, false));
+            threadList.scrollTop = threadList.scrollHeight;
+          }
+          threadInput.value = '';
+          autoresize(threadInput);
+          threadInput.focus();
+          bumpReplyCount(threadParentId);
+        });
+    });
+  }
+  if (threadInput) {
+    threadInput.addEventListener('input', function () { autoresize(threadInput); });
+    threadInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        // Let the mention popup intercept first.
+        if (mentionPopup && !mentionPopup.hidden && mentionItems.length) return;
+        e.preventDefault();
+        threadComposer && threadComposer.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    });
+  }
+
+  // --- @mention autocomplete: one popup, attached to both composers ----
+  var mentionPopup       = $('#chatMentionPopup');
+  var mentionAnchorInput = null;
+  var mentionItems       = [];
+  var mentionActiveIndex = 0;
+  var mentionPeopleCache = null;
+
+  function loadMentionPeople(cb) {
+    if (mentionPeopleCache) { cb(mentionPeopleCache); return; }
+    apiGet('people', 'dms.php', {}).then(function (res) {
+      mentionPeopleCache = (res && res.ok && res.data && res.data.people) ? res.data.people : [];
+      cb(mentionPeopleCache);
+    });
+  }
+
+  function detectMentionTrigger(textareaEl) {
+    var pos = textareaEl.selectionStart;
+    var before = textareaEl.value.substring(0, pos);
+    var m = before.match(/(?:^|[^a-z0-9_])@([a-z0-9_-]*)$/i);
+    if (!m) return null;
+    return { query: m[1].toLowerCase() };
+  }
+
+  function specialSub(s) {
+    if (s === 'channel')  return 'Everyone in this channel';
+    if (s === 'here')     return 'Online members';
+    if (s === 'everyone') return 'Everyone in the workspace';
+    return '';
+  }
+
+  function showMentionPopup(textareaEl, query) {
+    if (!mentionPopup) return;
+    mentionAnchorInput = textareaEl;
+    loadMentionPeople(function (people) {
+      var items = [];
+      ['channel', 'here', 'everyone'].forEach(function (sp) {
+        if (sp.indexOf(query) === 0) {
+          items.push({ id: 'sp:' + sp, name: '@' + sp, sub: specialSub(sp), insert: sp, special: true });
+        }
+      });
+      people.forEach(function (p) {
+        var first = String(p.name || '').split(/\s+/)[0].toLowerCase();
+        if (first && first.indexOf(query) === 0) {
+          items.push({ id: p.id, name: p.name, sub: '@' + first, insert: first, special: false });
+        }
+      });
+      mentionItems = items.slice(0, 8);
+      mentionActiveIndex = 0;
+      if (!mentionItems.length) { hideMentionPopup(); return; }
+      renderMentionPopup();
+      positionMentionPopup(textareaEl);
+    });
+  }
+
+  function renderMentionPopup() {
+    if (!mentionPopup) return;
+    mentionPopup.innerHTML = mentionItems.map(function (item, i) {
+      var avatarClass = item.special ? 'chat-mention-item-avatar chat-mention-item-avatar-special' : 'chat-mention-item-avatar';
+      var avatarText  = item.special ? '@' : initialsOf(item.name.replace(/^@/, ''));
+      return '<div class="chat-mention-item' + (i === mentionActiveIndex ? ' active' : '') + '" data-mention-index="' + i + '">'
+           +   '<span class="' + avatarClass + '">' + escapeHtml(avatarText) + '</span>'
+           +   '<span class="chat-mention-item-name">' + escapeHtml(item.name) + '</span>'
+           +   '<span class="chat-mention-item-sub">' + escapeHtml(item.sub || '') + '</span>'
+           + '</div>';
+    }).join('');
+    mentionPopup.hidden = false;
+  }
+
+  function positionMentionPopup(textareaEl) {
+    if (!mentionPopup) return;
+    var rect = textareaEl.getBoundingClientRect();
+    mentionPopup.hidden = false;
+    requestAnimationFrame(function () {
+      var ph = mentionPopup.offsetHeight;
+      mentionPopup.style.top  = Math.max(8, rect.top - ph - 6) + 'px';
+      mentionPopup.style.left = Math.max(8, rect.left) + 'px';
+    });
+  }
+
+  function hideMentionPopup() {
+    if (mentionPopup) mentionPopup.hidden = true;
+    mentionAnchorInput = null;
+    mentionItems = [];
+  }
+
+  function insertMention(textareaEl, item) {
+    var pos = textareaEl.selectionStart;
+    var text = textareaEl.value;
+    var before = text.substring(0, pos);
+    var after  = text.substring(pos);
+    var newBefore = before.replace(/@[a-z0-9_-]*$/i, '@' + item.insert);
+    textareaEl.value = newBefore + ' ' + after;
+    var caret = newBefore.length + 1;
+    textareaEl.selectionStart = textareaEl.selectionEnd = caret;
+    hideMentionPopup();
+    autoresize(textareaEl);
+  }
+
+  function attachMentionHandler(textareaEl) {
+    if (!textareaEl) return;
+    textareaEl.addEventListener('input', function () {
+      var trigger = detectMentionTrigger(this);
+      if (trigger) showMentionPopup(this, trigger.query);
+      else hideMentionPopup();
+    });
+    textareaEl.addEventListener('keydown', function (e) {
+      if (!mentionPopup || mentionPopup.hidden || mentionItems.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        mentionActiveIndex = (mentionActiveIndex + 1) % mentionItems.length;
+        renderMentionPopup();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        mentionActiveIndex = (mentionActiveIndex - 1 + mentionItems.length) % mentionItems.length;
+        renderMentionPopup();
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        insertMention(this, mentionItems[mentionActiveIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideMentionPopup();
+      }
+    });
+  }
+
+  attachMentionHandler($('#chatComposerInput'));
+  attachMentionHandler($('#chatThreadInput'));
+
+  if (mentionPopup) {
+    mentionPopup.addEventListener('mousedown', function (e) {
+      // mousedown (not click) so we beat the focus loss on the textarea.
+      var t = e.target.closest('[data-mention-index]');
+      if (!t || !mentionAnchorInput) return;
+      e.preventDefault();
+      var idx = parseInt(t.getAttribute('data-mention-index'), 10);
+      if (idx >= 0 && idx < mentionItems.length) {
+        var anchor = mentionAnchorInput;
+        insertMention(anchor, mentionItems[idx]);
+        anchor.focus();
+      }
+    });
+  }
+
+  // Outside-click + Escape: close emoji picker and mention popup.
+  document.addEventListener('mousedown', function (e) {
+    var picker = $('#chatEmojiPopup');
+    if (picker && !picker.hidden &&
+        !picker.contains(e.target) &&
+        !e.target.closest('[data-action="add-reaction"]')) {
+      closeEmojiPicker();
+    }
+    if (mentionPopup && !mentionPopup.hidden &&
+        !mentionPopup.contains(e.target) && e.target !== mentionAnchorInput) {
+      hideMentionPopup();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeEmojiPicker();
+  });
 
   if (window.console && console.log) {
     var where = CURRENT_CHANNEL_ID
@@ -611,6 +1094,6 @@
       : (CURRENT_CONVERSATION_ID
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : '(no channel)');
-    console.log('[Anton Chat] Phase 4 loaded', where);
+    console.log('[Anton Chat] Phase 5 loaded', where);
   }
 })();
