@@ -1,0 +1,6 @@
+# Anton Chat — block direct access to internal-only directories.
+# These should only be reachable through PHP includes, never via the browser.
+
+RewriteEngine On
+RewriteRule ^includes/ - [F,L]
+RewriteRule ^sql/      - [F,L]
