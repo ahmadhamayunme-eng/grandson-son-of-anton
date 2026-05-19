@@ -541,3 +541,74 @@ html.light .chat-modal::backdrop {
   color: var(--success);
   font-weight: 600;
 }
+
+/* ===== Empty-state action group ===== */
+.chat-empty-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* ===== New DM modal (Phase 4) ===== */
+.chat-modal-wide {
+  width: min(520px, calc(100% - 32px));
+}
+.chat-modal-search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.chat-modal-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.chat-modal-footer-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 4px 0;
+}
+
+/* People-picker row */
+.chat-people-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.chat-people-row:hover { background: var(--surface-hover); }
+.chat-people-row input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.chat-people-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.chat-people-name {
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

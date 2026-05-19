@@ -32,8 +32,9 @@ $stmt = $pdo->prepare('SELECT name FROM workspaces WHERE id = ?');
 $stmt->execute([$ws]);
 $workspaceName = (string)($stmt->fetchColumn() ?: 'Workspace');
 
-// Channels the user is in (for the sidebar).
+// Channels and DMs the user can see (sidebar lists).
 $userChannels = chat_load_user_channels($ws, $uid);
+$userDms      = chat_load_user_dms($ws, $uid);
 
 // Max event id at page-render time — passed to the SSE client so the very
 // first connect starts from "now" instead of replaying old events. Reconnects
@@ -42,15 +43,17 @@ $stmt = $pdo->prepare('SELECT IFNULL(MAX(id), 0) FROM chat_events WHERE workspac
 $stmt->execute([$ws]);
 $lastEventId = (int)$stmt->fetchColumn();
 
-// Selected channel: ?c=<slug>. If none specified but the user has
-// channels, redirect to the first one — same default-landing behaviour
-// as Slack. If the channel doesn't exist or isn't visible, fall through
-// to the "pick a channel" empty state.
-$currentSlug    = (string)($_GET['c'] ?? '');
-$currentChannel = null;
+// Selected target: ?c=<slug> (channel) or ?d=<id> (DM). They're mutually
+// exclusive — channel wins if both happen to be set.
+$currentSlug = (string)($_GET['c'] ?? '');
+$currentDmId = (int)($_GET['d'] ?? 0);
+if ($currentSlug !== '' && $currentDmId > 0) $currentDmId = 0;
+
+$currentChannel  = null;
+$currentDm       = null;
 $currentMessages = [];
-$memberCount    = 0;
-$isMember       = false;
+$memberCount     = 0;
+$isMember        = false;
 
 if ($currentSlug !== '') {
   $ch = chat_load_channel_by_slug($ws, $currentSlug);
@@ -60,13 +63,30 @@ if ($currentSlug !== '') {
     $currentMessages = chat_load_recent_messages((int)$ch['id'], 50);
     $memberCount     = chat_channel_member_count((int)$ch['id']);
   }
-}
-if ($currentChannel === null && $currentSlug === '' && !empty($userChannels)) {
-  header('Location: /chat/?c=' . urlencode($userChannels[0]['slug']), true, 303);
-  exit;
+} elseif ($currentDmId > 0) {
+  $dm = chat_load_dm_by_id($ws, $uid, $currentDmId);
+  if ($dm) {
+    $currentDm       = $dm;
+    $currentMessages = chat_load_dm_messages((int)$dm['id'], 50);
+    $memberCount     = chat_dm_member_count((int)$dm['id']);
+  }
 }
 
-$pageTitle = $currentChannel ? '#' . $currentChannel['slug'] : 'Chat';
+// Default landing — first channel alphabetically, else first DM by recent
+// activity. Falls through to the empty state if the user has neither.
+if ($currentChannel === null && $currentDm === null && $currentSlug === '' && $currentDmId === 0) {
+  if (!empty($userChannels)) {
+    header('Location: /chat/?c=' . urlencode($userChannels[0]['slug']), true, 303);
+    exit;
+  } elseif (!empty($userDms)) {
+    header('Location: /chat/?d=' . (int)$userDms[0]['id'], true, 303);
+    exit;
+  }
+}
+
+if ($currentChannel)   $pageTitle = '#' . $currentChannel['slug'];
+elseif ($currentDm)    $pageTitle = chat_dm_display_name($currentDm);
+else                   $pageTitle = 'Chat';
 $activeKey = 'chat';
 
 $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
@@ -139,8 +159,24 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       </section>
 
       <section class="chat-section">
-        <div class="chat-section-head"><span>Direct Messages</span></div>
-        <div class="chat-section-empty">DMs land in Phase 4</div>
+        <div class="chat-section-head">
+          <span>Direct Messages</span>
+          <button type="button" class="chat-section-add" title="New direct message" data-action="open-new-dm" aria-label="New direct message">+</button>
+        </div>
+        <?php if (empty($userDms)): ?>
+          <div class="chat-section-empty">No direct messages yet</div>
+        <?php else: ?>
+          <?php foreach ($userDms as $d):
+            $active = $currentDm && (int)$currentDm['id'] === (int)$d['id'];
+            $name   = chat_dm_display_name($d);
+          ?>
+            <a class="chat-row<?= $active ? ' active' : '' ?>"
+               href="/chat/?d=<?= (int)$d['id'] ?>"
+               title="<?= h($name) ?>">
+              <span class="chat-row-prefix" aria-hidden="true">@</span><?= h($name) ?>
+            </a>
+          <?php endforeach; ?>
+        <?php endif; ?>
       </section>
     </nav>
   </aside>
@@ -229,17 +265,92 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
           <?php endif; ?>
         </div>
       <?php endif; ?>
-    <?php elseif (empty($userChannels)): ?>
+    <?php elseif ($currentDm): ?>
+      <header class="chat-header">
+        <h1 class="chat-header-title">
+          <span class="chat-header-prefix" aria-hidden="true">@</span><?= h(chat_dm_display_name($currentDm)) ?>
+        </h1>
+        <div class="chat-header-meta">
+          <?php if ((int)$currentDm['is_group']): ?>
+            <span class="chat-header-members">Group · <?= (int)$memberCount ?> people</span>
+          <?php else: ?>
+            <span class="chat-header-members">Direct message</span>
+          <?php endif; ?>
+        </div>
+      </header>
+
+      <div class="chat-msgs" id="chatMsgs" data-conversation-id="<?= (int)$currentDm['id'] ?>">
+        <?php if (empty($currentMessages)): ?>
+          <div class="chat-msgs-empty">
+            <div class="chat-msgs-empty-title">This is the beginning of your conversation with <?= h(chat_dm_display_name($currentDm)) ?>.</div>
+            <div class="chat-msgs-empty-sub">Say hi.</div>
+          </div>
+        <?php else: ?>
+          <?php
+            $prevAuthor = null; $prevTs = 0;
+            foreach ($currentMessages as $m):
+              $msgTs   = strtotime($m['created_at']);
+              $grouped = ($m['user_id'] === $prevAuthor) && (($msgTs - $prevTs) < 300);
+              $deleted = $m['deleted_at'] !== null;
+              $edited  = $m['edited_at']  !== null;
+          ?>
+            <div class="chat-msg<?= $grouped ? ' chat-msg-grouped' : '' ?>" data-msg-id="<?= (int)$m['id'] ?>" data-user-id="<?= (int)$m['user_id'] ?>" data-msg-ts="<?= (int)$msgTs ?>">
+              <div class="chat-msg-avatar">
+                <?php if (!$grouped): ?>
+                  <?= user_avatar_html((int)$m['user_id'], $m['author_name'], 'chat-avatar') ?>
+                <?php endif; ?>
+              </div>
+              <div class="chat-msg-body">
+                <?php if (!$grouped): ?>
+                  <div class="chat-msg-meta">
+                    <span class="chat-msg-name"><?= h($m['author_name']) ?></span>
+                    <span class="chat-msg-time"><?= h(chat_format_message_time($m['created_at'])) ?></span>
+                  </div>
+                <?php endif; ?>
+                <div class="chat-msg-text<?= $deleted ? ' chat-msg-deleted' : '' ?>"><?= $deleted
+                  ? '<em>This message was deleted.</em>'
+                  : nl2br(h($m['content'])) . ($edited ? ' <span class="chat-msg-edited">(edited)</span>' : '')
+                ?></div>
+              </div>
+            </div>
+          <?php
+              $prevAuthor = $m['user_id'];
+              $prevTs     = $msgTs;
+            endforeach;
+          ?>
+        <?php endif; ?>
+      </div>
+
+      <form class="chat-composer" id="chatComposer" data-conversation-id="<?= (int)$currentDm['id'] ?>" autocomplete="off">
+        <textarea
+          class="chat-composer-input"
+          id="chatComposerInput"
+          name="content"
+          placeholder="Message <?= h(chat_dm_display_name($currentDm)) ?>"
+          rows="1"
+          maxlength="40000"
+          required></textarea>
+        <button type="submit" class="chat-composer-send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </form>
+    <?php elseif (empty($userChannels) && empty($userDms)): ?>
       <div class="chat-empty">
         <div class="chat-empty-title">Welcome to Anton Chat.</div>
-        <div class="chat-empty-sub">Get started by creating your first channel.</div>
-        <button type="button" class="chat-cta" data-action="open-create-channel">Create a channel</button>
+        <div class="chat-empty-sub">Get started by creating a channel, or sending someone a direct message.</div>
+        <div class="chat-empty-actions">
+          <button type="button" class="chat-cta" data-action="open-create-channel">Create a channel</button>
+          <button type="button" class="chat-btn" data-action="open-new-dm">Start a DM</button>
+        </div>
       </div>
     <?php else: ?>
       <div class="chat-empty">
-        <div class="chat-empty-title">Pick a channel.</div>
-        <div class="chat-empty-sub">Choose a channel in the sidebar, or browse all public channels.</div>
-        <button type="button" class="chat-cta" data-action="open-browse-channels">Browse channels</button>
+        <div class="chat-empty-title">Pick a conversation.</div>
+        <div class="chat-empty-sub">Choose a channel or DM in the sidebar, or browse all public channels.</div>
+        <div class="chat-empty-actions">
+          <button type="button" class="chat-cta" data-action="open-browse-channels">Browse channels</button>
+          <button type="button" class="chat-btn" data-action="open-new-dm">Start a DM</button>
+        </div>
       </div>
     <?php endif; ?>
   </section>
@@ -290,6 +401,28 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
   </div>
 </dialog>
 
+<dialog class="chat-modal chat-modal-wide" id="modalNewDm" aria-labelledby="modalNewDmTitle">
+  <div class="chat-modal-form">
+    <h2 class="chat-modal-title" id="modalNewDmTitle">New direct message</h2>
+    <p class="chat-modal-help">Pick one person for a private 1-on-1, or several for a group (up to 8 total including you).</p>
+
+    <input type="text" id="newDmSearch" class="chat-modal-search" placeholder="Search people…" autocomplete="off">
+
+    <div class="chat-modal-body" id="newDmPeopleList">
+      <div class="chat-modal-loading">Loading…</div>
+    </div>
+
+    <div class="chat-modal-footer-meta" id="newDmSelectedCount">No one selected</div>
+
+    <div class="chat-modal-err" id="newDmErr" role="alert" hidden></div>
+
+    <div class="chat-modal-actions">
+      <button type="button" class="chat-btn" data-action="close-modal">Cancel</button>
+      <button type="button" class="chat-btn chat-btn-primary" id="newDmStartBtn" disabled>Start DM</button>
+    </div>
+  </div>
+</dialog>
+
 </main>
 </div>
 
@@ -301,6 +434,7 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     currentUserId: <?= (int)$uid ?>,
     currentChannelId: <?= $currentChannel ? (int)$currentChannel['id'] : 'null' ?>,
     currentChannelSlug: <?= $currentChannel ? json_encode($currentChannel['slug']) : 'null' ?>,
+    currentConversationId: <?= $currentDm ? (int)$currentDm['id'] : 'null' ?>,
     lastEventId: <?= (int)$lastEventId ?>
   };
 </script>
