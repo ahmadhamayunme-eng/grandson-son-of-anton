@@ -886,7 +886,7 @@ function chat_sanitize_html(string $html): string {
 
   static $allowedTags = [
     'p', 'br',
-    'strong', 'b', 'em', 'i', 's', 'u',
+    'strong', 'b', 'em', 'i', 's', 'strike', 'u',
     'code', 'pre',
     'ul', 'ol', 'li',
     'blockquote',
@@ -983,7 +983,42 @@ function chat_render_message_content(string $content, int $workspaceId): string 
   } else {
     $html = chat_markdown($content);
   }
+  // Auto-link bare URLs that the user typed without using the link toolbar.
+  // The markdown path already does this; the HTML path didn't, so a typed
+  // "https://example.com" rendered as plain text. Same skip-list as mentions
+  // (don't double-wrap inside existing <a>, <code>, <pre>).
+  $html = chat_apply_autolinks_outside_protected($html);
   return chat_apply_mentions_outside_protected($html, $users);
+}
+
+/**
+ * Find bare http(s) URLs in HTML text content (outside <a>, <code>, <pre>)
+ * and wrap them in clickable <a target="_blank"> tags.
+ */
+function chat_apply_autolinks_outside_protected(string $html): string {
+  $pattern = '#(<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<a\b[^>]*>.*?</a>)#si';
+  $parts = preg_split($pattern, $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+  $result = '';
+  foreach ($parts as $i => $part) {
+    if ($i % 2 === 0) {
+      // Non-protected fragment — auto-link URLs. The regex matches http/https
+      // schemes followed by a typical URL body, stopping at whitespace or
+      // HTML angle brackets so we don't eat past the surrounding tags.
+      $result .= preg_replace_callback(
+        '#(?<![">\w])(https?://[^\s<>"]+)#i',
+        function ($m) {
+          $url = rtrim($m[1], ".,);:!?]");
+          $trail = substr($m[1], strlen($url));
+          return '<a href="' . htmlspecialchars($url, ENT_QUOTES) . '" target="_blank" rel="noopener noreferrer">'
+               . htmlspecialchars($url, ENT_QUOTES) . '</a>' . $trail;
+        },
+        $part
+      );
+    } else {
+      $result .= $part;
+    }
+  }
+  return $result;
 }
 
 // ---- Saved messages -------------------------------------------------------

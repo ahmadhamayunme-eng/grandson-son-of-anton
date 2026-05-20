@@ -12,12 +12,66 @@ $avatarUrl = user_avatar_url((int)($u['id'] ?? 0));
 function nav_active(string $key, string $current): string {
   return $key === $current ? ' active' : '';
 }
-function nav_item_html(string $href, string $key, string $label, string $iconSvg, string $activeKey): string {
+function nav_item_html(string $href, string $key, string $label, string $iconSvg, string $activeKey, int $badge = 0): string {
   $cls = 'nav-item' . nav_active($key, $activeKey);
+  $badgeHtml = '';
+  if ($badge > 0) {
+    $txt = $badge > 99 ? '99+' : (string)$badge;
+    $badgeHtml = ' <span class="nav-item-badge">' . h($txt) . '</span>';
+  }
   return '<a class="' . $cls . '" data-key="' . h($key) . '" href="' . h($href) . '">'
        . $iconSvg
-       . h($label) . '</a>';
+       . h($label) . $badgeHtml . '</a>';
 }
+
+/**
+ * Total unread chat messages across every channel + DM the user belongs to.
+ * Returns 0 if the chat tables don't exist yet (fresh install) or anything
+ * else goes wrong — the nav should never fatal because of this badge.
+ */
+function nav_chat_unread_total(int $userId, int $workspaceId): int {
+  if ($userId <= 0 || $workspaceId <= 0) return 0;
+  try {
+    $pdo = db();
+    $chStmt = $pdo->prepare(
+      "SELECT IFNULL(SUM(
+         (SELECT COUNT(*) FROM chat_messages m
+          WHERE m.channel_id = cm.channel_id
+            AND m.parent_message_id IS NULL
+            AND m.deleted_at IS NULL
+            AND m.user_id != ?
+            AND m.id > IFNULL(cm.last_read_message_id, 0))
+       ), 0) AS n
+       FROM chat_channel_members cm
+       JOIN chat_channels c ON c.id = cm.channel_id
+       WHERE cm.user_id = ? AND c.workspace_id = ? AND c.archived_at IS NULL"
+    );
+    $chStmt->execute([$userId, $userId, $workspaceId]);
+    $ch = (int)$chStmt->fetchColumn();
+
+    $dmStmt = $pdo->prepare(
+      "SELECT IFNULL(SUM(
+         (SELECT COUNT(*) FROM chat_messages m
+          WHERE m.conversation_id = dm.conversation_id
+            AND m.parent_message_id IS NULL
+            AND m.deleted_at IS NULL
+            AND m.user_id != ?
+            AND m.id > IFNULL(dm.last_read_message_id, 0))
+       ), 0) AS n
+       FROM chat_direct_conversation_members dm
+       JOIN chat_direct_conversations c ON c.id = dm.conversation_id
+       WHERE dm.user_id = ? AND c.workspace_id = ?"
+    );
+    $dmStmt->execute([$userId, $userId, $workspaceId]);
+    $dm = (int)$dmStmt->fetchColumn();
+
+    return $ch + $dm;
+  } catch (Throwable $e) {
+    return 0;
+  }
+}
+
+$navChatUnread = nav_chat_unread_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
 
 $icons = [
   'dashboard' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>',
@@ -38,6 +92,25 @@ $icons = [
   'logout'    => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
 ];
 ?>
+<style>
+  /* Chat unread badge on the nav item — small red pill, rendered by
+     nav_item_html when $badge > 0. Lives here so it's available on every
+     AntonX page without touching anton.css. */
+  .nav-item .nav-item-badge {
+    margin-left: auto;
+    background: oklch(0.70 0.20 25);
+    color: #fff;
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 10px;
+    min-width: 16px;
+    text-align: center;
+  }
+  .nav-item.active .nav-item-badge { background: oklch(0.70 0.20 25); color: #fff; }
+</style>
 <aside class="sidebar">
   <a class="brand" href="dashboard.php" aria-label="anton x">
     <span class="brand-logo"><?= file_get_contents(__DIR__ . '/antonx-logo.svg') ?></span>
@@ -45,7 +118,7 @@ $icons = [
   <nav class="nav" id="antonNav">
     <?= nav_item_html('dashboard.php', 'dashboard', 'Dashboard', $icons['dashboard'], $activeKey) ?>
     <?= nav_item_html('search.php', 'search', 'Search', $icons['search'], $activeKey) ?>
-    <?= nav_item_html('chat/', 'chat', 'Chat', $icons['chat'], $activeKey) ?>
+    <?= nav_item_html('chat/', 'chat', 'Chat', $icons['chat'], $activeKey, $navChatUnread) ?>
     <?= nav_item_html('my_tasks.php', 'my-tasks', 'My Tasks', $icons['my-tasks'], $activeKey) ?>
     <?= nav_item_html('clients.php', 'clients', 'Clients', $icons['clients'], $activeKey) ?>
     <?= nav_item_html('projects.php', 'projects', 'Projects', $icons['projects'], $activeKey) ?>
