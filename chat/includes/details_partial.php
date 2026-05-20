@@ -56,7 +56,7 @@ $createdAt = (string)($ch['created_at'] ?? '');
         $initials = function_exists('user_initials') ? user_initials($name) : strtoupper(substr($name, 0, 2));
       ?>
         <div class="member-row" data-user-id="<?= (int)$mu['id'] ?>">
-          <span class="av av-sm" data-initials="<?= h($initials) ?>"><?= h($initials) ?><span class="presence dot-presence" data-user-id="<?= (int)$mu['id'] ?>"></span></span>
+          <span class="av av-sm" data-av-color="<?= (int)$mu['id'] % 8 ?>" data-initials="<?= h($initials) ?>"><?= h($initials) ?><span class="presence dot-presence" data-user-id="<?= (int)$mu['id'] ?>"></span></span>
           <div class="info">
             <div class="nm"><?= h($name) ?></div>
             <div class="rl"><?= h((string)($mu['role_name'] ?? 'Member')) ?></div>

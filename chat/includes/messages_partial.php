@@ -77,7 +77,7 @@ foreach ($currentMessages as $m):
           $name = (string)$m['author_name'];
           $initials = function_exists('user_initials') ? user_initials($name) : strtoupper(substr($name, 0, 2));
         ?>
-          <span class="av" data-user-id="<?= $u ?>" data-initials="<?= h($initials) ?>"><?= h($initials) ?><span class="presence dot-presence" data-user-id="<?= $u ?>"></span></span>
+          <span class="av" data-user-id="<?= $u ?>" data-av-color="<?= $u % 8 ?>" data-initials="<?= h($initials) ?>"><?= h($initials) ?><span class="presence dot-presence" data-user-id="<?= $u ?>"></span></span>
         <?php endif; ?>
       </div>
       <div class="msg-col">
