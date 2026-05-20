@@ -683,7 +683,10 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
 .msg-body p + p { margin-top: 4px; }
 .msg-body strong, .msg-body b { font-weight: 700; color: var(--fg-0); }
 .msg-body em, .msg-body i { font-style: italic; }
-.msg-body s, .msg-body del { color: var(--fg-2); }
+.msg-body s, .msg-body del, .msg-body strike {
+  color: var(--fg-2);
+  text-decoration: line-through;
+}
 .msg-body ul, .msg-body ol { margin: 4px 0 4px 22px; padding: 0; }
 .msg-body li { margin: 0; }
 .msg-body blockquote {
@@ -1034,7 +1037,21 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   max-width: 140px;
 }
-.pending-file-meta { color: var(--fg-2); font-size: 11px; }
+.pending-file-meta { color: var(--fg-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pending-file-bar {
+  display: block;
+  height: 3px;
+  background: var(--bg-0);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.pending-file-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 120ms linear;
+}
 .pending-file-remove {
   background: transparent;
   border: 0;

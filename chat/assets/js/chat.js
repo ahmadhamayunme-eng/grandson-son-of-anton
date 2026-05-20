@@ -211,7 +211,7 @@
       switch (format) {
         case 'bold':   document.execCommand('bold');          break;
         case 'italic': document.execCommand('italic');        break;
-        case 'strike': document.execCommand('strikeThrough'); break;
+        case 'strike': wrapInline(input, 's'); break;  // Browsers emit <strike> via execCommand; wrap as <s> directly so the server-side allowlist keeps it.
         case 'ul':     document.execCommand('insertUnorderedList'); break;
         case 'ol':     document.execCommand('insertOrderedList');   break;
         case 'quote':  document.execCommand('formatBlock', false, 'BLOCKQUOTE'); break;
@@ -1127,56 +1127,87 @@
     var thumbHtml = isImage
       ? '<img src="' + URL.createObjectURL(file) + '" alt="">'
       : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+    var totalLabel = formatBytes(file.size || 0);
 
     pendingEl.insertAdjacentHTML('beforeend',
       '<div class="pending-file pending-file-uploading" data-tmp-id="' + tempId + '">' +
         '<span class="pending-file-thumb">' + thumbHtml + '</span>' +
         '<span class="pending-file-info">' +
           '<span class="pending-file-name">' + escapeHtml(file.name) + '</span>' +
-          '<span class="pending-file-meta">Uploading…</span>' +
+          '<span class="pending-file-meta">0 B / ' + escapeHtml(totalLabel) + ' (0%)</span>' +
+          '<span class="pending-file-bar"><span class="pending-file-bar-fill" style="width:0%"></span></span>' +
         '</span>' +
         '<button type="button" class="pending-file-remove" data-action="remove-pending-file" data-tmp-id="' + tempId + '" data-pending-id="' + pendingId + '">×</button>' +
       '</div>');
 
-    var fd = new FormData();
-    fd.append('file', file);
-    fetch('/chat/api/upload.php', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' },
-      body: fd
-    }).then(function (r) {
-      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
-    }).then(function (res) {
-      var pill = pendingEl.querySelector('[data-tmp-id="' + tempId + '"]');
-      if (!res.ok) {
-        if (pill) {
-          pill.classList.remove('pending-file-uploading');
-          pill.classList.add('pending-file-error');
-          var meta = pill.querySelector('.pending-file-meta');
-          if (meta) meta.textContent = (res.data && res.data.message) || 'Upload failed';
-        }
+    // Real upload progress requires XMLHttpRequest — fetch() can't expose
+    // upload.onprogress events. We keep the rest of the API contract identical
+    // (X-CSRF-Token header, multipart with one "file" field, JSON response).
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/chat/api/upload.php', true);
+    xhr.setRequestHeader('X-CSRF-Token', CSRF);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.withCredentials = true;
+
+    function pill() { return pendingEl.querySelector('[data-tmp-id="' + tempId + '"]'); }
+    function setMeta(text) {
+      var p = pill(); if (!p) return;
+      var meta = p.querySelector('.pending-file-meta');
+      if (meta) meta.textContent = text;
+    }
+    function setBar(pct) {
+      var p = pill(); if (!p) return;
+      var fill = p.querySelector('.pending-file-bar-fill');
+      if (fill) fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    }
+    function markError(msg) {
+      var p = pill(); if (!p) return;
+      p.classList.remove('pending-file-uploading');
+      p.classList.add('pending-file-error');
+      setMeta(msg || 'Upload failed');
+      var bar = p.querySelector('.pending-file-bar');
+      if (bar) bar.remove();
+    }
+
+    xhr.upload.addEventListener('progress', function (e) {
+      if (!e.lengthComputable) {
+        setMeta(formatBytes(e.loaded || 0) + ' / ' + totalLabel);
         return;
       }
-      var f = res.data.file;
+      var pct = Math.round((e.loaded / e.total) * 100);
+      setMeta(formatBytes(e.loaded) + ' / ' + formatBytes(e.total) + ' (' + pct + '%)');
+      setBar(pct);
+    });
+
+    xhr.onload = function () {
+      var data = null;
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch (err) { data = null; }
+      var ok = xhr.status >= 200 && xhr.status < 300;
+      var p = pill();
+      if (!ok || !data || !data.file) {
+        markError((data && data.message) || 'Upload failed (' + xhr.status + ')');
+        return;
+      }
+      var f = data.file;
       pendingFilesFor(pendingId).push(f.id);
-      if (pill) {
-        pill.classList.remove('pending-file-uploading');
-        pill.setAttribute('data-file-id', f.id);
-        var meta = pill.querySelector('.pending-file-meta');
-        if (meta) meta.textContent = formatBytes(parseInt(f.size, 10) || 0);
-        var rm = pill.querySelector('.pending-file-remove');
+      if (p) {
+        p.classList.remove('pending-file-uploading');
+        p.setAttribute('data-file-id', f.id);
+        setBar(100);
+        setMeta(formatBytes(parseInt(f.size, 10) || 0));
+        var bar = p.querySelector('.pending-file-bar');
+        if (bar) bar.remove();
+        var rm = p.querySelector('.pending-file-remove');
         if (rm) rm.setAttribute('data-file-id', f.id);
       }
-    }).catch(function () {
-      var pill = pendingEl.querySelector('[data-tmp-id="' + tempId + '"]');
-      if (pill) {
-        pill.classList.remove('pending-file-uploading');
-        pill.classList.add('pending-file-error');
-        var meta = pill.querySelector('.pending-file-meta');
-        if (meta) meta.textContent = 'Network error';
-      }
-    });
+    };
+    xhr.onerror   = function () { markError('Network error'); };
+    xhr.onabort   = function () { markError('Upload cancelled'); };
+    xhr.ontimeout = function () { markError('Upload timed out'); };
+
+    var fd = new FormData();
+    fd.append('file', file);
+    xhr.send(fd);
   }
   function removePendingFile(btn) {
     var pill = btn.closest('.pending-file');
