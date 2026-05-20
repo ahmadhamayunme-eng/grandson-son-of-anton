@@ -939,7 +939,13 @@ function chat_sanitize_html(string $html): string {
         // Tag-specific extra validation.
         if ($tag === 'a') {
           $href = $child->getAttribute('href');
-          if ($href !== '' && !preg_match('#^(https?:|mailto:|/|#)#i', $href)) {
+          // Allow http/https/mailto + path-relative (/) + hash anchors (#).
+          // NB: the regex delimiter must NOT be `#`, since `#` appears inside
+          // the pattern; using `~` keeps the inner `#` literal without
+          // accidentally ending the pattern early (which previously broke
+          // EVERY link — preg_match returned false, !false = true, so the
+          // href was stripped off every <a> tag on sanitization).
+          if ($href !== '' && !preg_match('~^(https?:|mailto:|/|#)~i', $href)) {
             $child->removeAttribute('href');
           }
           if ($child->hasAttribute('href')) {
