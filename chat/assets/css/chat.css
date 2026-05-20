@@ -1208,6 +1208,14 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
    MODALS
    ============================================================ */
 .cx-modal {
+  /* Force every modal dialog to render dead-center on the viewport — the
+     native dialog auto-center can be defeated by ancestor stacking / our
+     own height:100vh body lock. Explicit fixed + translate is bulletproof. */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
   background: var(--bg-3);
   border: 1px solid var(--line-1);
   border-radius: var(--r-lg);
@@ -1216,7 +1224,9 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
   width: min(440px, calc(100% - 32px));
   max-height: 80vh;
   box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  z-index: 1000;
 }
+.cx-modal:not([open]) { display: none; }
 .cx-modal::backdrop {
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(2px);
