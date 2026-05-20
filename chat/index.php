@@ -162,6 +162,7 @@ $unreadCounts  = chat_unread_counts_for_user($ws, $uid);
 $mentionCounts = chat_mention_counts_for_user($ws, $uid);
 $presenceMap   = chat_presence_state_map($ws);
 $userPrefs     = chat_load_user_prefs($uid);
+$statusMap     = chat_load_status_map($ws);
 
 // Inbox unread = total unread DMs + mention count across channels.
 $inboxBadge = array_sum($unreadCounts['dms']) + array_sum($mentionCounts);
@@ -278,10 +279,18 @@ if ($currentChannel) {
   <aside class="cx-sidebar">
     <div class="ws-header">
       <div class="ws-name"><span><?= h($workspaceName) ?></span></div>
-      <div class="ws-meta">
+      <button type="button" class="ws-meta ws-meta-btn" data-action="open-user-menu" aria-label="Open profile menu">
         <span class="dot-presence presence-active" data-user-id="<?= (int)$uid ?>"></span>
-        <span><?= h($user['name']) ?> · <span class="ws-role"><?= h($user['role_name'] ?? 'Member') ?></span></span>
-      </div>
+        <span class="ws-name-inline"><?= h($user['name']) ?></span>
+        <span
+          class="ws-status-emoji"
+          data-status-user-id="<?= (int)$uid ?>"
+          title="<?= h((string)($userPrefs['status_text'] ?? '')) ?>"
+          <?= empty($userPrefs['status_emoji']) ? 'hidden' : '' ?>
+        ><?= h((string)($userPrefs['status_emoji'] ?? '')) ?></span>
+        <span class="ws-role">· <?= h($user['role_name'] ?? 'Member') ?></span>
+        <svg class="ws-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
     </div>
 
     <div class="side-search">
@@ -385,6 +394,9 @@ if ($currentChannel) {
                 <span class="dot-presence" style="background:var(--fg-3)"></span>
               <?php endif; ?>
               <span class="name"><?= h($name) ?></span>
+              <?php if ($isOneOnOne): ?>
+                <span class="side-status-emoji" data-status-user-id="<?= $otherId ?>" hidden></span>
+              <?php endif; ?>
               <?php if ($unread > 0): ?><span class="badge"><?= $unread > 99 ? '99+' : $unread ?></span><?php endif; ?>
             </a>
           <?php endforeach; ?>
@@ -636,6 +648,20 @@ if ($currentChannel) {
 <div class="cx-popmenu" id="chatChannelMenu" hidden>
   <button type="button" data-action="leave-channel" class="cx-popmenu-danger"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave channel</button>
 </div>
+<div class="cx-popmenu cx-popmenu-user" id="chatUserMenu" hidden>
+  <div class="cx-popmenu-header">
+    <div class="cx-popmenu-name"><?= h($user['name']) ?></div>
+    <div class="cx-popmenu-sub"><span class="dot-presence presence-active" data-user-id="<?= (int)$uid ?>"></span> Active</div>
+  </div>
+  <button type="button" data-action="open-status-modal">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg>
+    Update your status
+  </button>
+  <button type="button" data-action="open-prefs">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+    Preferences
+  </button>
+</div>
 
 <!-- ===== Modals — re-styled to design tokens ===== -->
 <dialog class="cx-modal" id="modalCmdk" aria-label="Quick switcher">
@@ -793,6 +819,47 @@ if ($currentChannel) {
   </form>
 </dialog>
 
+<dialog class="cx-modal" id="modalStatus" aria-labelledby="modalStatusTitle">
+  <form class="cx-modal-form" id="statusForm">
+    <h2 class="cx-modal-title" id="modalStatusTitle">Set a status</h2>
+    <div class="status-input-row">
+      <button type="button" class="status-emoji-btn" id="statusEmojiBtn" data-action="toggle-status-emoji-grid" aria-label="Pick emoji">
+        <span id="statusEmojiValue"><?= h((string)($userPrefs['status_emoji'] ?? '😀')) ?></span>
+      </button>
+      <input type="text" id="statusTextInput" maxlength="120" placeholder="What's your status?" value="<?= h((string)($userPrefs['status_text'] ?? '')) ?>" autocomplete="off">
+    </div>
+    <div class="status-emoji-grid" id="statusEmojiGrid" hidden>
+      <?php foreach (['😀','😎','🤔','😴','🎯','📝','💻','📊','🚀','🔥','✨','💡','📞','📧','🍵','☕','🍕','🎉','❤️','👀','🙌','🎧','📚','🌴','🏖️','🤒','🚶','🛒','🚗','🏠','🌙','⏰'] as $em): ?>
+        <button type="button" class="status-emoji-cell" data-emoji="<?= h($em) ?>"><?= h($em) ?></button>
+      <?php endforeach; ?>
+    </div>
+    <div class="status-presets">
+      <button type="button" class="status-preset" data-emoji="📅" data-text="In a meeting"  data-expires="3600">📅 In a meeting</button>
+      <button type="button" class="status-preset" data-emoji="🍵" data-text="On a break"    data-expires="1800">🍵 On a break</button>
+      <button type="button" class="status-preset" data-emoji="🏖️" data-text="Out of office" data-expires="86400">🏖️ Out of office</button>
+      <button type="button" class="status-preset" data-emoji="🤒" data-text="Out sick"      data-expires="86400">🤒 Out sick</button>
+      <button type="button" class="status-preset" data-emoji="🚶" data-text="Working from home" data-expires="0">🚶 Working from home</button>
+      <button type="button" class="status-preset" data-emoji="🎧" data-text="Focused, please DM" data-expires="0">🎧 Focused, please DM</button>
+    </div>
+    <label class="cx-modal-field">
+      <span class="cx-modal-label">Clear after</span>
+      <select id="statusExpiresSelect">
+        <option value="0">Don't clear</option>
+        <option value="1800">30 minutes</option>
+        <option value="3600">1 hour</option>
+        <option value="14400">4 hours</option>
+        <option value="86400">Today</option>
+      </select>
+    </label>
+    <div class="cx-modal-err" id="statusErr" role="alert" hidden></div>
+    <div class="cx-modal-actions">
+      <button type="button" class="cx-btn" data-action="clear-status">Clear status</button>
+      <button type="button" class="cx-btn" data-action="close-modal">Cancel</button>
+      <button type="submit" class="cx-btn cx-btn-primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
 </main>
 </div>
 
@@ -810,6 +877,7 @@ if ($currentChannel) {
     unreadCounts:       <?= json_encode($unreadCounts) ?>,
     mentionCounts:      <?= json_encode($mentionCounts) ?>,
     presenceMap:        <?= json_encode($presenceMap) ?>,
+    statusMap:          <?= json_encode((object)$statusMap) ?>,
     prefs:              <?= json_encode($userPrefs) ?>
   };
 </script>
