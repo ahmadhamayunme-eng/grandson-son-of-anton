@@ -45,7 +45,10 @@ if (empty($currentMessages)): ?>
       <?php if ($deleted): ?>
         <div class="chat-msg-text chat-msg-deleted"><em>This message was deleted.</em></div>
       <?php elseif ($hasContent): ?>
-        <div class="chat-msg-text"><?= $m['content_html'] ?? nl2br(h((string)($m['content'] ?? ''))) ?><?php if ($edited): ?> <span class="chat-msg-edited">(edited)</span><?php endif; ?></div>
+        <?php // data-raw-content carries the raw markdown for the inline editor
+              // (Phase 9). Kept as an attribute so the editor doesn't need a
+              // server round-trip to fetch the source. ?>
+        <div class="chat-msg-text" data-raw-content="<?= h((string)($m['content'] ?? '')) ?>"><?= $m['content_html'] ?? nl2br(h((string)($m['content'] ?? ''))) ?><?php if ($edited): ?> <span class="chat-msg-edited">(edited)</span><?php endif; ?></div>
       <?php endif; ?>
       <?php if (!$deleted && !empty($files)): ?>
         <div class="chat-msg-files">
@@ -103,6 +106,11 @@ if (empty($currentMessages)): ?>
         <button type="button" class="chat-msg-action" data-action="open-thread" data-msg-id="<?= (int)$m['id'] ?>" title="Reply in thread">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
         </button>
+        <?php if ((int)$m['user_id'] === (int)$uid): ?>
+          <button type="button" class="chat-msg-action" data-action="open-msg-menu" data-msg-id="<?= (int)$m['id'] ?>" title="More">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        <?php endif; ?>
       </div>
     <?php endif; ?>
   </div>

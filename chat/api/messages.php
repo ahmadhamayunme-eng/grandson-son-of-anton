@@ -31,9 +31,11 @@ $pdo  = db();
 $action = (string)($_GET['action'] ?? '');
 
 switch ($action) {
-  case 'list': msg_action_list($pdo, $ws, $uid);
-  case 'send': msg_action_send($pdo, $ws, $uid, $user);
-  default:     chat_json_error('unknown_action', "Unknown action: $action", 400);
+  case 'list':   msg_action_list($pdo, $ws, $uid);
+  case 'send':   msg_action_send($pdo, $ws, $uid, $user);
+  case 'edit':   msg_action_edit($pdo, $ws, $uid);
+  case 'delete': msg_action_delete($pdo, $ws, $uid);
+  default:       chat_json_error('unknown_action', "Unknown action: $action", 400);
 }
 
 function msg_action_list(PDO $pdo, int $ws, int $uid): never {
@@ -275,4 +277,100 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
     'reply_count'       => 0,
     'files'             => $attachedFiles,
   ]], 201);
+}
+
+function msg_action_edit(PDO $pdo, int $ws, int $uid): never {
+  chat_api_require_post();
+  chat_api_require_csrf();
+
+  $messageId = (int)($_POST['message_id'] ?? 0);
+  $content   = trim((string)($_POST['content'] ?? ''));
+
+  if ($messageId <= 0)          chat_json_error('bad_request', 'Missing message_id.', 400);
+  if ($content === '')          chat_json_error('bad_request', 'Message is empty.', 400);
+  if (strlen($content) > 40000) chat_json_error('too_long',    'Message exceeds 40,000 characters.', 400);
+
+  $stmt = $pdo->prepare('SELECT * FROM chat_messages WHERE id = ?');
+  $stmt->execute([$messageId]);
+  $msg = $stmt->fetch();
+  if (!$msg)                                 chat_json_error('not_found', 'Message not found.', 404);
+  if ((int)$msg['workspace_id'] !== $ws)     chat_json_error('forbidden', '', 403);
+  if ((int)$msg['user_id']      !== $uid)    chat_json_error('forbidden', 'Only the author can edit.', 403);
+  if ($msg['deleted_at']        !== null)    chat_json_error('gone',      'Cannot edit a deleted message.', 410);
+
+  $now = now();
+  $pdo->beginTransaction();
+  try {
+    // Re-parse mentions: drop the old rows first.
+    $del = $pdo->prepare('DELETE FROM chat_mentions WHERE message_id = ?');
+    $del->execute([$messageId]);
+
+    $upd = $pdo->prepare('UPDATE chat_messages SET content = ?, edited_at = ? WHERE id = ?');
+    $upd->execute([$content, $now, $messageId]);
+
+    chat_parse_and_store_mentions($messageId, $content, $ws);
+
+    $payload = [];
+    if ($msg['parent_message_id'] !== null) $payload['parent_message_id'] = (int)$msg['parent_message_id'];
+    chat_emit_event(
+      $ws, 'message_edited',
+      $msg['channel_id']      !== null ? (int)$msg['channel_id']      : null,
+      $msg['conversation_id'] !== null ? (int)$msg['conversation_id'] : null,
+      $messageId, $uid,
+      empty($payload) ? null : $payload
+    );
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    throw $e;
+  }
+
+  chat_json(['message' => [
+    'id'           => $messageId,
+    'content'      => $content,
+    'content_html' => chat_render_message_content($content, $ws),
+    'edited_at'    => $now,
+  ]]);
+}
+
+function msg_action_delete(PDO $pdo, int $ws, int $uid): never {
+  chat_api_require_post();
+  chat_api_require_csrf();
+
+  $messageId = (int)($_POST['message_id'] ?? 0);
+  if ($messageId <= 0) chat_json_error('bad_request', 'Missing message_id.', 400);
+
+  $stmt = $pdo->prepare('SELECT * FROM chat_messages WHERE id = ?');
+  $stmt->execute([$messageId]);
+  $msg = $stmt->fetch();
+  if (!$msg)                              chat_json_error('not_found', 'Message not found.', 404);
+  if ((int)$msg['workspace_id'] !== $ws)  chat_json_error('forbidden', '', 403);
+  if ((int)$msg['user_id']      !== $uid) chat_json_error('forbidden', 'Only the author can delete.', 403);
+  // Already deleted → idempotent success.
+  if ($msg['deleted_at'] !== null) chat_json(['ok' => true, 'message_id' => $messageId]);
+
+  $now = now();
+  $pdo->beginTransaction();
+  try {
+    $upd = $pdo->prepare('UPDATE chat_messages SET deleted_at = ? WHERE id = ?');
+    $upd->execute([$now, $messageId]);
+
+    $payload = [];
+    if ($msg['parent_message_id'] !== null) $payload['parent_message_id'] = (int)$msg['parent_message_id'];
+    chat_emit_event(
+      $ws, 'message_deleted',
+      $msg['channel_id']      !== null ? (int)$msg['channel_id']      : null,
+      $msg['conversation_id'] !== null ? (int)$msg['conversation_id'] : null,
+      $messageId, $uid,
+      empty($payload) ? null : $payload
+    );
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    throw $e;
+  }
+
+  chat_json(['ok' => true, 'message_id' => $messageId]);
 }

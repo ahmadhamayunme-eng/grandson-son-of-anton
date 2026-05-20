@@ -231,13 +231,20 @@
   if (msgList) scrollMsgsToBottom();
   if (input) {
     autoresize(input);
-    // Focus the composer so the user can just type.
     requestAnimationFrame(function () { input.focus(); });
     input.addEventListener('input', function () { autoresize(input); });
     input.addEventListener('keydown', function (e) {
-      // Enter = send, Shift+Enter = newline. (Configurable per
-      // chat_user_prefs.enter_to_send in a later phase.)
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // Honour the user's enter_to_send preference (Phase 9). When on:
+      // Enter sends, Shift+Enter newline. When off: Cmd/Ctrl+Enter sends,
+      // Enter is a newline. Mention popup intercepts Enter first.
+      if (e.key !== 'Enter') return;
+      if (enterToSend) {
+        if (e.shiftKey) return;
+        if (mentionPopup && !mentionPopup.hidden && mentionItems.length) return;
+        e.preventDefault();
+        if (composer) composer.dispatchEvent(new Event('submit', { cancelable: true }));
+      } else {
+        if (!(e.metaKey || e.ctrlKey)) return;
         e.preventDefault();
         if (composer) composer.dispatchEvent(new Event('submit', { cancelable: true }));
       }
@@ -689,6 +696,17 @@
           updateMessageReactions(parseInt(ev.message_id, 10), ev.payload.reactions);
         }
         break;
+      case 'message_edited':
+        if (ev.message_id) {
+          applyEditedMessage(parseInt(ev.message_id, 10), {
+            content:      ev.message_content      || '',
+            content_html: ev.message_content_html || '',
+          });
+        }
+        break;
+      case 'message_deleted':
+        if (ev.message_id) applyDeletedMessage(parseInt(ev.message_id, 10));
+        break;
       // Other event types received but not rendered yet — Phase 8 wires up
       // unread + presence; dm_created may want a sidebar refresh someday.
       default:
@@ -991,9 +1009,15 @@
   if (threadInput) {
     threadInput.addEventListener('input', function () { autoresize(threadInput); });
     threadInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        // Let the mention popup intercept first.
+      // Same enter_to_send rule as the main composer (Phase 9).
+      if (e.key !== 'Enter') return;
+      if (enterToSend) {
+        if (e.shiftKey) return;
         if (mentionPopup && !mentionPopup.hidden && mentionItems.length) return;
+        e.preventDefault();
+        threadComposer && threadComposer.dispatchEvent(new Event('submit', { cancelable: true }));
+      } else {
+        if (!(e.metaKey || e.ctrlKey)) return;
         e.preventDefault();
         threadComposer && threadComposer.dispatchEvent(new Event('submit', { cancelable: true }));
       }
@@ -1672,6 +1696,400 @@
     } catch (e) { /* ignore — some browsers throw on Notification() with bad args */ }
   }
 
+  // ===== Phase 9 — shortcuts + menus + edit/delete + prefs ===========
+
+  var userPrefs   = boot.prefs || { enter_to_send: 1, notify_dm: 1, notify_mention: 1, timezone: 'UTC' };
+  var enterToSend = parseInt(userPrefs.enter_to_send, 10) !== 0;
+
+  // --- Cmd/Ctrl+K quick switcher ---------------------------------------
+  var switcherItems = [];
+  var switcherActiveIndex = 0;
+
+  function buildSwitcherItems() {
+    var items = [];
+    document.querySelectorAll('.chat-row[data-channel-id]').forEach(function (el) {
+      var nameEl   = el.querySelector('.chat-row-name');
+      var prefixEl = el.querySelector('.chat-row-prefix');
+      items.push({
+        kind:   'Channel',
+        name:   nameEl   ? nameEl.textContent.trim()   : '',
+        prefix: prefixEl ? prefixEl.textContent.trim() : '#',
+        href:   el.getAttribute('href')
+      });
+    });
+    document.querySelectorAll('.chat-row[data-conversation-id]').forEach(function (el) {
+      var nameEl = el.querySelector('.chat-row-name');
+      items.push({
+        kind:   'DM',
+        name:   nameEl ? nameEl.textContent.trim() : '',
+        prefix: '@',
+        href:   el.getAttribute('href')
+      });
+    });
+    return items;
+  }
+
+  function fuzzyScore(query, text) {
+    if (!query) return 1;
+    query = query.toLowerCase();
+    text  = (text || '').toLowerCase();
+    var direct = text.indexOf(query);
+    if (direct !== -1) return 1000 - direct;       // direct substring wins, earlier > later
+    var qi = 0, score = 0;
+    for (var ti = 0; ti < text.length && qi < query.length; ti++) {
+      if (text[ti] === query[qi]) { qi++; score++; }
+    }
+    return qi === query.length ? score : 0;
+  }
+
+  function openSwitcher() {
+    openDialog('modalSwitcher');
+    var input = $('#switcherInput');
+    if (!input) return;
+    input.value = '';
+    renderSwitcher('');
+    requestAnimationFrame(function () { input.focus(); });
+  }
+
+  function renderSwitcher(query) {
+    var all = buildSwitcherItems();
+    var matches;
+    if (!query) {
+      matches = all.slice(0, 12);
+    } else {
+      matches = all
+        .map(function (i) { return { item: i, score: fuzzyScore(query, i.name) }; })
+        .filter(function (x) { return x.score > 0; })
+        .sort(function (a, b) { return b.score - a.score; })
+        .slice(0, 12)
+        .map(function (x) { return x.item; });
+    }
+    switcherItems = matches;
+    switcherActiveIndex = 0;
+
+    var resultsEl = $('#switcherResults');
+    if (!resultsEl) return;
+    if (!matches.length) {
+      resultsEl.innerHTML = '<div class="chat-search-empty">No matches.</div>';
+      return;
+    }
+    resultsEl.innerHTML = matches.map(function (item, i) {
+      return '<a class="chat-switcher-item' + (i === 0 ? ' active' : '') + '"'
+           + ' href="' + escapeHtml(item.href) + '" data-switcher-index="' + i + '">'
+           +   '<span class="chat-switcher-item-prefix">' + escapeHtml(item.prefix) + '</span>'
+           +   '<span class="chat-switcher-item-name">'   + escapeHtml(item.name)   + '</span>'
+           +   '<span class="chat-switcher-item-kind">'   + escapeHtml(item.kind)   + '</span>'
+           + '</a>';
+    }).join('');
+  }
+
+  function updateSwitcherActive() {
+    $$('.chat-switcher-item').forEach(function (el, i) {
+      if (i === switcherActiveIndex) {
+        el.classList.add('active');
+        if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      } else {
+        el.classList.remove('active');
+      }
+    });
+  }
+
+  var switcherInput = $('#switcherInput');
+  if (switcherInput) {
+    switcherInput.addEventListener('input', function () { renderSwitcher(this.value.trim()); });
+    switcherInput.addEventListener('keydown', function (e) {
+      if (!switcherItems.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        switcherActiveIndex = (switcherActiveIndex + 1) % switcherItems.length;
+        updateSwitcherActive();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        switcherActiveIndex = (switcherActiveIndex - 1 + switcherItems.length) % switcherItems.length;
+        updateSwitcherActive();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        var item = switcherItems[switcherActiveIndex];
+        if (item && item.href) window.location.href = item.href;
+      }
+    });
+  }
+
+  // Global Cmd/Ctrl+K shortcut to open the switcher.
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      openSwitcher();
+    }
+  });
+
+  // --- Preferences modal ---------------------------------------------
+  var prefsForm = $('#prefsForm');
+  function openPrefsModal() {
+    if (prefsForm) {
+      prefsForm.elements['enter_to_send'].checked  = parseInt(userPrefs.enter_to_send,  10) !== 0;
+      prefsForm.elements['notify_dm'].checked      = parseInt(userPrefs.notify_dm,      10) !== 0;
+      prefsForm.elements['notify_mention'].checked = parseInt(userPrefs.notify_mention, 10) !== 0;
+    }
+    var err = $('#prefsErr');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    openDialog('modalPrefs');
+  }
+  if (prefsForm) {
+    prefsForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = prefsForm.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      apiPost('update', 'prefs.php', {
+        enter_to_send:  prefsForm.elements['enter_to_send'].checked  ? '1' : '0',
+        notify_dm:      prefsForm.elements['notify_dm'].checked      ? '1' : '0',
+        notify_mention: prefsForm.elements['notify_mention'].checked ? '1' : '0',
+      }).then(function (res) {
+        if (btn) btn.disabled = false;
+        if (!res.ok) {
+          var err = $('#prefsErr');
+          if (err) { err.textContent = (res.data && res.data.message) || 'Save failed.'; err.hidden = false; }
+          return;
+        }
+        userPrefs   = res.data.prefs || userPrefs;
+        enterToSend = parseInt(userPrefs.enter_to_send, 10) !== 0;
+        closeDialog($('#modalPrefs'));
+      }).catch(function () {
+        if (btn) btn.disabled = false;
+        var err = $('#prefsErr');
+        if (err) { err.textContent = 'Network error.'; err.hidden = false; }
+      });
+    });
+  }
+
+  // --- Message action menu (Edit / Delete) ----------------------------
+  var msgMenuEl       = $('#chatMsgMenu');
+  var msgMenuTargetId = null;
+
+  function openMsgMenu(button, msgId) {
+    if (!msgMenuEl) return;
+    msgMenuTargetId = msgId;
+    // Hide Edit when the message is files-only (no .chat-msg-text).
+    var msgEl   = document.querySelector('.chat-msg[data-msg-id="' + msgId + '"]');
+    var hasText = !!(msgEl && msgEl.querySelector('.chat-msg-text:not(.chat-msg-deleted)'));
+    var editBtn = msgMenuEl.querySelector('[data-action="edit-message"]');
+    if (editBtn) editBtn.style.display = hasText ? '' : 'none';
+
+    msgMenuEl.hidden = false;
+    var rect = button.getBoundingClientRect();
+    var mh   = msgMenuEl.offsetHeight || 80;
+    var top  = rect.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = rect.top - mh - 4;
+    var left = Math.min(window.innerWidth - msgMenuEl.offsetWidth - 8, rect.right - msgMenuEl.offsetWidth);
+    msgMenuEl.style.top  = Math.max(8, top)  + 'px';
+    msgMenuEl.style.left = Math.max(8, left) + 'px';
+  }
+  function closeMsgMenu() {
+    if (msgMenuEl) msgMenuEl.hidden = true;
+    msgMenuTargetId = null;
+  }
+
+  // --- Inline edit ----------------------------------------------------
+  function enterEditMode(msgId) {
+    closeMsgMenu();
+    var msgEl = document.querySelector('.chat-msg[data-msg-id="' + msgId + '"]');
+    if (!msgEl) return;
+    var textEl = msgEl.querySelector('.chat-msg-text:not(.chat-msg-deleted)');
+    if (!textEl || textEl.querySelector('.chat-msg-edit')) return;
+
+    var raw = textEl.getAttribute('data-raw-content') || textEl.textContent || '';
+    textEl.setAttribute('data-original-html', textEl.innerHTML);
+    textEl.innerHTML =
+      '<div class="chat-msg-edit">' +
+        '<textarea class="chat-msg-edit-input">' + escapeHtml(raw) + '</textarea>' +
+        '<div class="chat-msg-edit-actions">' +
+          '<button type="button" class="chat-btn" data-action="cancel-edit" data-msg-id="' + msgId + '">Cancel</button>' +
+          '<button type="button" class="chat-btn chat-btn-primary" data-action="save-edit" data-msg-id="' + msgId + '">Save changes</button>' +
+        '</div>' +
+      '</div>';
+    var ta = textEl.querySelector('textarea');
+    if (ta) {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      ta.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); cancelEdit(msgId); }
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          saveEdit(msgId);
+        }
+      });
+    }
+  }
+  function cancelEdit(msgId) {
+    var textEl = document.querySelector('.chat-msg[data-msg-id="' + msgId + '"] .chat-msg-text');
+    if (!textEl) return;
+    var orig = textEl.getAttribute('data-original-html');
+    if (orig !== null) {
+      textEl.innerHTML = orig;
+      textEl.removeAttribute('data-original-html');
+    }
+  }
+  function saveEdit(msgId) {
+    var msgEl  = document.querySelector('.chat-msg[data-msg-id="' + msgId + '"]');
+    if (!msgEl) return;
+    var textEl = msgEl.querySelector('.chat-msg-text');
+    var ta     = textEl && textEl.querySelector('textarea');
+    if (!ta) return;
+    var newContent = ta.value.trim();
+    if (!newContent) { cancelEdit(msgId); return; }
+    var saveBtn = textEl.querySelector('[data-action="save-edit"]');
+    if (saveBtn) saveBtn.disabled = true;
+    apiPost('edit', 'messages.php', { message_id: msgId, content: newContent })
+      .then(function (res) {
+        if (!res.ok) {
+          if (saveBtn) saveBtn.disabled = false;
+          alert(res.data && res.data.message ? res.data.message : 'Failed to save.');
+          return;
+        }
+        applyEditedMessage(msgId, res.data.message);
+      })
+      .catch(function () {
+        if (saveBtn) saveBtn.disabled = false;
+        alert('Network error.');
+      });
+  }
+  function applyEditedMessage(msgId, msg) {
+    document.querySelectorAll('.chat-msg[data-msg-id="' + msgId + '"]').forEach(function (msgEl) {
+      var textEl = msgEl.querySelector('.chat-msg-text');
+      if (!textEl) return;
+      textEl.setAttribute('data-raw-content', msg.content || '');
+      textEl.removeAttribute('data-original-html');
+      textEl.classList.remove('chat-msg-deleted');
+      textEl.innerHTML = (msg.content_html || nl2br(msg.content || '')) +
+                         ' <span class="chat-msg-edited">(edited)</span>';
+    });
+  }
+  function applyDeletedMessage(msgId) {
+    document.querySelectorAll('.chat-msg[data-msg-id="' + msgId + '"]').forEach(function (msgEl) {
+      var body = msgEl.querySelector('.chat-msg-body');
+      if (!body) return;
+      var existing = body.querySelector('.chat-msg-text');
+      if (existing) {
+        existing.className = 'chat-msg-text chat-msg-deleted';
+        existing.innerHTML = '<em>This message was deleted.</em>';
+        existing.removeAttribute('data-raw-content');
+        existing.removeAttribute('data-original-html');
+      } else {
+        body.insertAdjacentHTML('afterbegin', '<div class="chat-msg-text chat-msg-deleted"><em>This message was deleted.</em></div>');
+      }
+      ['.chat-reactions', '.chat-reply-count', '.chat-msg-files'].forEach(function (sel) {
+        var el = body.querySelector(sel);
+        if (el) el.remove();
+      });
+      var actions = msgEl.querySelector('.chat-msg-actions');
+      if (actions) actions.remove();
+    });
+  }
+
+  // --- Channel header kebab (Leave channel) ---------------------------
+  var channelMenuEl        = $('#chatChannelMenu');
+  var channelMenuChannelId = null;
+
+  function openChannelMenu(button, channelId) {
+    if (!channelMenuEl) return;
+    channelMenuChannelId = channelId;
+    channelMenuEl.hidden = false;
+    var rect = button.getBoundingClientRect();
+    var mh   = channelMenuEl.offsetHeight || 50;
+    var top  = rect.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = rect.top - mh - 4;
+    var left = Math.min(window.innerWidth - channelMenuEl.offsetWidth - 8, rect.right - channelMenuEl.offsetWidth);
+    channelMenuEl.style.top  = Math.max(8, top)  + 'px';
+    channelMenuEl.style.left = Math.max(8, left) + 'px';
+  }
+  function closeChannelMenu() {
+    if (channelMenuEl) channelMenuEl.hidden = true;
+    channelMenuChannelId = null;
+  }
+  function leaveCurrentChannel() {
+    if (!channelMenuChannelId) return;
+    var cid = channelMenuChannelId;
+    closeChannelMenu();
+    if (!confirm('Leave this channel?')) return;
+    apiPost('leave', 'channels.php', { channel_id: cid }).then(function (res) {
+      if (!res.ok) {
+        alert(res.data && res.data.message ? res.data.message : 'Could not leave.');
+        return;
+      }
+      window.location.href = '/chat/';
+    });
+  }
+
+  // Outside-click + Esc close for both menus.
+  document.addEventListener('mousedown', function (e) {
+    if (msgMenuEl && !msgMenuEl.hidden &&
+        !msgMenuEl.contains(e.target) &&
+        !e.target.closest('[data-action="open-msg-menu"]')) {
+      closeMsgMenu();
+    }
+    if (channelMenuEl && !channelMenuEl.hidden &&
+        !channelMenuEl.contains(e.target) &&
+        !e.target.closest('[data-action="open-channel-menu"]')) {
+      closeChannelMenu();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeMsgMenu();
+      closeChannelMenu();
+    }
+  });
+
+  // Add Phase-9 actions to the global delegated click handler.
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-action]');
+    if (!t) return;
+    var action = t.getAttribute('data-action');
+    switch (action) {
+      case 'open-prefs':
+        e.preventDefault();
+        openPrefsModal();
+        break;
+      case 'open-msg-menu':
+        e.preventDefault();
+        e.stopPropagation();
+        openMsgMenu(t, parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'edit-message':
+        e.preventDefault();
+        if (msgMenuTargetId) enterEditMode(msgMenuTargetId);
+        break;
+      case 'delete-message':
+        e.preventDefault();
+        var did = msgMenuTargetId;
+        closeMsgMenu();
+        if (did && confirm('Delete this message? This can\'t be undone.')) {
+          apiPost('delete', 'messages.php', { message_id: did }).then(function (res) {
+            if (!res.ok) alert(res.data && res.data.message ? res.data.message : 'Failed to delete.');
+            else applyDeletedMessage(did);
+          });
+        }
+        break;
+      case 'cancel-edit':
+        e.preventDefault();
+        cancelEdit(parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'save-edit':
+        e.preventDefault();
+        saveEdit(parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'open-channel-menu':
+        e.preventDefault();
+        e.stopPropagation();
+        openChannelMenu(t, parseInt(t.getAttribute('data-channel-id'), 10));
+        break;
+      case 'leave-channel':
+        e.preventDefault();
+        leaveCurrentChannel();
+        break;
+    }
+  });
+
   // ===== Scroll-to-message on URL hash (#msg-N), used by search results.
   function scrollToHashMessage() {
     var hash = String(window.location.hash || '');
@@ -1696,6 +2114,6 @@
       : (CURRENT_CONVERSATION_ID
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : '(no channel)');
-    console.log('[Anton Chat] Phase 8 loaded', where);
+    console.log('[Anton Chat] Phase 9 loaded', where);
   }
 })();
