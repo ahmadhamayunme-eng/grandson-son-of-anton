@@ -29,7 +29,7 @@ switch ($action) {
     chat_api_require_post();
     chat_api_require_csrf();
 
-    $allowed = ['timezone', 'notify_dm', 'notify_mention', 'enter_to_send'];
+    $allowed = ['timezone', 'notify_dm', 'notify_mention', 'enter_to_send', 'dnd'];
     $values  = [];
     foreach ($allowed as $k) {
       if (!array_key_exists($k, $_POST)) continue;
