@@ -103,6 +103,9 @@ if ($currentDm)                   chat_mark_dm_read((int)$currentDm['id'],    $u
 $unreadCounts = chat_unread_counts_for_user($ws, $uid);
 $presenceMap  = chat_presence_map($ws);
 
+// Phase 9 — user prefs (enter_to_send, notify_dm, notify_mention, timezone).
+$userPrefs = chat_load_user_prefs($uid);
+
 $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
 $_chatCssV  = @filemtime(__DIR__ . '/assets/css/chat.css') ?: '1';
 $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
@@ -147,6 +150,9 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
 <div class="chat-shell">
   <aside class="chat-sidebar">
     <header class="chat-ws">
+      <button type="button" class="chat-ws-prefs" data-action="open-prefs" title="Preferences" aria-label="Preferences">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
       <div class="chat-ws-name"><?= h($workspaceName) ?></div>
       <div class="chat-ws-user"><?= h($user['name']) ?> <span class="chat-ws-sep">·</span> <span class="chat-ws-role"><?= h($user['role_name'] ?? 'Member') ?></span></div>
     </header>
@@ -232,6 +238,11 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
             <span class="chat-header-topic"><?= h($currentChannel['topic']) ?></span>
           <?php endif; ?>
         </div>
+        <?php if ($isMember): ?>
+          <button type="button" class="chat-header-kebab" data-action="open-channel-menu" data-channel-id="<?= (int)$currentChannel['id'] ?>" data-channel-slug="<?= h($currentChannel['slug']) ?>" title="Channel options" aria-label="Channel options">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+          </button>
+        <?php endif; ?>
       </header>
 
       <div class="chat-msgs" id="chatMsgs" data-channel-id="<?= (int)$currentChannel['id'] ?>">
@@ -353,6 +364,27 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
      the clicked "Add reaction" button. -->
 <div class="chat-emoji-popup" id="chatEmojiPopup" hidden></div>
 
+<!-- Phase 9 message-action menu (Edit / Delete) — shared, JS positions it
+     near the kebab the user clicked. -->
+<div class="chat-msg-menu" id="chatMsgMenu" hidden>
+  <button type="button" data-action="edit-message">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+    Edit message
+  </button>
+  <button type="button" data-action="delete-message" class="chat-msg-menu-danger">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+    Delete message
+  </button>
+</div>
+
+<!-- Channel header menu (Leave channel) — shared, JS positions near the kebab. -->
+<div class="chat-msg-menu" id="chatChannelMenu" hidden>
+  <button type="button" data-action="leave-channel" class="chat-msg-menu-danger">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+    Leave channel
+  </button>
+</div>
+
 <!-- ===== Modals ===== -->
 <dialog class="chat-modal" id="modalCreateChannel" aria-labelledby="modalCreateChannelTitle">
   <form class="chat-modal-form" id="createChannelForm">
@@ -396,6 +428,44 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
       <button type="button" class="chat-btn" data-action="close-modal">Close</button>
     </div>
   </div>
+</dialog>
+
+<!-- Phase 9 — Cmd/Ctrl+K quick channel/DM switcher. -->
+<dialog class="chat-modal chat-modal-switcher" id="modalSwitcher" aria-labelledby="modalSwitcherTitle">
+  <div class="chat-modal-form chat-modal-form-tight">
+    <h2 class="chat-modal-title chat-sr-only" id="modalSwitcherTitle">Jump to a channel or DM</h2>
+    <input type="text" id="switcherInput" class="chat-switcher-input" placeholder="Jump to a channel or DM…" autocomplete="off">
+    <div class="chat-switcher-results" id="switcherResults"></div>
+  </div>
+</dialog>
+
+<!-- Phase 9 — Preferences modal. -->
+<dialog class="chat-modal" id="modalPrefs" aria-labelledby="modalPrefsTitle">
+  <form class="chat-modal-form" id="prefsForm">
+    <h2 class="chat-modal-title" id="modalPrefsTitle">Preferences</h2>
+
+    <label class="chat-modal-checkbox">
+      <input type="checkbox" name="enter_to_send" value="1" <?= (int)$userPrefs['enter_to_send'] ? 'checked' : '' ?>>
+      <span><strong>Enter</strong> sends the message <span class="chat-modal-optional">(off = use <strong>Ctrl/⌘+Enter</strong> to send instead)</span></span>
+    </label>
+
+    <label class="chat-modal-checkbox">
+      <input type="checkbox" name="notify_dm" value="1" <?= (int)$userPrefs['notify_dm'] ? 'checked' : '' ?>>
+      <span>Browser notification on new direct messages</span>
+    </label>
+
+    <label class="chat-modal-checkbox">
+      <input type="checkbox" name="notify_mention" value="1" <?= (int)$userPrefs['notify_mention'] ? 'checked' : '' ?>>
+      <span>Browser notification on @mentions</span>
+    </label>
+
+    <div class="chat-modal-err" id="prefsErr" role="alert" hidden></div>
+
+    <div class="chat-modal-actions">
+      <button type="button" class="chat-btn" data-action="close-modal">Cancel</button>
+      <button type="submit" class="chat-btn chat-btn-primary">Save</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog class="chat-modal chat-modal-wide chat-modal-search-dialog" id="modalSearch" aria-labelledby="modalSearchTitle">
@@ -479,7 +549,8 @@ $_chatJsV   = @filemtime(__DIR__ . '/assets/js/chat.js') ?: '1';
     currentConversationId: <?= $currentDm ? (int)$currentDm['id'] : 'null' ?>,
     lastEventId: <?= (int)$lastEventId ?>,
     unreadCounts: <?= json_encode($unreadCounts) ?>,
-    presenceMap:  <?= json_encode($presenceMap) ?>
+    presenceMap:  <?= json_encode($presenceMap) ?>,
+    prefs:        <?= json_encode($userPrefs) ?>
   };
 </script>
 <script>

@@ -653,6 +653,39 @@ function chat_presence_ping(int $userId): void {
 }
 
 /**
+ * Load the user's chat-specific preferences. Returns sensible defaults
+ * if the row doesn't exist yet (e.g. a brand-new user who never visited
+ * the Preferences modal).
+ *
+ *   enter_to_send  1 = Enter sends (default), 0 = Cmd/Ctrl+Enter sends
+ *   notify_dm      1 = browser notification on new DMs
+ *   notify_mention 1 = browser notification on @user / @here / @channel
+ *   timezone       IANA tz string, default 'UTC'
+ */
+function chat_load_user_prefs(int $userId): array {
+  $stmt = db()->prepare(
+    'SELECT timezone, notify_dm, notify_mention, enter_to_send
+     FROM chat_user_prefs WHERE user_id = ?'
+  );
+  $stmt->execute([$userId]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    return [
+      'timezone'       => 'UTC',
+      'notify_dm'      => 1,
+      'notify_mention' => 1,
+      'enter_to_send'  => 1,
+    ];
+  }
+  return [
+    'timezone'       => (string)$row['timezone'],
+    'notify_dm'      => (int)$row['notify_dm'],
+    'notify_mention' => (int)$row['notify_mention'],
+    'enter_to_send'  => (int)$row['enter_to_send'],
+  ];
+}
+
+/**
  * Online/offline map for every active user in the workspace.
  *   [ user_id => 1 if last_seen_at within 90s, 0 otherwise ]
  * The 90s threshold matches the spec.
