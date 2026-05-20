@@ -40,9 +40,9 @@
   --f-sans: 'Geist', ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --f-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
 
-  --side-w: 264px;
+  --side-w: 280px;
   --right-w: 320px;
-  --topbar-h: 44px;
+  --topbar-h: 48px;
 }
 
 /* ---- Light mode (derived) ---- */
@@ -74,9 +74,20 @@ html.light {
 }
 
 /* The chat layout overrides .main padding from anton.css so it can host the
-   .cx-app grid edge-to-edge. The chat-app fills the AntonX main area. */
-.main { padding: 0 !important; }
-html, body { overflow: hidden; }
+   .cx-app grid edge-to-edge. We also lock .main to the viewport height so
+   the chat's internal sidebar / top-bar stay fixed and only the message
+   list scrolls. Without this, long channels push the page taller than the
+   viewport and the workspace header scrolls out of view. */
+.main {
+  padding: 0 !important;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+html, body { overflow: hidden; height: 100vh; }
+/* AntonX's outer .app has min-height: 100vh; force it to exactly 100vh on
+   the chat page so a 100vh .main doesn't stretch the whole document. */
+body > .app { height: 100vh; min-height: 100vh; max-height: 100vh; overflow: hidden; }
 
 /* Scope Geist to the chat module so AntonX pages keep Inter. */
 .cx-app, .cx-app input, .cx-app textarea, .cx-app button, .cx-app select {
@@ -94,20 +105,31 @@ html, body { overflow: hidden; }
 .cx-app {
   display: grid;
   grid-template-columns: var(--side-w) 1fr;
+  grid-template-rows: var(--topbar-h) 1fr;
   height: 100%;
+  max-height: 100%;
   background: var(--bg-2);
   color: var(--fg-0);
   overflow: hidden;
+  min-height: 0;
 }
-.cx-app.with-details {
+.cx-app.with-details,
+.cx-app.with-thread {
   grid-template-columns: var(--side-w) 1fr var(--right-w);
 }
 .cx-app.sidebar-collapsed {
   grid-template-columns: 0 1fr;
 }
-.cx-app.sidebar-collapsed.with-details {
+.cx-app.sidebar-collapsed.with-details,
+.cx-app.sidebar-collapsed.with-thread {
   grid-template-columns: 0 1fr var(--right-w);
 }
+.cx-app:not(.with-details) > .details { display: none; }
+.cx-app:not(.with-thread)  > .cx-thread { display: none; }
+.cx-app > .cx-sidebar { grid-row: 2 / 3; grid-column: 1 / 2; min-height: 0; }
+.cx-app > .cx-main    { grid-row: 2 / 3; grid-column: 2 / 3; min-height: 0; }
+.cx-app > .details    { grid-row: 2 / 3; grid-column: 3 / 4; min-height: 0; }
+.cx-app > .cx-thread  { grid-row: 2 / 3; grid-column: 3 / 4; min-height: 0; }
 
 /* ============================================================
    TOP BAR
@@ -181,23 +203,28 @@ html, body { overflow: hidden; }
 .cx-app.sidebar-collapsed .cx-sidebar { display: none; }
 
 .ws-header {
-  padding: 12px 16px 6px;
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--line-0);
 }
 .ws-name {
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--fg-0);
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .ws-meta {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 12px;
   color: var(--fg-2);
 }
-.ws-meta .dot-presence { width: 8px; height: 8px; border-radius: 50%; }
+.ws-meta .ws-role { color: var(--fg-3); }
+.ws-meta .dot-presence { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .ws-meta .ws-role { color: var(--fg-3); }
 
 .side-search { padding: 4px 12px 10px; }
@@ -291,9 +318,10 @@ html, body { overflow: hidden; }
 .side-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  padding: 4px 12px;
+  padding: 5px 14px;
+  min-height: 28px;
   text-decoration: none;
   background: transparent;
   border: 0;
@@ -303,6 +331,7 @@ html, body { overflow: hidden; }
   cursor: pointer;
   text-align: left;
   border-radius: 0;
+  line-height: 1.2;
 }
 .side-item:hover { background: var(--bg-hover); }
 .side-item.active {
@@ -438,6 +467,14 @@ html, body { overflow: hidden; }
   justify-content: center;
 }
 .ch-header .members .stack .stack-av:first-child { margin-left: 0; }
+.ch-header .members .stack .stack-av[data-av-color="0"] { background: oklch(0.45 0.14 75);  }
+.ch-header .members .stack .stack-av[data-av-color="1"] { background: oklch(0.45 0.11 200); }
+.ch-header .members .stack .stack-av[data-av-color="2"] { background: oklch(0.42 0.15 25);  }
+.ch-header .members .stack .stack-av[data-av-color="3"] { background: oklch(0.42 0.14 285); }
+.ch-header .members .stack .stack-av[data-av-color="4"] { background: oklch(0.45 0.12 150); }
+.ch-header .members .stack .stack-av[data-av-color="5"] { background: oklch(0.45 0.14 330); }
+.ch-header .members .stack .stack-av[data-av-color="6"] { background: oklch(0.42 0.12 245); }
+.ch-header .members .stack .stack-av[data-av-color="7"] { background: oklch(0.45 0.13 105); }
 
 .ch-tabs {
   display: flex;
@@ -579,6 +616,16 @@ html.light .msg-group:hover { background: oklch(0.965 0 0); }
   flex-shrink: 0;
 }
 .av-sm { width: 24px; height: 24px; font-size: 10px; border-radius: 6px; }
+/* Per-user avatar tints (data-av-color set on render = user_id mod 8). The
+   design uses distinct colors per author — gold / teal / purple / etc. */
+.av[data-av-color="0"] { background: linear-gradient(135deg, oklch(0.62 0.16 75),  oklch(0.45 0.13 60));  }  /* amber  */
+.av[data-av-color="1"] { background: linear-gradient(135deg, oklch(0.62 0.14 200), oklch(0.45 0.11 220)); }  /* teal   */
+.av[data-av-color="2"] { background: linear-gradient(135deg, oklch(0.55 0.18 25),  oklch(0.40 0.15 25));  }  /* red    */
+.av[data-av-color="3"] { background: linear-gradient(135deg, oklch(0.58 0.16 280), oklch(0.42 0.13 295)); }  /* indigo */
+.av[data-av-color="4"] { background: linear-gradient(135deg, oklch(0.60 0.15 150), oklch(0.45 0.12 150)); }  /* green  */
+.av[data-av-color="5"] { background: linear-gradient(135deg, oklch(0.58 0.18 330), oklch(0.42 0.15 340)); }  /* pink   */
+.av[data-av-color="6"] { background: linear-gradient(135deg, oklch(0.56 0.14 250), oklch(0.42 0.12 240)); }  /* blue   */
+.av[data-av-color="7"] { background: linear-gradient(135deg, oklch(0.60 0.14 110), oklch(0.44 0.12 100)); }  /* olive  */
 .av .presence {
   position: absolute;
   bottom: -1px;

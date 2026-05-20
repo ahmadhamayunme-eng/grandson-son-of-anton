@@ -454,7 +454,8 @@
     } else {
       var initials = initialsOf(msg.author_name);
       var presence = presenceMap[msg.user_id] || 'offline';
-      avHtml = '<span class="av" data-user-id="' + msg.user_id + '" data-initials="' + escapeHtml(initials) + '">'
+      var avColor  = (parseInt(msg.user_id, 10) || 0) % 8;
+      avHtml = '<span class="av" data-user-id="' + msg.user_id + '" data-av-color="' + avColor + '" data-initials="' + escapeHtml(initials) + '">'
              +   escapeHtml(initials)
              +   '<span class="presence dot-presence presence-' + presence + '" data-user-id="' + msg.user_id + '"></span>'
              + '</span>';
@@ -886,8 +887,11 @@
 
   function openThread(parentId) {
     if (!threadPanel || !threadList) return;
+    // Thread and details share the right column — close details when thread opens.
+    if (cxApp && cxApp.classList.contains('with-details')) cxApp.classList.remove('with-details');
     threadParentId = parentId;
     threadPanel.hidden = false;
+    if (cxApp) cxApp.classList.add('with-thread');
     threadList.innerHTML = '<div class="cx-modal-loading">Loading…</div>';
     apiGet('list', 'messages.php', { parent_message_id: parentId })
       .then(function (res) {
@@ -915,6 +919,7 @@
   function closeThread() {
     threadParentId = null;
     if (threadPanel) threadPanel.hidden = true;
+    if (cxApp) cxApp.classList.remove('with-thread');
     if (threadInput) { threadInput.innerHTML = ''; placeholderUpdate(threadInput); }
   }
   function appendThreadMessage(msg) {
@@ -1576,6 +1581,12 @@
   // ===== Details panel =====
   function toggleDetails() {
     if (!cxApp) return;
+    // Close the thread panel first — details + thread share the right column.
+    if (cxApp.classList.contains('with-thread')) {
+      cxApp.classList.remove('with-thread');
+      if (threadPanel) threadPanel.hidden = true;
+      threadParentId = null;
+    }
     cxApp.classList.toggle('with-details');
     if (cxApp.classList.contains('with-details') && currentDetailsTab === 'pinned') {
       loadDetailsPinned();
