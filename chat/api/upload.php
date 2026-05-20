@@ -1,16 +1,24 @@
 <?php
-// /chat/api/upload.php — single-file upload endpoint (Phase 6).
+// /chat/api/upload.php — single-file upload endpoint.
 //
 // Accepts: multipart/form-data with one "file" field, plus the X-CSRF-Token
-// header. Validates MIME (via finfo) + extension matches MIME + size <= 25 MB.
-// Stores the file under chat/uploads/YYYY-MM/<random>.<ext> with random
-// filename, inserts a chat_files row with message_id = NULL (staged),
-// returns { file: { id, name, mime, size, is_image } }.
+// header. Per user directive, no MIME / extension restrictions — any file
+// type is accepted up to a hard 500 MB cap.
+//
+// Defence-in-depth still applies:
+//   * Files are stored with a random name + their original extension.
+//   * chat/uploads/.htaccess denies direct browser access entirely.
+//   * chat/api/file.php gates reads behind workspace + channel membership
+//     and always emits "Content-Disposition: attachment" (except images,
+//     which are inline-displayed) plus "X-Content-Type-Options: nosniff",
+//     so an uploaded .php or .html file can never be executed/rendered.
+//
+// Stores under chat/uploads/YYYY-MM/<random>.<ext>, inserts a chat_files
+// row with message_id = NULL (staged), returns
+// { file: { id, name, mime, size, is_image } }.
 //
 // The file is invisible to anyone except the uploader until messages.php
 // claims it on send (UPDATE chat_files SET message_id = N WHERE id IN ...).
-// Files are never served by direct URL — chat/uploads/.htaccess denies all
-// direct access; reads go through chat/api/file.php.
 
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once __DIR__ . '/../../lib/auth.php';
@@ -42,49 +50,26 @@ if ($f['error'] !== UPLOAD_ERR_OK) {
   chat_json_error('upload_error', $msg, 400);
 }
 
-// 25 MB cap (matches spec). Defence-in-depth — php.ini also caps via
-// upload_max_filesize / post_max_size, which Hostinger usually sets
-// higher than 25 MB.
-$maxBytes = 25 * 1024 * 1024;
+// 500 MB cap (user-configured). php.ini (.user.ini) already raises
+// upload_max_filesize / post_max_size to 1024M so this is the bottleneck.
+$maxBytes = 500 * 1024 * 1024;
 $size     = (int)$f['size'];
 if ($size <= 0)         chat_json_error('bad_request', 'Empty file.', 400);
-if ($size > $maxBytes)  chat_json_error('too_large',   'File exceeds 25 MB.', 400);
+if ($size > $maxBytes)  chat_json_error('too_large',   'File exceeds 500 MB.', 400);
 
 // Sniff the real MIME via finfo (don't trust the browser-supplied type).
+// We accept any MIME — finfo is used only to populate the chat_files row
+// and to decide inline-vs-attachment on download.
 $finfo = new finfo(FILEINFO_MIME_TYPE);
 $mime  = (string)$finfo->file($f['tmp_name']);
+if ($mime === '' || $mime === false) $mime = 'application/octet-stream';
 
-$origName  = (string)$f['name'];
-$extLower  = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-
-// MIME allow-list. Anything not here is rejected.
-$allowed = [
-  // images
-  'image/jpeg'       => ['jpg', 'jpeg'],
-  'image/png'        => ['png'],
-  'image/gif'        => ['gif'],
-  'image/webp'       => ['webp'],
-  // documents
-  'application/pdf'  => ['pdf'],
-  'application/msword' => ['doc'],
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => ['docx'],
-  'application/vnd.ms-excel' => ['xls'],
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => ['xlsx'],
-  'application/vnd.ms-powerpoint' => ['ppt'],
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation' => ['pptx'],
-  // text
-  'text/plain'       => ['txt', 'md', 'log'],
-  'text/csv'         => ['csv'],
-  'text/markdown'    => ['md'],
-  // archives
-  'application/zip'  => ['zip'],
-];
-
-if (!isset($allowed[$mime])) {
-  chat_json_error('bad_type', "Files of type \"$mime\" aren't allowed.", 400);
-}
-if (!in_array($extLower, $allowed[$mime], true)) {
-  chat_json_error('bad_ext', 'File extension doesn\'t match the actual file type.', 400);
+$origName = (string)$f['name'];
+$extLower = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+// Sanitize the extension to something filesystem-safe + a sensible cap.
+// Anything weird (no extension, embedded slashes, very long) becomes "bin".
+if ($extLower === '' || !preg_match('/^[a-z0-9]{1,12}$/', $extLower)) {
+  $extLower = 'bin';
 }
 
 // Disk path: chat/uploads/YYYY-MM/<random>.<ext>

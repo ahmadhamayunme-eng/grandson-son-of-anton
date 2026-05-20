@@ -108,7 +108,19 @@ header('Content-Disposition: ' . $disposition
 header('Cache-Control: private, max-age=86400');
 header('X-Content-Type-Options: nosniff');
 
-// Stream — readfile is fine for files up to a few hundred MB; we cap at 25 MB.
+// Large-file friendly: drop the execution timeout and stream in chunks so a
+// 500 MB download doesn't trip max_execution_time or balloon PHP's memory
+// usage. readfile() already streams, but fpassthru via fopen lets us be
+// explicit about not buffering.
+@set_time_limit(0);
+ignore_user_abort(false);
 while (ob_get_level() > 0) { @ob_end_clean(); }
-readfile($diskPath);
+$fp = @fopen($diskPath, 'rb');
+if ($fp === false) { readfile($diskPath); exit; }
+while (!feof($fp)) {
+  echo fread($fp, 8192);
+  @flush();
+  if (connection_aborted()) break;
+}
+fclose($fp);
 exit;
