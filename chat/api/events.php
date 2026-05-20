@@ -97,7 +97,8 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
             m.created_at    AS message_created_at,
             m.edited_at     AS message_edited_at,
             m.deleted_at    AS message_deleted_at,
-            m.parent_message_id AS message_parent_id,
+            m.parent_message_id   AS message_parent_id,
+            m.reply_to_message_id AS message_reply_to_id,
             u.name          AS author_name,
             ch.slug         AS channel_slug
      FROM chat_events e
@@ -187,6 +188,11 @@ $maxRuntime = 25;   // close before set_time_limit / proxy timeouts bite
 
 while ((time() - $start) < $maxRuntime) {
   if (connection_aborted()) break;
+
+  // Phase 10: deliver any scheduled messages whose time has come. The
+  // delivery emits chat_events rows which the same SSE loop picks up
+  // below — recipients see them appear live.
+  chat_deliver_due_scheduled_messages();
 
   $events = chat_sse_fetch($pdo, $ws, $uid, $since);
   if (!empty($events)) {

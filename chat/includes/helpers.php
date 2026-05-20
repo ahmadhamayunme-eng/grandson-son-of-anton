@@ -348,19 +348,12 @@ function chat_workspace_users_by_first_name(int $workspaceId): array {
   return $map;
 }
 
-/**
- * Render a message's raw content as HTML-safe markup. Two stages:
- *   1. Markdown via Parsedown (safe mode + breaks enabled + escaped raw HTML).
- *      Falls back to a small regex-based formatter if Parsedown isn't
- *      vendored, so chat works either way.
- *   2. Wrap recognised @mentions in <span class="chat-mention">, skipping
- *      anything inside <code>, <pre>, and existing <a> tags.
+/*
+ * NOTE: chat_render_message_content() lives further down in this file
+ * (Phase 10 version) — it handles both new HTML messages from the
+ * contentEditable composer and legacy markdown messages. Don't redeclare
+ * it here.
  */
-function chat_render_message_content(string $content, int $workspaceId): string {
-  $html  = chat_markdown($content);
-  $users = chat_workspace_users_by_first_name($workspaceId);
-  return chat_apply_mentions_outside_protected($html, $users);
-}
 
 /**
  * Markdown → HTML. Prefers Parsedown when available; falls back to a
@@ -664,7 +657,7 @@ function chat_presence_ping(int $userId): void {
  */
 function chat_load_user_prefs(int $userId): array {
   $stmt = db()->prepare(
-    'SELECT timezone, notify_dm, notify_mention, enter_to_send
+    'SELECT timezone, notify_dm, notify_mention, enter_to_send, dnd
      FROM chat_user_prefs WHERE user_id = ?'
   );
   $stmt->execute([$userId]);
@@ -675,6 +668,7 @@ function chat_load_user_prefs(int $userId): array {
       'notify_dm'      => 1,
       'notify_mention' => 1,
       'enter_to_send'  => 1,
+      'dnd'            => 0,
     ];
   }
   return [
@@ -682,6 +676,7 @@ function chat_load_user_prefs(int $userId): array {
     'notify_dm'      => (int)$row['notify_dm'],
     'notify_mention' => (int)$row['notify_mention'],
     'enter_to_send'  => (int)$row['enter_to_send'],
+    'dnd'            => (int)($row['dnd'] ?? 0),
   ];
 }
 
@@ -855,4 +850,473 @@ function chat_api_require_csrf(): void {
   if (!$token || !hash_equals($_SESSION['csrf'] ?? '', $token)) {
     chat_json_error('invalid_csrf', 'Bad or missing CSRF token. Reload the page.', 403);
   }
+}
+
+// =============================================================================
+// PHASE 10 — design migration helpers
+// =============================================================================
+
+// ---- HTML rendering / sanitization ----------------------------------------
+
+/**
+ * Returns true if $content looks like HTML (Phase-10 storage format), false
+ * if it looks like markdown (legacy). The composer now ships sanitized HTML;
+ * older rows are markdown and still need Parsedown. Heuristic: starts with
+ * an opening tag.
+ */
+function chat_content_is_html(string $content): bool {
+  return (bool)preg_match('/^\s*<[a-z!]/i', $content);
+}
+
+/**
+ * Sanitize HTML coming from the contentEditable composer. Allowlist-based
+ * via DOMDocument — strips scripts, on* handlers, javascript: URLs, and
+ * anything not in the tag/attribute list.
+ *
+ * Allowed tags:
+ *   p, br, strong, b, em, i, s, u, code, pre, ul, ol, li, blockquote, a, span, div
+ *
+ * Allowed attributes:
+ *   a:    href (http/https/mailto/relative only), auto target=_blank + rel
+ *   span: class (only "mention", "mention-special", "ch-link"), data-user-id
+ *   pre, code: class (for language hints)
+ */
+function chat_sanitize_html(string $html): string {
+  if (trim($html) === '') return '';
+
+  static $allowedTags = [
+    'p', 'br',
+    'strong', 'b', 'em', 'i', 's', 'u',
+    'code', 'pre',
+    'ul', 'ol', 'li',
+    'blockquote',
+    'a', 'span', 'div',
+  ];
+  static $allowedAttrsByTag = [
+    'a'    => ['href', 'target', 'rel'],
+    'span' => ['class', 'data-user-id'],
+    'pre'  => ['class'],
+    'code' => ['class'],
+  ];
+  // Keep both naming conventions: 'chat-mention' is what the markdown
+  // pipeline emits, 'mention' is the short alias.
+  static $allowedSpanClasses = [
+    'mention', 'mention-special', 'ch-link',
+    'chat-mention', 'chat-mention-special',
+  ];
+
+  $dom = new DOMDocument('1.0', 'UTF-8');
+  libxml_use_internal_errors(true);
+  $wrapped = '<?xml encoding="UTF-8"?><div id="__chat_root__">' . $html . '</div>';
+  $dom->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+  libxml_clear_errors();
+
+  $root = $dom->getElementById('__chat_root__');
+  if (!$root) return '';
+
+  $walker = function (DOMNode $node) use (&$walker, $allowedTags, $allowedAttrsByTag, $allowedSpanClasses) {
+    // Snapshot children since we may mutate the list while iterating.
+    $children = [];
+    foreach ($node->childNodes as $c) $children[] = $c;
+
+    foreach ($children as $child) {
+      if ($child->nodeType === XML_ELEMENT_NODE) {
+        $tag = strtolower($child->tagName);
+        if (!in_array($tag, $allowedTags, true)) {
+          // Unwrap: keep children, drop the tag itself.
+          while ($child->firstChild) $node->insertBefore($child->firstChild, $child);
+          $node->removeChild($child);
+          continue;
+        }
+        // Strip attributes not in the per-tag allowlist.
+        $allowed = $allowedAttrsByTag[$tag] ?? [];
+        $remove  = [];
+        foreach ($child->attributes as $a) {
+          if (!in_array(strtolower($a->name), $allowed, true)) $remove[] = $a->name;
+        }
+        foreach ($remove as $name) $child->removeAttribute($name);
+
+        // Tag-specific extra validation.
+        if ($tag === 'a') {
+          $href = $child->getAttribute('href');
+          if ($href !== '' && !preg_match('#^(https?:|mailto:|/|#)#i', $href)) {
+            $child->removeAttribute('href');
+          }
+          if ($child->hasAttribute('href')) {
+            $child->setAttribute('target', '_blank');
+            $child->setAttribute('rel', 'noopener noreferrer');
+          }
+        }
+        if ($tag === 'span' && $child->hasAttribute('class')) {
+          $kept = array_intersect(
+            preg_split('/\s+/', $child->getAttribute('class')),
+            $allowedSpanClasses
+          );
+          if (!empty($kept)) $child->setAttribute('class', implode(' ', $kept));
+          else               $child->removeAttribute('class');
+        }
+        $walker($child);
+      } elseif ($child->nodeType === XML_COMMENT_NODE || $child->nodeType === XML_PI_NODE) {
+        $node->removeChild($child);
+      }
+    }
+  };
+  $walker($root);
+
+  $out = '';
+  foreach ($root->childNodes as $child) $out .= $dom->saveHTML($child);
+  return trim($out);
+}
+
+/**
+ * Updated content renderer that handles both new (HTML) and legacy (markdown)
+ * messages. New messages from the contentEditable composer are already
+ * sanitized HTML — we just re-apply mention wrapping (in case the user typed
+ * a fresh @mention as plain text). Legacy markdown messages still go through
+ * the Phase 6 pipeline.
+ */
+function chat_render_message_content(string $content, int $workspaceId): string {
+  $users = chat_workspace_users_by_first_name($workspaceId);
+  if (chat_content_is_html($content)) {
+    // Re-sanitize defensively (already done on store, but cheap).
+    $html = chat_sanitize_html($content);
+  } else {
+    $html = chat_markdown($content);
+  }
+  return chat_apply_mentions_outside_protected($html, $users);
+}
+
+// ---- Saved messages -------------------------------------------------------
+
+function chat_user_has_saved_message(int $messageId, int $userId): bool {
+  $stmt = db()->prepare('SELECT 1 FROM chat_saved_messages WHERE user_id = ? AND message_id = ? LIMIT 1');
+  $stmt->execute([$userId, $messageId]);
+  return (bool)$stmt->fetchColumn();
+}
+
+function chat_load_saved_set_for_user(array $messageIds, int $userId): array {
+  if (empty($messageIds)) return [];
+  $ph = implode(',', array_fill(0, count($messageIds), '?'));
+  $stmt = db()->prepare("SELECT message_id FROM chat_saved_messages WHERE user_id = ? AND message_id IN ($ph)");
+  $stmt->execute(array_merge([$userId], $messageIds));
+  $set = [];
+  foreach ($stmt->fetchAll() as $r) $set[(int)$r['message_id']] = true;
+  return $set;
+}
+
+// ---- Pinned messages ------------------------------------------------------
+
+function chat_message_is_pinned(int $channelId, int $messageId): bool {
+  $stmt = db()->prepare('SELECT 1 FROM chat_pinned_messages WHERE channel_id = ? AND message_id = ? LIMIT 1');
+  $stmt->execute([$channelId, $messageId]);
+  return (bool)$stmt->fetchColumn();
+}
+
+function chat_load_pinned_set_for_channel(int $channelId, array $messageIds): array {
+  if (empty($messageIds)) return [];
+  $ph = implode(',', array_fill(0, count($messageIds), '?'));
+  $stmt = db()->prepare("SELECT message_id FROM chat_pinned_messages WHERE channel_id = ? AND message_id IN ($ph)");
+  $stmt->execute(array_merge([$channelId], $messageIds));
+  $set = [];
+  foreach ($stmt->fetchAll() as $r) $set[(int)$r['message_id']] = true;
+  return $set;
+}
+
+function chat_load_pinned_messages_for_channel(int $channelId, int $workspaceId): array {
+  $stmt = db()->prepare(
+    'SELECT m.id, m.user_id, m.content, m.created_at, m.edited_at, m.deleted_at,
+            m.parent_message_id, p.pinned_by, p.pinned_at,
+            u.name AS author_name
+     FROM chat_pinned_messages p
+     JOIN chat_messages m ON m.id = p.message_id
+     JOIN users u ON u.id = m.user_id
+     WHERE p.channel_id = ? AND m.deleted_at IS NULL
+     ORDER BY p.pinned_at DESC
+     LIMIT 100'
+  );
+  $stmt->execute([$channelId]);
+  return chat_decorate_messages($stmt->fetchAll(), $workspaceId);
+}
+
+// ---- Threads (user-level) -------------------------------------------------
+
+/**
+ * Threads the user is participating in across the workspace. A user
+ * "participates" if they posted a reply OR authored the parent. Returns
+ * decorated parent messages with reply_count + last reply meta.
+ */
+function chat_load_user_threads(int $workspaceId, int $userId, int $limit = 50): array {
+  $limit = max(1, min(200, $limit));
+  $stmt = db()->prepare(
+    "SELECT p.id AS parent_id,
+            (SELECT MAX(r.id) FROM chat_messages r
+             WHERE r.parent_message_id = p.id AND r.deleted_at IS NULL) AS last_reply_id
+     FROM chat_messages p
+     WHERE p.workspace_id = ?
+       AND p.parent_message_id IS NULL
+       AND p.deleted_at IS NULL
+       AND (
+         p.user_id = ?
+         OR EXISTS (SELECT 1 FROM chat_messages r
+                    WHERE r.parent_message_id = p.id AND r.user_id = ?)
+       )
+     HAVING last_reply_id IS NOT NULL
+     ORDER BY last_reply_id DESC
+     LIMIT " . (int)$limit
+  );
+  $stmt->execute([$workspaceId, $userId, $userId]);
+  $parentIds = array_column($stmt->fetchAll(), 'parent_id');
+  if (empty($parentIds)) return [];
+
+  $ph = implode(',', array_fill(0, count($parentIds), '?'));
+  $stmt = db()->prepare(
+    "SELECT m.id, m.user_id, m.content, m.created_at, m.edited_at, m.deleted_at,
+            m.parent_message_id, m.channel_id, m.conversation_id,
+            u.name AS author_name,
+            c.slug AS channel_slug, c.is_private AS channel_is_private
+     FROM chat_messages m
+     JOIN users u ON u.id = m.user_id
+     LEFT JOIN chat_channels c ON c.id = m.channel_id
+     WHERE m.id IN ($ph)"
+  );
+  $stmt->execute($parentIds);
+  $byId = [];
+  foreach ($stmt->fetchAll() as $r) $byId[(int)$r['id']] = $r;
+  // Preserve thread ordering (most-recent first).
+  $rows = [];
+  foreach ($parentIds as $pid) {
+    if (isset($byId[(int)$pid])) $rows[] = $byId[(int)$pid];
+  }
+  return chat_decorate_messages($rows, $workspaceId);
+}
+
+// ---- Inbox ----------------------------------------------------------------
+
+/**
+ * Inbox feed: messages that mention the user (@user, @channel, @here,
+ * @everyone in channels they're a member of) plus DM messages where the
+ * user is a recipient but not the author. Newest first.
+ */
+function chat_load_user_inbox(int $workspaceId, int $userId, int $limit = 50): array {
+  $limit = max(1, min(200, $limit));
+
+  $stmt = db()->prepare(
+    "SELECT m.id, m.user_id, m.content, m.created_at, m.edited_at, m.deleted_at,
+            m.parent_message_id, m.channel_id, m.conversation_id,
+            u.name AS author_name,
+            c.slug AS channel_slug, c.is_private AS channel_is_private
+     FROM chat_messages m
+     JOIN users u ON u.id = m.user_id
+     LEFT JOIN chat_channels c ON c.id = m.channel_id
+     WHERE m.workspace_id = ?
+       AND m.deleted_at IS NULL
+       AND m.user_id != ?
+       AND (
+         EXISTS (
+           SELECT 1 FROM chat_mentions mn
+           WHERE mn.message_id = m.id
+             AND (
+               (mn.mention_type = 'user' AND mn.mentioned_user_id = ?)
+               OR (mn.mention_type IN ('channel','here','everyone')
+                   AND m.channel_id IN (
+                     SELECT channel_id FROM chat_channel_members WHERE user_id = ?
+                   ))
+             )
+         )
+         OR (m.conversation_id IS NOT NULL AND m.conversation_id IN (
+           SELECT conversation_id FROM chat_direct_conversation_members WHERE user_id = ?
+         ))
+       )
+     ORDER BY m.id DESC
+     LIMIT " . (int)$limit
+  );
+  $stmt->execute([$workspaceId, $userId, $userId, $userId, $userId]);
+  return chat_decorate_messages($stmt->fetchAll(), $workspaceId);
+}
+
+// ---- Per-user mention counts (Phase 10 — for sidebar gold badges) ---------
+
+function chat_mention_counts_for_user(int $workspaceId, int $userId): array {
+  $pdo = db();
+  $stmt = $pdo->prepare(
+    "SELECT cm.channel_id,
+            (SELECT COUNT(*) FROM chat_messages m
+             JOIN chat_mentions mn ON mn.message_id = m.id
+             WHERE m.channel_id = cm.channel_id
+               AND m.parent_message_id IS NULL
+               AND m.deleted_at IS NULL
+               AND m.user_id != ?
+               AND m.id > IFNULL(cm.last_read_message_id, 0)
+               AND (
+                 (mn.mention_type = 'user' AND mn.mentioned_user_id = ?)
+                 OR mn.mention_type IN ('channel','here','everyone')
+               )
+            ) AS cnt
+     FROM chat_channel_members cm
+     JOIN chat_channels c ON c.id = cm.channel_id
+     WHERE cm.user_id = ? AND c.workspace_id = ? AND c.archived_at IS NULL"
+  );
+  $stmt->execute([$userId, $userId, $userId, $workspaceId]);
+  $out = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $n = (int)$r['cnt'];
+    if ($n > 0) $out[(int)$r['channel_id']] = $n;
+  }
+  return $out;
+}
+
+// ---- 4-state presence (Phase 10) ------------------------------------------
+
+/**
+ * Returns user_id => 'active'|'idle'|'offline'|'dnd' for every active user
+ * in the workspace. DND wins over everything when set.
+ *   active  = last_seen within 60s
+ *   idle    = last_seen within 300s
+ *   offline = older or never
+ *   dnd     = user opted in via prefs.dnd
+ */
+function chat_presence_state_map(int $workspaceId): array {
+  $stmt = db()->prepare(
+    "SELECT u.id,
+            TIMESTAMPDIFF(SECOND, p.last_seen_at, NOW()) AS secs,
+            IFNULL(pf.dnd, 0) AS dnd
+     FROM users u
+     LEFT JOIN chat_user_presence p ON p.user_id = u.id
+     LEFT JOIN chat_user_prefs    pf ON pf.user_id = u.id
+     WHERE u.workspace_id = ? AND u.is_active = 1"
+  );
+  $stmt->execute([$workspaceId]);
+  $map = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $id = (int)$r['id'];
+    if ((int)$r['dnd']) { $map[$id] = 'dnd'; continue; }
+    $secs = $r['secs'];
+    if ($secs === null)        $map[$id] = 'offline';
+    elseif ((int)$secs <= 60)  $map[$id] = 'active';
+    elseif ((int)$secs <= 300) $map[$id] = 'idle';
+    else                       $map[$id] = 'offline';
+  }
+  return $map;
+}
+
+// ---- Scheduled message sweep (called from the SSE worker) -----------------
+
+/**
+ * Deliver any scheduled messages whose `scheduled_for` is in the past. Runs
+ * inside the SSE loop so any open chat tab triggers delivery — no OS cron
+ * required. Idempotent: each row claimed via a transaction + sent_at update.
+ */
+function chat_deliver_due_scheduled_messages(): int {
+  $pdo = db();
+  $stmt = $pdo->prepare(
+    'SELECT * FROM chat_scheduled_messages
+     WHERE scheduled_for <= NOW() AND sent_at IS NULL
+     ORDER BY scheduled_for ASC
+     LIMIT 20'
+  );
+  $stmt->execute();
+  $rows = $stmt->fetchAll();
+  if (empty($rows)) return 0;
+
+  $delivered = 0;
+  foreach ($rows as $r) {
+    $pdo->beginTransaction();
+    try {
+      // Re-check inside the transaction so two concurrent SSE workers don't
+      // double-deliver the same row.
+      $check = $pdo->prepare('SELECT sent_at FROM chat_scheduled_messages WHERE id = ? FOR UPDATE');
+      $check->execute([(int)$r['id']]);
+      $still = $check->fetch();
+      if (!$still || $still['sent_at'] !== null) { $pdo->commit(); continue; }
+
+      $now = now();
+      $insert = $pdo->prepare(
+        'INSERT INTO chat_messages
+           (workspace_id, channel_id, conversation_id, parent_message_id, reply_to_message_id, user_id, content, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      );
+      $insert->execute([
+        (int)$r['workspace_id'],
+        $r['channel_id']          !== null ? (int)$r['channel_id']          : null,
+        $r['conversation_id']     !== null ? (int)$r['conversation_id']     : null,
+        $r['parent_message_id']   !== null ? (int)$r['parent_message_id']   : null,
+        $r['reply_to_message_id'] !== null ? (int)$r['reply_to_message_id'] : null,
+        (int)$r['user_id'],
+        (string)$r['content_html'],
+        $now,
+      ]);
+      $messageId = (int)$pdo->lastInsertId();
+      chat_parse_and_store_mentions($messageId, (string)$r['content_html'], (int)$r['workspace_id']);
+
+      $payload = [];
+      if ($r['parent_message_id']   !== null) $payload['parent_message_id']   = (int)$r['parent_message_id'];
+      if ($r['reply_to_message_id'] !== null) $payload['reply_to_message_id'] = (int)$r['reply_to_message_id'];
+
+      chat_emit_event(
+        (int)$r['workspace_id'], 'message',
+        $r['channel_id']      !== null ? (int)$r['channel_id']      : null,
+        $r['conversation_id'] !== null ? (int)$r['conversation_id'] : null,
+        $messageId,
+        (int)$r['user_id'],
+        empty($payload) ? null : $payload
+      );
+
+      $upd = $pdo->prepare('UPDATE chat_scheduled_messages SET sent_at = ?, sent_message_id = ? WHERE id = ?');
+      $upd->execute([$now, $messageId, (int)$r['id']]);
+
+      $pdo->commit();
+      $delivered++;
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      // Swallow — next sweep will retry.
+    }
+  }
+  return $delivered;
+}
+
+// ---- chat_decorate_messages extension (Phase 10) --------------------------
+// Adds is_saved, is_pinned, reply_to_message, channel context, and the
+// content_html re-render to the existing decoration pipeline. Used by
+// every list endpoint and the initial page render.
+function chat_decorate_messages_phase10(array $rows, int $workspaceId, int $currentUserId, ?int $contextChannelId = null): array {
+  if (empty($rows)) return $rows;
+  $rows = chat_decorate_messages($rows, $workspaceId);
+
+  $ids = [];
+  foreach ($rows as $r) { $ids[] = (int)$r['id']; }
+  $savedSet  = chat_load_saved_set_for_user($ids, $currentUserId);
+  $pinnedSet = $contextChannelId ? chat_load_pinned_set_for_channel($contextChannelId, $ids) : [];
+
+  // Reply-to messages — fetch in batch.
+  $replyIds = [];
+  foreach ($rows as $r) {
+    if (!empty($r['reply_to_message_id'])) $replyIds[] = (int)$r['reply_to_message_id'];
+  }
+  $replyById = [];
+  if (!empty($replyIds)) {
+    $ph = implode(',', array_fill(0, count($replyIds), '?'));
+    $stmt = db()->prepare(
+      "SELECT m.id, m.content, m.deleted_at, u.name AS author_name
+       FROM chat_messages m JOIN users u ON u.id = m.user_id
+       WHERE m.id IN ($ph)"
+    );
+    $stmt->execute($replyIds);
+    foreach ($stmt->fetchAll() as $r) {
+      $replyById[(int)$r['id']] = [
+        'id'          => (int)$r['id'],
+        'author_name' => $r['author_name'],
+        'content'     => $r['deleted_at'] !== null ? '' : (string)$r['content'],
+        'deleted'     => $r['deleted_at'] !== null,
+      ];
+    }
+  }
+
+  foreach ($rows as &$r) {
+    $r['is_saved']  = isset($savedSet[(int)$r['id']])  ? 1 : 0;
+    $r['is_pinned'] = isset($pinnedSet[(int)$r['id']]) ? 1 : 0;
+    $rt = !empty($r['reply_to_message_id']) ? (int)$r['reply_to_message_id'] : 0;
+    $r['reply_to']  = $rt && isset($replyById[$rt]) ? $replyById[$rt] : null;
+  }
+  unset($r);
+  return $rows;
 }
