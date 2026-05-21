@@ -164,7 +164,7 @@ try {
       foreach (($_POST['assignees'] ?? []) as $uid) {
         $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$task_id, (int)$uid]);
       }
-      // Anton Connect — sync the project's chat channel membership now that
+      // Anton Jr. — sync the project's chat channel membership now that
       // a new task (and its assignees) exist. Safe to call repeatedly.
       if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
         require_once __DIR__ . '/chat/includes/project_sync.php';

@@ -193,7 +193,7 @@ while ((time() - $start) < $maxRuntime) {
   // delivery emits chat_events rows which the same SSE loop picks up
   // below — recipients see them appear live.
   chat_deliver_due_scheduled_messages();
-  // Phase 11: Anton Connect — fire any pending due-soon task reminders.
+  // Phase 11: Anton Jr. — fire any pending due-soon task reminders.
   if (function_exists('chat_run_due_reminders')) chat_run_due_reminders();
   // Phase 11: standup automation tick (send prompts / collate replies).
   if (file_exists(__DIR__ . '/../includes/standup.php')) {

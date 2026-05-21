@@ -1582,11 +1582,11 @@ function chat_decorate_messages_phase10(array $rows, int $workspaceId, int $curr
 }
 
 // =============================================================================
-// PHASE 11 — Anton Connect unification (chat ↔ AntonX bridge)
+// PHASE 11 — Anton Jr. unification (chat ↔ AntonX bridge)
 // =============================================================================
 
 /**
- * Resolve the per-workspace "Anton Connect" system user, creating one if it
+ * Resolve the per-workspace "Anton Jr." system user, creating one if it
  * doesn't exist yet (covers workspaces created after phase11.sql ran).
  * Returns the row, or NULL on catastrophic failure (which the caller should
  * gracefully skip — automations are nice-to-have, never block the user flow).
@@ -1599,7 +1599,19 @@ function chat_get_system_user(int $workspaceId): ?array {
     $stmt = db()->prepare('SELECT * FROM users WHERE workspace_id = ? AND is_system = 1 LIMIT 1');
     $stmt->execute([$workspaceId]);
     $row = $stmt->fetch();
-    if ($row) return $cache[$workspaceId] = $row;
+    if ($row) {
+      // Keep the display name in sync if a legacy "Anton Connect" row exists.
+      // (Pre-rename: phase11.sql backfilled with that name before we renamed
+      // the bot. Runtime fallback in case the SQL migration's UPDATE never
+      // ran on this DB.)
+      if (($row['name'] ?? '') === 'Anton Connect') {
+        try {
+          db()->prepare('UPDATE users SET name = "Anton Jr." WHERE id = ?')->execute([(int)$row['id']]);
+          $row['name'] = 'Anton Jr.';
+        } catch (Throwable $e) {}
+      }
+      return $cache[$workspaceId] = $row;
+    }
 
     // Lazy-create. Pick the highest-permission role available.
     $roleId = (int)(db()->query("SELECT id FROM roles WHERE name = 'Super Admin' LIMIT 1")->fetchColumn() ?: 0);
@@ -1608,13 +1620,13 @@ function chat_get_system_user(int $workspaceId): ?array {
     }
     if ($roleId <= 0) return null;
 
-    $email = 'anton-connect+' . $workspaceId . '@anton.local';
+    $email = 'anton-jr+' . $workspaceId . '@anton.local';
     $now   = now();
     $ins = db()->prepare(
       'INSERT INTO users (workspace_id, role_id, name, email, password_hash, is_active, is_system, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)'
     );
-    $ins->execute([$workspaceId, $roleId, 'Anton Connect', $email, '!!ANTON_CONNECT_NO_LOGIN!!', $now, $now]);
+    $ins->execute([$workspaceId, $roleId, 'Anton Jr.', $email, '!!ANTON_JR_NO_LOGIN!!', $now, $now]);
     $newId = (int)db()->lastInsertId();
     $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
     $stmt->execute([$newId]);
@@ -1665,7 +1677,7 @@ function chat_find_or_create_dm(int $workspaceId, int $userA, int $userB): ?int 
 }
 
 /**
- * Post a message AS Anton Connect into a channel OR DM (exactly one target).
+ * Post a message AS Anton Jr. into a channel OR DM (exactly one target).
  * Mirrors the msg_action_send flow in /chat/api/messages.php:
  *   1. INSERT chat_messages with author = Anton
  *   2. chat_parse_and_store_mentions (so @user pings still ring)
@@ -1720,7 +1732,7 @@ function chat_post_as_system(
   }
 }
 
-/** Convenience: DM a user as Anton Connect, opening the DM on first use. */
+/** Convenience: DM a user as Anton Jr., opening the DM on first use. */
 function chat_dm_user_as_system(int $workspaceId, int $userId, string $contentHtml, ?array $card = null): int {
   $system = chat_get_system_user($workspaceId);
   if (!$system) return 0;
@@ -1791,7 +1803,7 @@ function chat_ensure_standup_channel(int $workspaceId): int {
       $now = now();
       $ins = db()->prepare(
         'INSERT INTO chat_channels (workspace_id, slug, is_private, topic, description, created_by, created_at)
-         VALUES (?, "standup", 0, "Daily standup", "Anton Connect rolls up daily standup answers here.", ?, ?)'
+         VALUES (?, "standup", 0, "Daily standup", "Anton Jr. rolls up daily standup answers here.", ?, ?)'
       );
       $ins->execute([$workspaceId, (int)$system['id'], $now]);
       $found = (int)db()->lastInsertId();
@@ -1804,7 +1816,7 @@ function chat_ensure_standup_channel(int $workspaceId): int {
       foreach ($um->fetchAll() as $row) {
         $addMember->execute([$found, (int)$row['id'], $now]);
       }
-      // And Anton Connect itself so post-as-system has a valid sender.
+      // And Anton Jr. itself so post-as-system has a valid sender.
       $addMember->execute([$found, (int)$system['id'], $now]);
       chat_emit_event($workspaceId, 'channel_created', $found, null, null, (int)$system['id']);
     }

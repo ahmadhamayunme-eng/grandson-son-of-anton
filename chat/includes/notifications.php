@@ -1,9 +1,9 @@
 <?php
-// chat/includes/notifications.php — Anton Connect ↔ AntonX event helpers.
+// chat/includes/notifications.php — Anton Jr. ↔ AntonX event helpers.
 //
 // Each function is a small, idempotent shim that an AntonX page calls after
 // it commits a relevant mutation. They:
-//   1. resolve / lazy-create the recipient's DM with Anton Connect
+//   1. resolve / lazy-create the recipient's DM with Anton Jr.
 //   2. post a friendly card-style HTML message there
 //   3. swallow every Throwable so a chat outage never breaks AntonX
 //
@@ -278,7 +278,7 @@ function chat_ensure_submissions_channel(int $workspaceId): int {
       );
       $ins->execute([$workspaceId, (int)$system['id'], $now]);
       $found = (int)db()->lastInsertId();
-      // Add Anton Connect as a member so its posts are valid.
+      // Add Anton Jr. as a member so its posts are valid.
       db()->prepare('INSERT IGNORE INTO chat_channel_members (channel_id, user_id, joined_at) VALUES (?, ?, ?)')
         ->execute([$found, (int)$system['id'], $now]);
       // Add every manager too so they see the channel in their sidebar.

@@ -120,7 +120,7 @@ function _qa_task(string $title, int $workspaceId, int $authorUserId, ?int $chan
       'poll'    => null,
     ];
   } catch (Throwable $e) {
-    error_log('[Anton Connect] /task failed: ' . $e->getMessage());
+    error_log('[Anton Jr.] /task failed: ' . $e->getMessage());
     return ['handled' => false];
   }
 }

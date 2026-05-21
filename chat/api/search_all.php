@@ -1,5 +1,5 @@
 <?php
-// /chat/api/search_all.php — unified Anton Connect search.
+// /chat/api/search_all.php — unified Anton Jr. search.
 //
 // GET ?q=<text>&limit=8
 //   Searches across People, Tasks, Projects, Clients, Docs, Channels, and
@@ -32,7 +32,7 @@ $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
 $pdo  = db();
 $out  = ['q' => $q, 'groups' => []];
 
-// People (active users, exclude Anton Connect itself).
+// People (active users, exclude Anton Jr. itself).
 try {
   $st = $pdo->prepare(
     "SELECT id, name, email FROM users

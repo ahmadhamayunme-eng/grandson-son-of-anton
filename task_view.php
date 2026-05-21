@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           ->execute([$ws, $id, $u['id'], $body, now()]);
     }
     $newCommentId = (int)$pdo->lastInsertId();
-    // Anton Connect — DM the assignees + creator about the new comment.
+    // Anton Jr. — DM the assignees + creator about the new comment.
     if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
       require_once __DIR__ . '/chat/includes/notifications.php';
       try { chat_notify_task_comment((int)$id, $body, (int)$u['id']); } catch (Throwable $e) {}

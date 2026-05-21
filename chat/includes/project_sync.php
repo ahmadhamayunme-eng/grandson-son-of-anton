@@ -1,5 +1,5 @@
 <?php
-// chat/includes/project_sync.php — Anton Connect ↔ AntonX project bridge.
+// chat/includes/project_sync.php — Anton Jr. ↔ AntonX project bridge.
 //
 // One function: chat_project_sync(int $projectId) — keeps a private chat
 // channel "#proj-<slug>" alive for each AntonX project, with membership
@@ -58,10 +58,10 @@ function chat_project_sync(int $projectId): int {
       ]);
       $channelId = (int)$pdo->lastInsertId();
 
-      // Welcome message from Anton Connect.
+      // Welcome message from Anton Jr..
       chat_post_as_system(
         $ws, $channelId, null,
-        '<p>Welcome to <strong>' . h($name) . '</strong>. This channel was created by Anton Connect '
+        '<p>Welcome to <strong>' . h($name) . '</strong>. This channel was created by Anton Jr. '
         . 'and tracks the project automatically — members sync with project assignees.</p>'
       );
       chat_emit_event($ws, 'channel_created', $channelId, null, null, $creatorId);
@@ -72,7 +72,7 @@ function chat_project_sync(int $projectId): int {
     }
 
     // Compute desired members: all distinct users assigned to any task in
-    // this project. Anton Connect itself is always a "member" of the channel
+    // this project. Anton Jr. itself is always a "member" of the channel
     // so its posts have a sender row available, but we skip adding it to
     // the visible membership list — it's a system user.
     $desiredStmt = $pdo->prepare(
@@ -84,7 +84,7 @@ function chat_project_sync(int $projectId): int {
     $desiredStmt->execute([$projectId]);
     $desired = array_map('intval', array_column($desiredStmt->fetchAll(), 'user_id'));
     if (!empty($desired) && $creatorId > 0) {
-      // Make sure Anton Connect exists in the channel for system posts.
+      // Make sure Anton Jr. exists in the channel for system posts.
       $desired[] = $creatorId;
       $desired = array_values(array_unique($desired));
     }
@@ -107,7 +107,7 @@ function chat_project_sync(int $projectId): int {
         chat_emit_event($ws, 'channel_member_added', $channelId, null, null, $u);
       }
     }
-    // Don't remove Anton Connect itself or users who joined manually outside
+    // Don't remove Anton Jr. itself or users who joined manually outside
     // the auto-sync (we only remove if the user is NOT assigned to ANY task
     // in this project, AND isn't the system user). For simplicity we err on
     // the side of keeping members rather than aggressively pruning — leaving
@@ -116,7 +116,7 @@ function chat_project_sync(int $projectId): int {
 
     return $channelId;
   } catch (Throwable $e) {
-    error_log('[Anton Connect] chat_project_sync failed: ' . $e->getMessage());
+    error_log('[Anton Jr.] chat_project_sync failed: ' . $e->getMessage());
     return 0;
   }
 }
