@@ -485,6 +485,34 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
   $reactionsByMsg = chat_load_reactions_for_messages($ids);
   $replyCounts    = chat_load_reply_counts($ids);
   $filesByMsg     = chat_load_files_for_messages($ids);
+  // Phase 11: poll lookups for inline /poll messages.
+  $pollsByMsg = [];
+  try {
+    if (!empty($ids)) {
+      $ph = implode(',', array_fill(0, count($ids), '?'));
+      $st = db()->prepare("SELECT * FROM chat_polls WHERE message_id IN ($ph)");
+      $st->execute($ids);
+      $polls = $st->fetchAll();
+      $pollIds = array_column($polls, 'id');
+      $votes = [];
+      if (!empty($pollIds)) {
+        $vph = implode(',', array_fill(0, count($pollIds), '?'));
+        $vs = db()->prepare("SELECT poll_id, option_idx, COUNT(*) AS n FROM chat_poll_votes WHERE poll_id IN ($vph) GROUP BY poll_id, option_idx");
+        $vs->execute($pollIds);
+        foreach ($vs->fetchAll() as $v) {
+          $votes[(int)$v['poll_id']][(int)$v['option_idx']] = (int)$v['n'];
+        }
+      }
+      foreach ($polls as $p) {
+        $pollsByMsg[(int)$p['message_id']] = [
+          'id'       => (int)$p['id'],
+          'question' => (string)$p['question'],
+          'options'  => json_decode((string)$p['options_json'], true) ?: [],
+          'counts'   => $votes[(int)$p['id']] ?? [],
+        ];
+      }
+    }
+  } catch (Throwable $e) { /* polls table missing — graceful */ }
 
   foreach ($rows as &$r) {
     $deleted = $r['deleted_at'] !== null;
@@ -493,7 +521,23 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
       $r['content_html'] = '';
       $r['files']        = [];
     } else {
-      $r['content_html'] = chat_render_message_content((string)$r['content'], $workspaceId);
+      $html = chat_render_message_content((string)$r['content'], $workspaceId);
+
+      // Attach an entity preview card if /share built one.
+      $cardJson = $r['entity_card_json'] ?? null;
+      if ($cardJson) {
+        $card = json_decode((string)$cardJson, true);
+        if (is_array($card) && !empty($card['type']) && !empty($card['id'])) {
+          $cardHtml = chat_render_entity_card((string)$card['type'], (int)$card['id'], $workspaceId);
+          if ($cardHtml !== '') $html .= $cardHtml;
+        }
+      }
+      // Inline poll widget.
+      $mid = (int)$r['id'];
+      if (isset($pollsByMsg[$mid])) {
+        $html .= _chat_render_poll($pollsByMsg[$mid]);
+      }
+      $r['content_html'] = $html;
       $r['files']        = $filesByMsg[(int)$r['id']] ?? [];
     }
     $r['reactions']   = $reactionsByMsg[(int)$r['id']] ?? [];
@@ -501,6 +545,26 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
   }
   unset($r);
   return $rows;
+}
+
+/** Render an inline poll as HTML block (with vote button per option). */
+function _chat_render_poll(array $poll): string {
+  $opts = $poll['options'];
+  $counts = $poll['counts'];
+  $total = array_sum($counts);
+  $html = '<div class="chat-poll" data-poll-id="' . (int)$poll['id'] . '">';
+  foreach ($opts as $i => $label) {
+    $n = (int)($counts[$i] ?? 0);
+    $pct = $total > 0 ? round(($n / $total) * 100) : 0;
+    $html .= '<button type="button" class="chat-poll-opt" data-action="poll-vote" data-poll-id="' . (int)$poll['id'] . '" data-option-idx="' . (int)$i . '">'
+          .   '<span class="chat-poll-bar" style="width:' . $pct . '%"></span>'
+          .   '<span class="chat-poll-label">' . h((string)$label) . '</span>'
+          .   '<span class="chat-poll-count">' . $n . '</span>'
+          . '</button>';
+  }
+  $html .= '<div class="chat-poll-meta">' . $total . ' vote' . ($total === 1 ? '' : 's') . '</div>';
+  $html .= '</div>';
+  return $html;
 }
 
 // ===== File attachments (Phase 6) =========================================
@@ -1049,7 +1113,107 @@ function chat_render_message_content(string $content, int $workspaceId): string 
   // "https://example.com" rendered as plain text. Same skip-list as mentions
   // (don't double-wrap inside existing <a>, <code>, <pre>).
   $html = chat_apply_autolinks_outside_protected($html);
-  return chat_apply_mentions_outside_protected($html, $users);
+  $html = chat_apply_mentions_outside_protected($html, $users);
+  // Cross-link AntonX entity tokens (task#1234, proj#slug, client#42, doc#9)
+  // into clickable pills. Same protected-region skip-list.
+  $html = chat_apply_entity_pills_outside_protected($html, $workspaceId);
+  return $html;
+}
+
+/**
+ * Wrap AntonX entity tokens (task#1234, proj#slug, client#42, doc#9) as
+ * clickable pills outside <a>/<code>/<pre>. The DB lookup pulls a pretty
+ * label so the pill shows the entity name, not just the id. Unknown entities
+ * fall through as plain text.
+ */
+function chat_apply_entity_pills_outside_protected(string $html, int $workspaceId): string {
+  $pattern = '#(<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<a\b[^>]*>.*?</a>)#si';
+  $parts = preg_split($pattern, $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+  if (!$parts) return $html;
+  $cache = ['task' => [], 'project' => [], 'client' => [], 'doc' => []];
+
+  $resolve = function (string $type, string $key) use (&$cache, $workspaceId): ?array {
+    if (isset($cache[$type][$key])) return $cache[$type][$key];
+    try {
+      $pdo = db();
+      switch ($type) {
+        case 'task':
+          $st = $pdo->prepare('SELECT id, title, status FROM tasks WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['title'], 'extra' => (string)$r['status']] : null;
+          break;
+        case 'project':
+          $isNum = ctype_digit($key);
+          if ($isNum) {
+            $st = $pdo->prepare('SELECT id, name FROM projects WHERE id = ? AND workspace_id = ?');
+            $st->execute([(int)$key, $workspaceId]);
+          } else {
+            // Match by slugified name.
+            $st = $pdo->prepare('SELECT id, name FROM projects WHERE workspace_id = ?');
+            $st->execute([$workspaceId]);
+            $r = null;
+            foreach ($st->fetchAll() as $row) {
+              if (chat_slugify((string)$row['name']) === $key) { $r = $row; break; }
+            }
+            $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+            break;
+          }
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+          break;
+        case 'client':
+          $st = $pdo->prepare('SELECT id, name FROM clients WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+          break;
+        case 'doc':
+          $st = $pdo->prepare('SELECT id, title FROM docs WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['title'], 'extra' => ''] : null;
+          break;
+        default:
+          $cache[$type][$key] = null;
+      }
+    } catch (Throwable $e) {
+      $cache[$type][$key] = null;
+    }
+    return $cache[$type][$key];
+  };
+
+  $regex = '/(^|[^a-z0-9_])(task|proj|project|client|doc)#([a-z0-9_-]+)\b/i';
+
+  $result = '';
+  foreach ($parts as $i => $part) {
+    if ($i % 2 === 1) { $result .= $part; continue; }
+    $result .= preg_replace_callback($regex, function ($m) use ($resolve) {
+      $prefix = $m[1];
+      $kind   = strtolower($m[2]);
+      $key    = strtolower($m[3]);
+      $type   = ($kind === 'proj') ? 'project' : $kind;
+      $found  = $resolve($type, $key);
+      if (!$found) {
+        // Leave the original text alone so users can fix typos / wait for create.
+        return $prefix . $kind . '#' . $key;
+      }
+      $href = '';
+      switch ($type) {
+        case 'task':    $href = '/task_details.php?id=' . $found['id']; break;
+        case 'project': $href = '/projects.php?id='     . $found['id']; break;
+        case 'client':  $href = '/clients.php?id='      . $found['id']; break;
+        case 'doc':     $href = '/doc_edit.php?id='     . $found['id']; break;
+      }
+      $cls = 'chat-entity chat-entity-' . $type;
+      $glyph = ['task' => '✓', 'project' => '#', 'client' => '◆', 'doc' => '📄'][$type] ?? '◇';
+      return $prefix . '<a class="' . $cls . '" href="' . h($href) . '">'
+           . '<span class="chat-entity-glyph">' . h($glyph) . '</span>'
+           . '<span class="chat-entity-label">' . h($found['label']) . '</span>'
+           . '</a>';
+    }, $part);
+  }
+  return $result;
 }
 
 /**
@@ -1415,4 +1579,435 @@ function chat_decorate_messages_phase10(array $rows, int $workspaceId, int $curr
   }
   unset($r);
   return $rows;
+}
+
+// =============================================================================
+// PHASE 11 — Anton Connect unification (chat ↔ AntonX bridge)
+// =============================================================================
+
+/**
+ * Resolve the per-workspace "Anton Connect" system user, creating one if it
+ * doesn't exist yet (covers workspaces created after phase11.sql ran).
+ * Returns the row, or NULL on catastrophic failure (which the caller should
+ * gracefully skip — automations are nice-to-have, never block the user flow).
+ */
+function chat_get_system_user(int $workspaceId): ?array {
+  static $cache = [];
+  if (isset($cache[$workspaceId])) return $cache[$workspaceId];
+
+  try {
+    $stmt = db()->prepare('SELECT * FROM users WHERE workspace_id = ? AND is_system = 1 LIMIT 1');
+    $stmt->execute([$workspaceId]);
+    $row = $stmt->fetch();
+    if ($row) return $cache[$workspaceId] = $row;
+
+    // Lazy-create. Pick the highest-permission role available.
+    $roleId = (int)(db()->query("SELECT id FROM roles WHERE name = 'Super Admin' LIMIT 1")->fetchColumn() ?: 0);
+    if ($roleId <= 0) {
+      $roleId = (int)(db()->query('SELECT id FROM roles ORDER BY id ASC LIMIT 1')->fetchColumn() ?: 0);
+    }
+    if ($roleId <= 0) return null;
+
+    $email = 'anton-connect+' . $workspaceId . '@anton.local';
+    $now   = now();
+    $ins = db()->prepare(
+      'INSERT INTO users (workspace_id, role_id, name, email, password_hash, is_active, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)'
+    );
+    $ins->execute([$workspaceId, $roleId, 'Anton Connect', $email, '!!ANTON_CONNECT_NO_LOGIN!!', $now, $now]);
+    $newId = (int)db()->lastInsertId();
+    $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
+    $stmt->execute([$newId]);
+    return $cache[$workspaceId] = $stmt->fetch();
+  } catch (Throwable $e) {
+    return null;
+  }
+}
+
+/**
+ * Find-or-create a 1-on-1 DM between two users in the same workspace.
+ * Idempotent — repeats return the same conversation_id (uses chat_dm_key_for_pair).
+ */
+function chat_find_or_create_dm(int $workspaceId, int $userA, int $userB): ?int {
+  if ($userA <= 0 || $userB <= 0 || $userA === $userB) return null;
+  try {
+    $pdo = db();
+    $key = chat_dm_key_for_pair($userA, $userB);
+    $stmt = $pdo->prepare(
+      'SELECT id FROM chat_direct_conversations
+       WHERE workspace_id = ? AND is_group = 0 AND dm_key = ?
+       LIMIT 1'
+    );
+    $stmt->execute([$workspaceId, $key]);
+    $existing = (int)$stmt->fetchColumn();
+    if ($existing > 0) return $existing;
+
+    $pdo->beginTransaction();
+    $now = now();
+    $ins = $pdo->prepare(
+      'INSERT INTO chat_direct_conversations (workspace_id, is_group, name, dm_key, created_by, created_at)
+       VALUES (?, 0, NULL, ?, ?, ?)'
+    );
+    $ins->execute([$workspaceId, $key, $userA, $now]);
+    $convId = (int)$pdo->lastInsertId();
+
+    $addMember = $pdo->prepare(
+      'INSERT INTO chat_direct_conversation_members (conversation_id, user_id, joined_at)
+       VALUES (?, ?, ?), (?, ?, ?)'
+    );
+    $addMember->execute([$convId, $userA, $now, $convId, $userB, $now]);
+    $pdo->commit();
+    return $convId;
+  } catch (Throwable $e) {
+    if (db()->inTransaction()) db()->rollBack();
+    return null;
+  }
+}
+
+/**
+ * Post a message AS Anton Connect into a channel OR DM (exactly one target).
+ * Mirrors the msg_action_send flow in /chat/api/messages.php:
+ *   1. INSERT chat_messages with author = Anton
+ *   2. chat_parse_and_store_mentions (so @user pings still ring)
+ *   3. chat_emit_event so live SSE clients see it
+ * Returns the inserted message_id, or 0 on failure.
+ */
+function chat_post_as_system(
+  int $workspaceId,
+  ?int $channelId,
+  ?int $conversationId,
+  string $contentHtml,
+  ?array $card = null,
+  ?int $parentMessageId = null
+): int {
+  if (($channelId === null) === ($conversationId === null)) return 0;
+  $system = chat_get_system_user($workspaceId);
+  if (!$system) return 0;
+
+  $clean = chat_sanitize_html($contentHtml);
+  if (trim($clean) === '' && empty($card)) return 0;
+
+  try {
+    $pdo = db();
+    $now = now();
+    $cardJson = $card ? json_encode($card, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
+
+    $ins = $pdo->prepare(
+      'INSERT INTO chat_messages
+         (workspace_id, channel_id, conversation_id, parent_message_id, user_id, content, entity_card_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $ins->execute([
+      $workspaceId,
+      $channelId, $conversationId, $parentMessageId,
+      (int)$system['id'], $clean, $cardJson, $now,
+    ]);
+    $msgId = (int)$pdo->lastInsertId();
+    chat_parse_and_store_mentions($msgId, $clean, $workspaceId);
+
+    $payload = [];
+    if ($parentMessageId) $payload['parent_message_id'] = $parentMessageId;
+    if ($card)            $payload['has_card'] = 1;
+    chat_emit_event(
+      $workspaceId, 'message',
+      $channelId, $conversationId,
+      $msgId, (int)$system['id'],
+      empty($payload) ? null : $payload
+    );
+    return $msgId;
+  } catch (Throwable $e) {
+    return 0;
+  }
+}
+
+/** Convenience: DM a user as Anton Connect, opening the DM on first use. */
+function chat_dm_user_as_system(int $workspaceId, int $userId, string $contentHtml, ?array $card = null): int {
+  $system = chat_get_system_user($workspaceId);
+  if (!$system) return 0;
+  $convId = chat_find_or_create_dm($workspaceId, (int)$system['id'], $userId);
+  if (!$convId) return 0;
+  return chat_post_as_system($workspaceId, null, $convId, $contentHtml, $card);
+}
+
+/**
+ * Build a slug from a free-form name, e.g. "Project Falcon!" -> "project-falcon".
+ * Result is forced into chat-channel slug rules (lowercase, a-z0-9-_, max 60).
+ */
+function chat_slugify(string $name): string {
+  $s = strtolower(trim($name));
+  $s = preg_replace('/[^a-z0-9_-]+/i', '-', $s) ?? '';
+  $s = preg_replace('/-+/', '-', $s) ?? '';
+  $s = trim($s, '-_');
+  if ($s === '') $s = 'untitled';
+  return substr($s, 0, 60);
+}
+
+/**
+ * Idempotent ensure-row for chat_automations.
+ */
+function chat_load_automation_config(int $workspaceId): array {
+  try {
+    $stmt = db()->prepare('SELECT * FROM chat_automations WHERE workspace_id = ?');
+    $stmt->execute([$workspaceId]);
+    $row = $stmt->fetch();
+    if ($row) return $row;
+
+    // First-call setup per the user's Phase 11 decision: standup defaults to
+    // ENABLED at 21:00 local with collation at 22:30. The standup channel is
+    // auto-created the first time the tick fires (chat_ensure_standup_channel).
+    $now = now();
+    db()->prepare(
+      'INSERT INTO chat_automations
+         (workspace_id, standup_enabled, standup_at, standup_cutoff_at, created_at, updated_at)
+       VALUES (?, 1, "21:00", "22:30", ?, ?)'
+    )->execute([$workspaceId, $now, $now]);
+    $stmt->execute([$workspaceId]);
+    return $stmt->fetch() ?: [];
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+
+/**
+ * Lazy-create the workspace's #standup channel + persist the id on the
+ * chat_automations row. Returns the channel_id or 0 on failure.
+ */
+function chat_ensure_standup_channel(int $workspaceId): int {
+  try {
+    $cfg = chat_load_automation_config($workspaceId);
+    $existing = (int)($cfg['standup_channel_id'] ?? 0);
+    if ($existing > 0) {
+      $st = db()->prepare('SELECT id FROM chat_channels WHERE id = ? AND workspace_id = ?');
+      $st->execute([$existing, $workspaceId]);
+      if ((int)$st->fetchColumn() === $existing) return $existing;
+    }
+    $st = db()->prepare('SELECT id FROM chat_channels WHERE workspace_id = ? AND slug = "standup" LIMIT 1');
+    $st->execute([$workspaceId]);
+    $found = (int)$st->fetchColumn();
+
+    if ($found === 0) {
+      $system = chat_get_system_user($workspaceId);
+      if (!$system) return 0;
+      $now = now();
+      $ins = db()->prepare(
+        'INSERT INTO chat_channels (workspace_id, slug, is_private, topic, description, created_by, created_at)
+         VALUES (?, "standup", 0, "Daily standup", "Anton Connect rolls up daily standup answers here.", ?, ?)'
+      );
+      $ins->execute([$workspaceId, (int)$system['id'], $now]);
+      $found = (int)db()->lastInsertId();
+      // Add every active human user.
+      $um = db()->prepare(
+        "SELECT id FROM users WHERE workspace_id = ? AND is_active = 1 AND IFNULL(is_system, 0) = 0"
+      );
+      $um->execute([$workspaceId]);
+      $addMember = db()->prepare('INSERT IGNORE INTO chat_channel_members (channel_id, user_id, joined_at) VALUES (?, ?, ?)');
+      foreach ($um->fetchAll() as $row) {
+        $addMember->execute([$found, (int)$row['id'], $now]);
+      }
+      // And Anton Connect itself so post-as-system has a valid sender.
+      $addMember->execute([$found, (int)$system['id'], $now]);
+      chat_emit_event($workspaceId, 'channel_created', $found, null, null, (int)$system['id']);
+    }
+
+    db()->prepare('UPDATE chat_automations SET standup_channel_id = ?, updated_at = ? WHERE workspace_id = ?')
+      ->execute([$found, now(), $workspaceId]);
+    return $found;
+  } catch (Throwable $e) {
+    return 0;
+  }
+}
+
+/**
+ * Track that a chat message is linked to an AntonX entity (task/project/client/doc).
+ * Used by "Convert message to task" + /share <entity>.
+ */
+function chat_link_message_to_entity(int $workspaceId, int $messageId, string $entityType, int $entityId): void {
+  if (!in_array($entityType, ['task','project','client','doc'], true)) return;
+  try {
+    db()->prepare(
+      'INSERT IGNORE INTO chat_message_links (workspace_id, message_id, entity_type, entity_id, created_at)
+       VALUES (?, ?, ?, ?, ?)'
+    )->execute([$workspaceId, $messageId, $entityType, $entityId, now()]);
+  } catch (Throwable $e) { /* swallow */ }
+}
+
+/**
+ * Look up which AntonX entity a chat message anchors (if any). NULL if none.
+ */
+function chat_entity_for_message(int $messageId): ?array {
+  try {
+    $stmt = db()->prepare('SELECT entity_type, entity_id FROM chat_message_links WHERE message_id = ? LIMIT 1');
+    $stmt->execute([$messageId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+  } catch (Throwable $e) {
+    return null;
+  }
+}
+
+/**
+ * Look up the anchor chat message for an AntonX entity. Returns the latest
+ * one if multiple (rare; /share posted twice).
+ */
+function chat_message_for_entity(int $workspaceId, string $entityType, int $entityId): ?int {
+  try {
+    $stmt = db()->prepare(
+      'SELECT message_id FROM chat_message_links
+       WHERE workspace_id = ? AND entity_type = ? AND entity_id = ?
+       ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->execute([$workspaceId, $entityType, $entityId]);
+    $id = (int)$stmt->fetchColumn();
+    return $id > 0 ? $id : null;
+  } catch (Throwable $e) {
+    return null;
+  }
+}
+
+/**
+ * Render an inline preview card for any AntonX entity referenced from chat.
+ * Returns HTML safe to inline into a message body — pure visual, no JS.
+ * Empty string if the entity is gone / forbidden / type unknown.
+ */
+function chat_render_entity_card(string $type, int $id, int $workspaceId): string {
+  if ($id <= 0) return '';
+  try {
+    $pdo = db();
+    switch ($type) {
+      case 'task': {
+        $stmt = $pdo->prepare(
+          'SELECT t.id, t.title, t.status, t.due_date, p.name AS project_name
+           FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+           WHERE t.id = ? AND t.workspace_id = ? LIMIT 1'
+        );
+        $stmt->execute([$id, $workspaceId]);
+        $r = $stmt->fetch();
+        if (!$r) return '';
+        $statusCls = strtolower(preg_replace('/[^a-z0-9]+/i', '-', (string)$r['status']) ?? 'todo');
+        $due = $r['due_date'] ? date('M j', strtotime((string)$r['due_date'])) : '';
+        return '<a class="entity-card entity-card-task" href="/task_details.php?id=' . (int)$r['id'] . '">'
+          .   '<span class="entity-card-kind">TASK</span>'
+          .   '<span class="entity-card-title">' . h((string)$r['title']) . '</span>'
+          .   '<span class="entity-card-meta">'
+          .     '<span class="entity-card-status entity-card-status-' . h($statusCls) . '">' . h((string)$r['status']) . '</span>'
+          .     ($r['project_name'] ? '<span class="entity-card-proj">' . h((string)$r['project_name']) . '</span>' : '')
+          .     ($due ? '<span class="entity-card-due">Due ' . h($due) . '</span>' : '')
+          .   '</span>'
+          . '</a>';
+      }
+      case 'project': {
+        $stmt = $pdo->prepare(
+          'SELECT p.id, p.name, c.name AS client_name, ps.name AS status_name
+           FROM projects p
+           LEFT JOIN clients c          ON c.id  = p.client_id
+           LEFT JOIN project_statuses ps ON ps.id = p.status_id
+           WHERE p.id = ? AND p.workspace_id = ? LIMIT 1'
+        );
+        $stmt->execute([$id, $workspaceId]);
+        $r = $stmt->fetch();
+        if (!$r) return '';
+        return '<a class="entity-card entity-card-project" href="/projects.php?id=' . (int)$r['id'] . '">'
+          .   '<span class="entity-card-kind">PROJECT</span>'
+          .   '<span class="entity-card-title">' . h((string)$r['name']) . '</span>'
+          .   '<span class="entity-card-meta">'
+          .     ($r['client_name'] ? '<span class="entity-card-client">' . h((string)$r['client_name']) . '</span>' : '')
+          .     ($r['status_name'] ? '<span class="entity-card-status">' . h((string)$r['status_name']) . '</span>' : '')
+          .   '</span>'
+          . '</a>';
+      }
+      case 'client': {
+        $stmt = $pdo->prepare('SELECT id, name FROM clients WHERE id = ? AND workspace_id = ? LIMIT 1');
+        $stmt->execute([$id, $workspaceId]);
+        $r = $stmt->fetch();
+        if (!$r) return '';
+        return '<a class="entity-card entity-card-client" href="/clients.php?id=' . (int)$r['id'] . '">'
+          .   '<span class="entity-card-kind">CLIENT</span>'
+          .   '<span class="entity-card-title">' . h((string)$r['name']) . '</span>'
+          . '</a>';
+      }
+      case 'doc': {
+        $stmt = $pdo->prepare(
+          'SELECT d.id, d.title, p.name AS project_name
+           FROM docs d LEFT JOIN projects p ON p.id = d.project_id
+           WHERE d.id = ? AND d.workspace_id = ? LIMIT 1'
+        );
+        $stmt->execute([$id, $workspaceId]);
+        $r = $stmt->fetch();
+        if (!$r) return '';
+        return '<a class="entity-card entity-card-doc" href="/doc_edit.php?id=' . (int)$r['id'] . '">'
+          .   '<span class="entity-card-kind">DOC</span>'
+          .   '<span class="entity-card-title">' . h((string)$r['title']) . '</span>'
+          .   ($r['project_name'] ? '<span class="entity-card-meta"><span class="entity-card-proj">' . h((string)$r['project_name']) . '</span></span>' : '')
+          . '</a>';
+      }
+    }
+    return '';
+  } catch (Throwable $e) {
+    return '';
+  }
+}
+
+/**
+ * Total unread chat for an AntonX-side bell badge (mirrors nav_chat_unread_total
+ * but lives here so the chat helpers themselves can re-export it). Wraps both
+ * channel + DM unread sums.
+ */
+function chat_unread_total_for_user(int $workspaceId, int $userId): int {
+  try {
+    $u = chat_unread_counts_for_user($workspaceId, $userId);
+    return array_sum($u['channels'] ?? []) + array_sum($u['dms'] ?? []);
+  } catch (Throwable $e) {
+    return 0;
+  }
+}
+
+/**
+ * SSE-tick worker: scan for tasks due in the next 24 hours where we haven't
+ * already pinged the assignee, then DM each one. Idempotent via the
+ * chat_due_reminders (task_id, user_id) PRIMARY KEY. Capped per call so a
+ * huge backfill doesn't stall the tick.
+ *
+ * Called from /chat/api/events.php inside the same loop that delivers
+ * scheduled messages.
+ */
+function chat_run_due_reminders(int $limit = 20): int {
+  if (!file_exists(__DIR__ . '/notifications.php')) return 0;
+  require_once __DIR__ . '/notifications.php';
+
+  try {
+    $pdo = db();
+    $stmt = $pdo->prepare(
+      "SELECT t.id AS task_id, ta.user_id, t.workspace_id
+       FROM tasks t
+       JOIN task_assignees ta ON ta.task_id = t.id
+       LEFT JOIN chat_due_reminders dr ON dr.task_id = t.id AND dr.user_id = ta.user_id
+       WHERE dr.task_id IS NULL
+         AND t.due_date IS NOT NULL
+         AND t.due_date <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+         AND t.due_date > NOW()
+         AND LOWER(t.status) NOT IN ('done','completed','closed','approved','submitted','submitted to client','archived')
+       ORDER BY t.due_date ASC
+       LIMIT ?"
+    );
+    $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+    if (empty($rows)) return 0;
+
+    $log = $pdo->prepare(
+      'INSERT IGNORE INTO chat_due_reminders (task_id, user_id, sent_at) VALUES (?, ?, ?)'
+    );
+    $sent = 0;
+    foreach ($rows as $r) {
+      $tid = (int)$r['task_id']; $uid = (int)$r['user_id'];
+      // Claim the slot first so concurrent ticks don't double-fire.
+      if ($log->execute([$tid, $uid, now()]) && $log->rowCount() > 0) {
+        chat_notify_task_due_soon($tid, $uid);
+        $sent++;
+      }
+    }
+    return $sent;
+  } catch (Throwable $e) {
+    return 0;
+  }
 }

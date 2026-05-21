@@ -868,6 +868,87 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
   padding: 1px 5px;
   border-radius: 4px;
 }
+
+/* AntonX entity pills (task#, proj#, client#, doc#) — server-rendered at
+   display time, never stored. Colors map to entity type. */
+.msg-body .chat-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 0;
+  font-size: 0.93em;
+  line-height: 1.4;
+}
+.msg-body .chat-entity .chat-entity-glyph {
+  font-family: var(--f-mono);
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+.msg-body .chat-entity-task     { background: var(--gold-soft); color: var(--gold); }
+.msg-body .chat-entity-project  { background: var(--teal-soft); color: var(--teal); }
+.msg-body .chat-entity-client   { background: oklch(0.58 0.16 280 / 0.18); color: oklch(0.78 0.16 280); }
+.msg-body .chat-entity-doc      { background: oklch(0.62 0 0 / 0.16);     color: var(--fg-1); }
+.msg-body .chat-entity:hover    { filter: brightness(1.1); }
+
+/* /share entity cards — block-level preview cards (server-rendered from
+   chat_messages.entity_card_json by Step 10). */
+.msg-body .entity-card {
+  display: block;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  background: var(--bg-1);
+  text-decoration: none;
+  color: var(--fg-0);
+  max-width: 460px;
+  border-bottom: 1px solid var(--line-1);   /* override .msg-body a default */
+}
+.msg-body .entity-card:hover { background: var(--bg-hover); }
+.msg-body .entity-card .entity-card-kind {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--fg-2);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.msg-body .entity-card-task     .entity-card-kind { color: var(--gold); }
+.msg-body .entity-card-project  .entity-card-kind { color: var(--teal); }
+.msg-body .entity-card-client   .entity-card-kind { color: oklch(0.78 0.16 280); }
+.msg-body .entity-card-doc      .entity-card-kind { color: var(--fg-1); }
+.msg-body .entity-card .entity-card-title {
+  display: block;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--fg-0);
+  line-height: 1.3;
+}
+.msg-body .entity-card .entity-card-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.msg-body .entity-card .entity-card-status {
+  background: var(--bg-3);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+.msg-body .entity-card .entity-card-status-done,
+.msg-body .entity-card .entity-card-status-completed,
+.msg-body .entity-card .entity-card-status-closed { background: oklch(0.78 0.15 150 / 0.18); color: var(--green); }
+.msg-body .entity-card .entity-card-due { color: var(--amber); font-weight: 600; }
 .msg-edited { font-size: 11px; color: var(--fg-2); margin-left: 4px; }
 .msg-body.msg-deleted { color: var(--fg-3); font-style: italic; }
 
@@ -1382,6 +1463,78 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
 }
 html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
 .cx-modal-wide { width: min(560px, calc(100% - 32px)); }
+.cx-modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cx-modal-form textarea {
+  padding: 9px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-sm);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  resize: vertical;
+  font-family: var(--f-sans);
+}
+.cx-modal-form textarea:focus { border-color: var(--gold-line); box-shadow: 0 0 0 2px var(--gold-soft); }
+.cx-modal-form select[multiple] { padding: 6px 8px; min-height: 90px; }
+.chat-tracked {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: 4px;
+  padding: 4px 10px;
+}
+.chat-tracked a { color: var(--gold) !important; border-bottom: 0 !important; font-weight: 600; }
+
+/* /poll widget — inline poll inserted by quick-action. Bars are the % of
+   total votes, click to (un)vote. */
+.chat-poll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  max-width: 420px;
+}
+.chat-poll-opt {
+  position: relative;
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: var(--r-sm);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.chat-poll-opt:hover { border-color: var(--gold-line); }
+.chat-poll-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--gold-soft);
+  z-index: 0;
+  transition: width 200ms ease;
+}
+.chat-poll-label { position: relative; z-index: 1; }
+.chat-poll-count {
+  position: relative;
+  z-index: 1;
+  float: right;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.chat-poll-meta { font-size: 11.5px; color: var(--fg-2); padding: 2px 2px; }
 .cx-modal-form {
   display: flex;
   flex-direction: column;

@@ -520,7 +520,7 @@ require_once __DIR__ . '/layout.php';
             <div class="user-cell">
               <div class="user-avatar" style="background:<?= h($grad) ?>;"><?= h(user_initials((string)$uu['name'])) ?></div>
               <div>
-                <div class="user-name"><?= h($uu['name']) ?></div>
+                <div class="user-name"><?= h($uu['name']) ?><?= user_status_chip((int)$uu['id']) ?></div>
                 <div class="user-id">USR-<?= str_pad((string)(int)$uu['id'], 4, '0', STR_PAD_LEFT) ?></div>
               </div>
             </div>

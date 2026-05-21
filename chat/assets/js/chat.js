@@ -572,6 +572,9 @@
         +   '<button type="button" data-action="reply-quote" data-msg-id="' + msg.id + '" data-author="' + escapeHtml(msg.author_name) + '" title="Reply to this message">'
         +     '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8h3v3H7v3a3 3 0 003 3M14 8h3v3h-3v3a3 3 0 003 3"/></svg>'
         +   '</button>'
+        +   '<button type="button" data-action="open-convert-task" data-msg-id="' + msg.id + '" title="Create task from this message">'
+        +     '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'
+        +   '</button>'
         + (msg.user_id === CURRENT_USER_ID
             ? ('<button type="button" data-action="open-msg-menu" data-msg-id="' + msg.id + '" title="More">'
             +   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></svg>'
@@ -1840,6 +1843,8 @@
     }
     renderCmdk('');
   }
+  var cmdkAllAntonInflight = null;
+  var cmdkAllAntonDebounce = null;
   function renderCmdk(query) {
     var all = buildCmdkItems();
     var matches;
@@ -1856,12 +1861,18 @@
     cmdkItems = matches;
     cmdkActiveIndex = 0;
     if (!cmdkResults) return;
-    if (!matches.length) {
-      cmdkResults.innerHTML = '<div class="cmdk-section-label">No matches.</div>';
-      return;
-    }
+    // Render the local matches first, then async-fetch the unified search to
+    // append "All of Anton" groups (People, Tasks, Projects, Clients, Docs,
+    // Messages) below the local list.
+    cmdkResults.innerHTML = renderCmdkLocalSection(matches) + renderCmdkLoadingSection(query);
+    cmdkRenderActive();
+    if (query) scheduleCmdkAllSearch(query);
+  }
 
-    // Group by kind for clarity.
+  function renderCmdkLocalSection(matches) {
+    if (!matches.length) {
+      return '<div class="cmdk-section-label">In this chat</div><div class="cmdk-section-label">No matches.</div>';
+    }
     var groups = {};
     matches.forEach(function (m, i) {
       if (!groups[m.kind]) groups[m.kind] = [];
@@ -1879,7 +1890,75 @@
               + '</a>';
       });
     });
-    cmdkResults.innerHTML = html;
+    return html;
+  }
+
+  function renderCmdkLoadingSection(q) {
+    if (!q) return '';
+    return '<div class="cmdk-section-label cmdk-allanton-label">All of Anton · searching…</div>';
+  }
+
+  function cmdkRenderActive() {
+    $$('.cmdk-item').forEach(function (el) {
+      var i = parseInt(el.getAttribute('data-cmdk-index'), 10);
+      if (i === cmdkActiveIndex) el.classList.add('active');
+      else el.classList.remove('active');
+    });
+  }
+
+  function scheduleCmdkAllSearch(q) {
+    clearTimeout(cmdkAllAntonDebounce);
+    cmdkAllAntonDebounce = setTimeout(function () { runCmdkAllSearch(q); }, 200);
+  }
+  function runCmdkAllSearch(q) {
+    if (cmdkAllAntonInflight && typeof cmdkAllAntonInflight.abort === 'function') {
+      try { cmdkAllAntonInflight.abort(); } catch (e) {}
+    }
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    cmdkAllAntonInflight = ctrl;
+    fetch('/chat/api/search_all.php?q=' + encodeURIComponent(q) + '&limit=6', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || ctrl !== cmdkAllAntonInflight) return;
+        renderCmdkAllAnton(data);
+      }).catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+      });
+  }
+  function renderCmdkAllAnton(data) {
+    if (!cmdkResults) return;
+    var groups = data.groups || {};
+    var kinds  = ['people', 'tasks', 'projects', 'clients', 'docs', 'channels', 'messages'];
+    var nameMap = {
+      people: 'People', tasks: 'Tasks', projects: 'Projects', clients: 'Clients',
+      docs: 'Docs', channels: 'Channels', messages: 'Messages'
+    };
+    // Append items to cmdkItems so keyboard nav covers them too.
+    var startIdx = cmdkItems.length;
+    var html = '';
+    var anyShown = false;
+    kinds.forEach(function (k) {
+      var list = groups[k] || [];
+      if (!list.length) return;
+      anyShown = true;
+      html += '<div class="cmdk-section-label">' + escapeHtml(nameMap[k]) + '</div>';
+      list.forEach(function (it) {
+        cmdkItems.push({ kind: nameMap[k], name: it.label, prefix: '', href: it.href });
+        html += '<a class="cmdk-item" href="' + escapeHtml(it.href) + '" data-cmdk-index="' + startIdx + '">'
+              + '<span class="prefix">↪</span>'
+              + '<span class="name">' + escapeHtml(it.label) + '</span>'
+              + '<span class="kind">' + escapeHtml(it.sub || nameMap[k]) + '</span>'
+              + '</a>';
+        startIdx++;
+      });
+    });
+    // Replace the "searching…" loading line.
+    var loading = cmdkResults.querySelector('.cmdk-allanton-label');
+    if (loading) loading.outerHTML = anyShown ? html : '<div class="cmdk-section-label">All of Anton · no matches.</div>';
+    else cmdkResults.insertAdjacentHTML('beforeend', html);
   }
   function updateCmdkActive() {
     $$('.cmdk-item').forEach(function (el) {
@@ -2401,6 +2480,127 @@
     }
     forwardTargetSel.innerHTML = opts.join('');
   }
+  // ===== Convert message → task =====
+  var convertTaskForm    = $('#convertTaskForm');
+  var convertTaskCtxLoaded = false;
+  var convertTaskCtx       = { projects: [], phases: [], people: [] };
+
+  function openConvertTaskModal(msgId) {
+    var hidden = $('#convertTaskMessageId');
+    if (hidden) hidden.value = String(msgId);
+    if ($('#convertTaskTitle')) {
+      var msgEl = document.querySelector('.msg-group[data-msg-id="' + msgId + '"] .msg-body');
+      var raw = msgEl ? (msgEl.textContent || '').trim() : '';
+      // Seed the title with up to 100 chars of the message body.
+      $('#convertTaskTitle').value = raw.length > 100 ? raw.slice(0, 97) + '…' : raw;
+    }
+    var err = $('#convertTaskErr');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    if (!convertTaskCtxLoaded) {
+      loadConvertTaskContext();
+    } else {
+      // Pre-select the channel's project if we know it; otherwise leave default.
+      preselectProjectByChannel();
+    }
+    openDialog('modalConvertTask');
+    setTimeout(function () { if ($('#convertTaskTitle')) $('#convertTaskTitle').focus(); }, 0);
+  }
+
+  function loadConvertTaskContext() {
+    apiGet('task_form_context', 'convert.php', {}).then(function (res) {
+      if (!res.ok || !res.data) return;
+      convertTaskCtx = {
+        projects: res.data.projects || [],
+        phases:   res.data.phases   || [],
+        people:   res.data.people   || []
+      };
+      convertTaskCtxLoaded = true;
+      renderConvertTaskSelects();
+    });
+  }
+
+  function renderConvertTaskSelects() {
+    var pSel = $('#convertTaskProject');
+    var hSel = $('#convertTaskPhase');
+    var aSel = $('#convertTaskAssignees');
+    if (pSel) {
+      pSel.innerHTML = '<option value="">Choose a project…</option>' +
+        convertTaskCtx.projects.map(function (p) {
+          return '<option value="' + p.id + '">' + escapeHtml(String(p.name || '')) + '</option>';
+        }).join('');
+      pSel.onchange = function () {
+        var pid = parseInt(this.value, 10) || 0;
+        var phases = convertTaskCtx.phases.filter(function (ph) { return parseInt(ph.project_id, 10) === pid; });
+        if (hSel) {
+          hSel.innerHTML = '<option value="">Auto (first phase)</option>' + phases.map(function (ph) {
+            return '<option value="' + ph.id + '">' + escapeHtml(String(ph.name || '')) + '</option>';
+          }).join('');
+        }
+      };
+    }
+    if (aSel) {
+      aSel.innerHTML = convertTaskCtx.people.map(function (p) {
+        return '<option value="' + p.id + '">' + escapeHtml(String(p.name || '')) + '</option>';
+      }).join('');
+    }
+    preselectProjectByChannel();
+  }
+
+  function preselectProjectByChannel() {
+    // If the current channel slug looks like "proj-<slug>", try to match the
+    // project so the user doesn't have to pick it manually.
+    if (!CURRENT_CHANNEL_SLUG || !convertTaskCtxLoaded) return;
+    var m = /^proj-(.+)$/.exec(String(CURRENT_CHANNEL_SLUG));
+    if (!m) return;
+    var slug = m[1];
+    var match = convertTaskCtx.projects.find(function (p) {
+      return String(p.name || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') === slug;
+    });
+    if (match && $('#convertTaskProject')) {
+      $('#convertTaskProject').value = String(match.id);
+      $('#convertTaskProject').dispatchEvent(new Event('change'));
+    }
+  }
+
+  if (convertTaskForm) {
+    convertTaskForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = {
+        message_id:  $('#convertTaskMessageId').value,
+        title:       $('#convertTaskTitle').value.trim(),
+        project_id:  $('#convertTaskProject').value,
+        phase_id:    $('#convertTaskPhase').value,
+        description: $('#convertTaskDescription').value.trim(),
+        due_date:    $('#convertTaskDue').value
+      };
+      var aSel = $('#convertTaskAssignees');
+      if (aSel) {
+        body.assignees = Array.prototype.slice.call(aSel.selectedOptions).map(function (o) { return o.value; });
+      }
+      var btn = convertTaskForm.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      apiPost('message_to_task', 'convert.php', body).then(function (res) {
+        if (btn) btn.disabled = false;
+        if (!res.ok) {
+          var err = $('#convertTaskErr');
+          if (err) { err.textContent = (res.data && res.data.message) || 'Could not create the task.'; err.hidden = false; }
+          return;
+        }
+        closeDialog('modalConvertTask');
+        // Optimistically append the tracker footer to the message in the DOM.
+        var msgEl = document.querySelector('.msg-group[data-msg-id="' + body.message_id + '"] .msg-body');
+        if (msgEl && !msgEl.querySelector('.chat-tracked')) {
+          msgEl.insertAdjacentHTML('beforeend',
+            '<p class="chat-tracked">📌 Tracked in <a href="' + res.data.task_url + '">task#' + res.data.task_id + '</a></p>');
+        }
+      }).catch(function () {
+        if (btn) btn.disabled = false;
+        var err = $('#convertTaskErr');
+        if (err) { err.textContent = 'Network error.'; err.hidden = false; }
+      });
+    });
+  }
+
   if (forwardForm) {
     forwardForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -2584,6 +2784,34 @@
         e.preventDefault();
         openForwardModal(parseInt(t.getAttribute('data-msg-id'), 10));
         break;
+      case 'open-convert-task':
+        e.preventDefault();
+        openConvertTaskModal(parseInt(t.getAttribute('data-msg-id'), 10));
+        break;
+      case 'poll-vote': {
+        e.preventDefault();
+        var pid = parseInt(t.getAttribute('data-poll-id'), 10);
+        var oid = parseInt(t.getAttribute('data-option-idx'), 10);
+        apiPost('vote', 'polls.php', { poll_id: pid, option_idx: oid }).then(function (res) {
+          if (!res.ok) return;
+          // Update counts + bars in place for every option inside this poll.
+          var poll = document.querySelector('.chat-poll[data-poll-id="' + pid + '"]');
+          if (!poll) return;
+          var total = res.data.total || 0;
+          poll.querySelectorAll('.chat-poll-opt').forEach(function (opt) {
+            var i = parseInt(opt.getAttribute('data-option-idx'), 10);
+            var n = (res.data.counts && res.data.counts[i]) || 0;
+            var pct = total > 0 ? Math.round((n / total) * 100) : 0;
+            var bar = opt.querySelector('.chat-poll-bar');
+            var cnt = opt.querySelector('.chat-poll-count');
+            if (bar) bar.style.width = pct + '%';
+            if (cnt) cnt.textContent = String(n);
+          });
+          var meta = poll.querySelector('.chat-poll-meta');
+          if (meta) meta.textContent = total + ' vote' + (total === 1 ? '' : 's');
+        });
+        break;
+      }
       case 'reply-quote':
         e.preventDefault();
         startReplyQuote(parseInt(t.getAttribute('data-msg-id'), 10), t.getAttribute('data-author') || '');

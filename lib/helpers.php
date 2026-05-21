@@ -94,3 +94,39 @@ function client_logo_html(int $clientId, string $name, string $class='client-log
   }
   return '<span class="' . h($class) . '">' . h(user_initials($name)) . '</span>';
 }
+
+/**
+ * Anton Connect — render the user's chat-set status emoji + tooltip text as a
+ * small inline chip. Empty string if the user has no current status or the
+ * status_* columns don't exist yet (DB not migrated to Phase 10 status.sql).
+ * Cached in-process to keep dashboard / user-list pages from doing N queries.
+ *
+ * Returns SAFE HTML, intended to be inlined next to a user's name.
+ */
+function user_status_chip(int $userId): string {
+  if ($userId <= 0) return '';
+  static $cache = null;
+  if ($cache === null) {
+    $cache = [];
+    try {
+      $rows = db()->query(
+        "SELECT user_id, status_emoji, status_text
+         FROM chat_user_prefs
+         WHERE status_emoji IS NOT NULL
+           AND (status_expires_at IS NULL OR status_expires_at > NOW())"
+      )->fetchAll();
+      foreach ($rows as $r) {
+        $cache[(int)$r['user_id']] = [
+          'emoji' => (string)$r['status_emoji'],
+          'text'  => (string)($r['status_text'] ?? ''),
+        ];
+      }
+    } catch (Throwable $e) {
+      // Table or columns don't exist yet — silently return empty.
+      $cache = [];
+    }
+  }
+  if (!isset($cache[$userId])) return '';
+  $s = $cache[$userId];
+  return '<span class="user-status-chip" title="' . h($s['text']) . '">' . h($s['emoji']) . '</span>';
+}

@@ -24,54 +24,14 @@ function nav_item_html(string $href, string $key, string $label, string $iconSvg
        . h($label) . $badgeHtml . '</a>';
 }
 
-/**
- * Total unread chat messages across every channel + DM the user belongs to.
- * Returns 0 if the chat tables don't exist yet (fresh install) or anything
- * else goes wrong — the nav should never fatal because of this badge.
- */
-function nav_chat_unread_total(int $userId, int $workspaceId): int {
-  if ($userId <= 0 || $workspaceId <= 0) return 0;
-  try {
-    $pdo = db();
-    $chStmt = $pdo->prepare(
-      "SELECT IFNULL(SUM(
-         (SELECT COUNT(*) FROM chat_messages m
-          WHERE m.channel_id = cm.channel_id
-            AND m.parent_message_id IS NULL
-            AND m.deleted_at IS NULL
-            AND m.user_id != ?
-            AND m.id > IFNULL(cm.last_read_message_id, 0))
-       ), 0) AS n
-       FROM chat_channel_members cm
-       JOIN chat_channels c ON c.id = cm.channel_id
-       WHERE cm.user_id = ? AND c.workspace_id = ? AND c.archived_at IS NULL"
-    );
-    $chStmt->execute([$userId, $userId, $workspaceId]);
-    $ch = (int)$chStmt->fetchColumn();
+// Badge helpers live in partials/nav_helpers.php so header.php can reuse them
+// for the top-right bell without duplicating SQL.
+require_once __DIR__ . '/nav_helpers.php';
 
-    $dmStmt = $pdo->prepare(
-      "SELECT IFNULL(SUM(
-         (SELECT COUNT(*) FROM chat_messages m
-          WHERE m.conversation_id = dm.conversation_id
-            AND m.parent_message_id IS NULL
-            AND m.deleted_at IS NULL
-            AND m.user_id != ?
-            AND m.id > IFNULL(dm.last_read_message_id, 0))
-       ), 0) AS n
-       FROM chat_direct_conversation_members dm
-       JOIN chat_direct_conversations c ON c.id = dm.conversation_id
-       WHERE dm.user_id = ? AND c.workspace_id = ?"
-    );
-    $dmStmt->execute([$userId, $userId, $workspaceId]);
-    $dm = (int)$dmStmt->fetchColumn();
-
-    return $ch + $dm;
-  } catch (Throwable $e) {
-    return 0;
-  }
-}
-
-$navChatUnread = nav_chat_unread_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
+$navChatUnread    = nav_chat_unread_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
+$navAntonxPending = nav_antonx_pending_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
+$navReviewsCount  = nav_reviews_pending_total((int)($u['workspace_id'] ?? 0), (string)$role);
+$navAlertTotal    = $navChatUnread + $navAntonxPending;
 
 $icons = [
   'dashboard' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>',
@@ -110,6 +70,16 @@ $icons = [
     text-align: center;
   }
   .nav-item.active .nav-item-badge { background: oklch(0.70 0.20 25); color: #fff; }
+
+  /* Anton Connect — chat status emoji shown inline next to user names. */
+  .user-status-chip {
+    display: inline-block;
+    font-size: 0.85em;
+    margin-left: 4px;
+    line-height: 1;
+    cursor: help;
+    vertical-align: -1px;
+  }
 </style>
 <aside class="sidebar">
   <a class="brand" href="dashboard.php" aria-label="anton x">
