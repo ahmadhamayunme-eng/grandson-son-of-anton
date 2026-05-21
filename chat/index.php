@@ -841,6 +841,47 @@ if ($currentChannel) {
   </form>
 </dialog>
 
+<dialog class="cx-modal cx-modal-wide" id="modalConvertTask" aria-labelledby="modalConvertTaskTitle">
+  <form class="cx-modal-form" id="convertTaskForm">
+    <h2 class="cx-modal-title" id="modalConvertTaskTitle">Create task from message</h2>
+    <p class="cx-modal-help">A new AntonX task gets created from this message. The chat message gets a "Tracked in task#…" footer linking back, and the assignee is DM'd by Anton Connect.</p>
+    <input type="hidden" id="convertTaskMessageId" value="">
+    <label class="cx-modal-field">
+      <span class="cx-modal-label">Title</span>
+      <input type="text" id="convertTaskTitle" required maxlength="220" placeholder="Short, actionable title">
+    </label>
+    <div class="cx-modal-grid-2">
+      <label class="cx-modal-field">
+        <span class="cx-modal-label">Project</span>
+        <select id="convertTaskProject" required><option value="">Loading…</option></select>
+      </label>
+      <label class="cx-modal-field">
+        <span class="cx-modal-label">Phase</span>
+        <select id="convertTaskPhase"><option value="">Auto (first phase)</option></select>
+      </label>
+    </div>
+    <div class="cx-modal-grid-2">
+      <label class="cx-modal-field">
+        <span class="cx-modal-label">Assignees</span>
+        <select id="convertTaskAssignees" multiple size="4"></select>
+      </label>
+      <label class="cx-modal-field">
+        <span class="cx-modal-label">Due date <span class="cx-modal-optional">(optional)</span></span>
+        <input type="date" id="convertTaskDue">
+      </label>
+    </div>
+    <label class="cx-modal-field">
+      <span class="cx-modal-label">Description <span class="cx-modal-optional">(optional)</span></span>
+      <textarea id="convertTaskDescription" rows="3" placeholder="More context…"></textarea>
+    </label>
+    <div class="cx-modal-err" id="convertTaskErr" role="alert" hidden></div>
+    <div class="cx-modal-actions">
+      <button type="button" class="cx-btn" data-action="close-modal">Cancel</button>
+      <button type="submit" class="cx-btn cx-btn-primary">Create task</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="cx-modal" id="modalStatus" aria-labelledby="modalStatusTitle">
   <form class="cx-modal-form" id="statusForm">
     <h2 class="cx-modal-title" id="modalStatusTitle">Set a status</h2>

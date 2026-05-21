@@ -174,13 +174,33 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
     if (!$sameChannel && !$sameDm) chat_json_error('bad_request', 'Reply target must be in the same channel or DM.', 400);
   }
 
+  // Phase 11: slash quick actions parsed server-side. Only top-level messages
+  // (not thread replies) can be quick actions, so the user doesn't end up
+  // creating tasks accidentally from a thread reply.
+  $qa = ['handled' => false];
+  if ($parentMessageId === 0 && file_exists(__DIR__ . '/../includes/quick_actions.php')) {
+    require_once __DIR__ . '/../includes/quick_actions.php';
+    $qa = chat_parse_quick_action(
+      $content, $ws, $uid,
+      $channelId      > 0 ? $channelId      : null,
+      $conversationId > 0 ? $conversationId : null
+    );
+    if (!empty($qa['handled'])) {
+      $content = chat_sanitize_html((string)($qa['content'] ?? ''));
+    }
+  }
+
+  $cardJson = (!empty($qa['handled']) && !empty($qa['card']))
+    ? json_encode($qa['card'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+    : null;
+
   $now = now();
   $pdo->beginTransaction();
   try {
     $stmt = $pdo->prepare(
       'INSERT INTO chat_messages
-         (workspace_id, channel_id, conversation_id, parent_message_id, reply_to_message_id, user_id, content, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+         (workspace_id, channel_id, conversation_id, parent_message_id, reply_to_message_id, user_id, content, entity_card_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
       $ws,
@@ -188,10 +208,28 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
       $conversationId   > 0 ? $conversationId   : null,
       $parentMessageId  > 0 ? $parentMessageId  : null,
       $replyToMessageId > 0 ? $replyToMessageId : null,
-      $uid, $content, $now,
+      $uid, $content, $cardJson, $now,
     ]);
     $messageId = (int)$pdo->lastInsertId();
     chat_parse_and_store_mentions($messageId, $content, $ws);
+
+    // Persist the entity link + poll, if the quick action made one.
+    if (!empty($qa['handled'])) {
+      if (!empty($qa['linked'])) {
+        chat_link_message_to_entity($ws, $messageId, (string)$qa['linked']['type'], (int)$qa['linked']['id']);
+      }
+      if (!empty($qa['poll'])) {
+        $pdo->prepare(
+          'INSERT INTO chat_polls (message_id, workspace_id, question, options_json, created_at)
+           VALUES (?, ?, ?, ?, ?)'
+        )->execute([
+          $messageId, $ws,
+          (string)$qa['poll']['question'],
+          json_encode($qa['poll']['options'], JSON_UNESCAPED_UNICODE),
+          $now,
+        ]);
+      }
+    }
 
     $attachedFiles = [];
     if (!empty($fileIds)) {
@@ -228,6 +266,19 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
   } catch (Throwable $e) {
     $pdo->rollBack();
     throw $e;
+  }
+
+  // Anton Connect — if this is a thread reply on a message linked to a task,
+  // mirror it as an AntonX comment. Outside the txn so a bridge failure
+  // can't roll back the user's actual message.
+  if ($parentMessageId > 0 && file_exists(__DIR__ . '/../includes/comment_mirror.php')) {
+    require_once __DIR__ . '/../includes/comment_mirror.php';
+    try { chat_mirror_thread_reply_to_comment($parentMessageId, $messageId, $content, $uid); } catch (Throwable $e) {}
+  }
+  // Anton Connect — if this DM is to Anton Connect, capture the standup reply.
+  if ($conversationId > 0 && file_exists(__DIR__ . '/../includes/standup.php')) {
+    require_once __DIR__ . '/../includes/standup.php';
+    try { chat_standup_capture_reply($ws, $uid, $content, $conversationId); } catch (Throwable $e) {}
   }
 
   chat_json(['message' => [

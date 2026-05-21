@@ -485,6 +485,34 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
   $reactionsByMsg = chat_load_reactions_for_messages($ids);
   $replyCounts    = chat_load_reply_counts($ids);
   $filesByMsg     = chat_load_files_for_messages($ids);
+  // Phase 11: poll lookups for inline /poll messages.
+  $pollsByMsg = [];
+  try {
+    if (!empty($ids)) {
+      $ph = implode(',', array_fill(0, count($ids), '?'));
+      $st = db()->prepare("SELECT * FROM chat_polls WHERE message_id IN ($ph)");
+      $st->execute($ids);
+      $polls = $st->fetchAll();
+      $pollIds = array_column($polls, 'id');
+      $votes = [];
+      if (!empty($pollIds)) {
+        $vph = implode(',', array_fill(0, count($pollIds), '?'));
+        $vs = db()->prepare("SELECT poll_id, option_idx, COUNT(*) AS n FROM chat_poll_votes WHERE poll_id IN ($vph) GROUP BY poll_id, option_idx");
+        $vs->execute($pollIds);
+        foreach ($vs->fetchAll() as $v) {
+          $votes[(int)$v['poll_id']][(int)$v['option_idx']] = (int)$v['n'];
+        }
+      }
+      foreach ($polls as $p) {
+        $pollsByMsg[(int)$p['message_id']] = [
+          'id'       => (int)$p['id'],
+          'question' => (string)$p['question'],
+          'options'  => json_decode((string)$p['options_json'], true) ?: [],
+          'counts'   => $votes[(int)$p['id']] ?? [],
+        ];
+      }
+    }
+  } catch (Throwable $e) { /* polls table missing — graceful */ }
 
   foreach ($rows as &$r) {
     $deleted = $r['deleted_at'] !== null;
@@ -493,7 +521,23 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
       $r['content_html'] = '';
       $r['files']        = [];
     } else {
-      $r['content_html'] = chat_render_message_content((string)$r['content'], $workspaceId);
+      $html = chat_render_message_content((string)$r['content'], $workspaceId);
+
+      // Attach an entity preview card if /share built one.
+      $cardJson = $r['entity_card_json'] ?? null;
+      if ($cardJson) {
+        $card = json_decode((string)$cardJson, true);
+        if (is_array($card) && !empty($card['type']) && !empty($card['id'])) {
+          $cardHtml = chat_render_entity_card((string)$card['type'], (int)$card['id'], $workspaceId);
+          if ($cardHtml !== '') $html .= $cardHtml;
+        }
+      }
+      // Inline poll widget.
+      $mid = (int)$r['id'];
+      if (isset($pollsByMsg[$mid])) {
+        $html .= _chat_render_poll($pollsByMsg[$mid]);
+      }
+      $r['content_html'] = $html;
       $r['files']        = $filesByMsg[(int)$r['id']] ?? [];
     }
     $r['reactions']   = $reactionsByMsg[(int)$r['id']] ?? [];
@@ -501,6 +545,26 @@ function chat_decorate_messages(array $rows, int $workspaceId): array {
   }
   unset($r);
   return $rows;
+}
+
+/** Render an inline poll as HTML block (with vote button per option). */
+function _chat_render_poll(array $poll): string {
+  $opts = $poll['options'];
+  $counts = $poll['counts'];
+  $total = array_sum($counts);
+  $html = '<div class="chat-poll" data-poll-id="' . (int)$poll['id'] . '">';
+  foreach ($opts as $i => $label) {
+    $n = (int)($counts[$i] ?? 0);
+    $pct = $total > 0 ? round(($n / $total) * 100) : 0;
+    $html .= '<button type="button" class="chat-poll-opt" data-action="poll-vote" data-poll-id="' . (int)$poll['id'] . '" data-option-idx="' . (int)$i . '">'
+          .   '<span class="chat-poll-bar" style="width:' . $pct . '%"></span>'
+          .   '<span class="chat-poll-label">' . h((string)$label) . '</span>'
+          .   '<span class="chat-poll-count">' . $n . '</span>'
+          . '</button>';
+  }
+  $html .= '<div class="chat-poll-meta">' . $total . ' vote' . ($total === 1 ? '' : 's') . '</div>';
+  $html .= '</div>';
+  return $html;
 }
 
 // ===== File attachments (Phase 6) =========================================
@@ -1688,16 +1752,68 @@ function chat_load_automation_config(int $workspaceId): array {
     $row = $stmt->fetch();
     if ($row) return $row;
 
+    // First-call setup per the user's Phase 11 decision: standup defaults to
+    // ENABLED at 21:00 local with collation at 22:30. The standup channel is
+    // auto-created the first time the tick fires (chat_ensure_standup_channel).
     $now = now();
     db()->prepare(
       'INSERT INTO chat_automations
          (workspace_id, standup_enabled, standup_at, standup_cutoff_at, created_at, updated_at)
-       VALUES (?, 0, "21:00", "22:30", ?, ?)'
+       VALUES (?, 1, "21:00", "22:30", ?, ?)'
     )->execute([$workspaceId, $now, $now]);
     $stmt->execute([$workspaceId]);
     return $stmt->fetch() ?: [];
   } catch (Throwable $e) {
     return [];
+  }
+}
+
+/**
+ * Lazy-create the workspace's #standup channel + persist the id on the
+ * chat_automations row. Returns the channel_id or 0 on failure.
+ */
+function chat_ensure_standup_channel(int $workspaceId): int {
+  try {
+    $cfg = chat_load_automation_config($workspaceId);
+    $existing = (int)($cfg['standup_channel_id'] ?? 0);
+    if ($existing > 0) {
+      $st = db()->prepare('SELECT id FROM chat_channels WHERE id = ? AND workspace_id = ?');
+      $st->execute([$existing, $workspaceId]);
+      if ((int)$st->fetchColumn() === $existing) return $existing;
+    }
+    $st = db()->prepare('SELECT id FROM chat_channels WHERE workspace_id = ? AND slug = "standup" LIMIT 1');
+    $st->execute([$workspaceId]);
+    $found = (int)$st->fetchColumn();
+
+    if ($found === 0) {
+      $system = chat_get_system_user($workspaceId);
+      if (!$system) return 0;
+      $now = now();
+      $ins = db()->prepare(
+        'INSERT INTO chat_channels (workspace_id, slug, is_private, topic, description, created_by, created_at)
+         VALUES (?, "standup", 0, "Daily standup", "Anton Connect rolls up daily standup answers here.", ?, ?)'
+      );
+      $ins->execute([$workspaceId, (int)$system['id'], $now]);
+      $found = (int)db()->lastInsertId();
+      // Add every active human user.
+      $um = db()->prepare(
+        "SELECT id FROM users WHERE workspace_id = ? AND is_active = 1 AND IFNULL(is_system, 0) = 0"
+      );
+      $um->execute([$workspaceId]);
+      $addMember = db()->prepare('INSERT IGNORE INTO chat_channel_members (channel_id, user_id, joined_at) VALUES (?, ?, ?)');
+      foreach ($um->fetchAll() as $row) {
+        $addMember->execute([$found, (int)$row['id'], $now]);
+      }
+      // And Anton Connect itself so post-as-system has a valid sender.
+      $addMember->execute([$found, (int)$system['id'], $now]);
+      chat_emit_event($workspaceId, 'channel_created', $found, null, null, (int)$system['id']);
+    }
+
+    db()->prepare('UPDATE chat_automations SET standup_channel_id = ?, updated_at = ? WHERE workspace_id = ?')
+      ->execute([$found, now(), $workspaceId]);
+    return $found;
+  } catch (Throwable $e) {
+    return 0;
   }
 }
 

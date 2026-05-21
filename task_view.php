@@ -178,10 +178,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,created_at) VALUES (?,?,?,?,?)")
           ->execute([$ws, $id, $u['id'], $body, now()]);
     }
+    $newCommentId = (int)$pdo->lastInsertId();
     // Anton Connect — DM the assignees + creator about the new comment.
     if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
       require_once __DIR__ . '/chat/includes/notifications.php';
       try { chat_notify_task_comment((int)$id, $body, (int)$u['id']); } catch (Throwable $e) {}
+    }
+    // Mirror this comment as a chat thread reply on the anchor message (if any).
+    if (file_exists(__DIR__ . '/chat/includes/comment_mirror.php')) {
+      require_once __DIR__ . '/chat/includes/comment_mirror.php';
+      try { chat_mirror_comment_to_thread((int)$id, $newCommentId, $body, (int)$u['id']); } catch (Throwable $e) {}
     }
     flash_set('success', 'Comment added.'); redirect("task_view.php?id=$id");
   }

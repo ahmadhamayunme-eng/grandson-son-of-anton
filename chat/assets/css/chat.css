@@ -1463,6 +1463,78 @@ html.light .msg-group:hover .av .presence { border-color: oklch(0.965 0 0); }
 }
 html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
 .cx-modal-wide { width: min(560px, calc(100% - 32px)); }
+.cx-modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cx-modal-form textarea {
+  padding: 9px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-sm);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  resize: vertical;
+  font-family: var(--f-sans);
+}
+.cx-modal-form textarea:focus { border-color: var(--gold-line); box-shadow: 0 0 0 2px var(--gold-soft); }
+.cx-modal-form select[multiple] { padding: 6px 8px; min-height: 90px; }
+.chat-tracked {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: 4px;
+  padding: 4px 10px;
+}
+.chat-tracked a { color: var(--gold) !important; border-bottom: 0 !important; font-weight: 600; }
+
+/* /poll widget — inline poll inserted by quick-action. Bars are the % of
+   total votes, click to (un)vote. */
+.chat-poll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  max-width: 420px;
+}
+.chat-poll-opt {
+  position: relative;
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: var(--r-sm);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.chat-poll-opt:hover { border-color: var(--gold-line); }
+.chat-poll-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--gold-soft);
+  z-index: 0;
+  transition: width 200ms ease;
+}
+.chat-poll-label { position: relative; z-index: 1; }
+.chat-poll-count {
+  position: relative;
+  z-index: 1;
+  float: right;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.chat-poll-meta { font-size: 11.5px; color: var(--fg-2); padding: 2px 2px; }
 .cx-modal-form {
   display: flex;
   flex-direction: column;

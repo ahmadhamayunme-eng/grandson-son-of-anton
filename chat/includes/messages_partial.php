@@ -192,6 +192,9 @@ foreach ($currentMessages as $m):
         <button type="button" data-action="reply-quote" data-msg-id="<?= (int)$m['id'] ?>" data-author="<?= h($m['author_name']) ?>" title="Reply to this message">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8h3v3H7v3a3 3 0 003 3M14 8h3v3h-3v3a3 3 0 003 3"/></svg>
         </button>
+        <button type="button" data-action="open-convert-task" data-msg-id="<?= (int)$m['id'] ?>" title="Create task from this message">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </button>
         <?php if ((int)$m['user_id'] === (int)$uid): ?>
           <button type="button" data-action="open-msg-menu" data-msg-id="<?= (int)$m['id'] ?>" title="More">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></svg>
