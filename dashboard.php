@@ -656,6 +656,70 @@ require_once __DIR__ . '/layout.php';
   </div>
 
   <aside class="rail">
+    <?php
+      // Anton Connect — recent unread chat (DMs + @mentions) widget. Built
+      // inline so the existing rail layout stays intact. Falls back silently
+      // if the chat tables don't exist on a fresh install.
+      $unreadChat = [];
+      try {
+        $stmt = $pdo->prepare(
+          "SELECT m.id, m.content, m.created_at, m.channel_id, m.conversation_id,
+                  c.slug AS channel_slug, u.name AS author_name
+           FROM chat_messages m
+           JOIN users u ON u.id = m.user_id
+           LEFT JOIN chat_channels c ON c.id = m.channel_id
+           WHERE m.workspace_id = ?
+             AND m.deleted_at IS NULL
+             AND m.parent_message_id IS NULL
+             AND m.user_id != ?
+             AND (
+               -- DMs the user is in
+               (m.conversation_id IS NOT NULL AND m.conversation_id IN (
+                 SELECT conversation_id FROM chat_direct_conversation_members WHERE user_id = ?
+               ) AND m.id > IFNULL((
+                 SELECT last_read_message_id FROM chat_direct_conversation_members
+                 WHERE conversation_id = m.conversation_id AND user_id = ?
+               ), 0))
+               -- OR @user mentions
+               OR m.id IN (
+                 SELECT message_id FROM chat_mentions WHERE mentioned_user_id = ?
+               )
+             )
+           ORDER BY m.id DESC LIMIT 5"
+        );
+        $stmt->execute([$ws, (int)$user['id'], (int)$user['id'], (int)$user['id'], (int)$user['id']]);
+        $unreadChat = $stmt->fetchAll();
+      } catch (Throwable $e) {}
+    ?>
+    <div class="panel">
+      <div class="rail-panel-head">
+        <span class="rail-panel-title">Unread chat</span>
+        <a href="chat/" class="rail-panel-count" style="text-decoration:none">Open chat →</a>
+      </div>
+      <div class="rail-panel-body">
+        <?php if (empty($unreadChat)): ?>
+          <div class="empty-card">You're all caught up.</div>
+        <?php else: foreach ($unreadChat as $m):
+          $snippet = trim(strip_tags((string)$m['content']));
+          if (mb_strlen($snippet, 'UTF-8') > 140) $snippet = mb_substr($snippet, 0, 140, 'UTF-8') . '…';
+          $where = $m['channel_slug'] ? '#' . $m['channel_slug'] : '@DM';
+          $href  = $m['channel_slug'] ? 'chat/?c=' . urlencode((string)$m['channel_slug']) . '#msg-' . (int)$m['id']
+                                       : 'chat/?d=' . (int)$m['conversation_id'] . '#msg-' . (int)$m['id'];
+          $grad  = dashboard_avatar_gradient((string)$m['author_name']);
+          $ini   = user_initials((string)$m['author_name']);
+        ?>
+          <a class="worker" href="<?= h($href) ?>" style="text-decoration:none;color:inherit;display:block">
+            <div class="worker-head">
+              <div class="avatar" style="background:<?= h($grad) ?>"><?= h($ini) ?></div>
+              <span class="worker-name"><?= h($m['author_name']) ?></span>
+              <span class="worker-count"><?= h($where) ?></span>
+            </div>
+            <div style="margin-top:6px;font-size:13px;color:var(--text-muted);padding-left:44px;line-height:1.4"><?= h($snippet) ?></div>
+          </a>
+        <?php endforeach; endif; ?>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="rail-panel-head">
         <span class="rail-panel-title">Who is Working on What</span>

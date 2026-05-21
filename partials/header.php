@@ -70,8 +70,27 @@ $_navBellTotal = $_navBellUid > 0 ? (
 <!-- Anton Connect bell: combined unread chat + open AntonX tasks count. Click
      opens /chat/ (where the inbox view aggregates DMs + mentions). Hidden when
      no user is logged in. -->
-<?php if ($_navBellUid > 0): ?>
-<a id="antonBell" class="anton-bell" href="chat/" title="Notifications · click to open chat" aria-label="Notifications">
+<?php if ($_navBellUid > 0):
+  // Check if there's a recent @channel/@everyone mention the user hasn't seen
+  // yet — if so, we'll start the bell in pulse state on page load.
+  $_navBellPulse = false;
+  try {
+    $st = db()->prepare(
+      "SELECT COUNT(*) FROM chat_mentions cm
+       JOIN chat_messages m ON m.id = cm.message_id
+       JOIN chat_channel_members ccm
+         ON ccm.channel_id = m.channel_id AND ccm.user_id = ?
+       WHERE cm.mention_type IN ('channel','everyone','here')
+         AND m.workspace_id = ?
+         AND m.deleted_at IS NULL
+         AND m.user_id != ?
+         AND m.id > IFNULL(ccm.last_read_message_id, 0)"
+    );
+    $st->execute([$_navBellUid, $_navBellWs, $_navBellUid]);
+    $_navBellPulse = (int)$st->fetchColumn() > 0;
+  } catch (Throwable $e) {}
+?>
+<a id="antonBell" class="anton-bell<?= $_navBellPulse ? ' pulse' : '' ?>" href="chat/" title="Notifications · click to open chat" aria-label="Notifications">
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 3h16l-2-3z"></path><path d="M9 20a3 3 0 006 0"></path></svg>
   <?php if ($_navBellTotal > 0): ?>
     <span class="anton-bell-badge"><?= $_navBellTotal > 99 ? '99+' : (int)$_navBellTotal ?></span>
