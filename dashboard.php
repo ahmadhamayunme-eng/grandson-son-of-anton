@@ -63,6 +63,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManage) {
     foreach (($_POST['assignees'] ?? []) as $uid) {
       $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$taskId, (int)$uid]);
     }
+    // Anton Connect — sync project channel members for the new assignees.
+    if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
+      require_once __DIR__ . '/chat/includes/project_sync.php';
+      try { chat_project_sync((int)$projectId); } catch (Throwable $e) {}
+    }
+    if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+      require_once __DIR__ . '/chat/includes/notifications.php';
+      foreach (($_POST['assignees'] ?? []) as $uid) {
+        try { chat_notify_task_assigned($taskId, (int)$uid, (int)$user['id']); } catch (Throwable $e) {}
+      }
+    }
     flash_set('success', 'Task created.');
     redirect('task_view.php?id=' . $taskId);
   }

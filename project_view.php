@@ -164,6 +164,19 @@ try {
       foreach (($_POST['assignees'] ?? []) as $uid) {
         $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$task_id, (int)$uid]);
       }
+      // Anton Connect — sync the project's chat channel membership now that
+      // a new task (and its assignees) exist. Safe to call repeatedly.
+      if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
+        require_once __DIR__ . '/chat/includes/project_sync.php';
+        try { chat_project_sync((int)$id); } catch (Throwable $e) {}
+      }
+      // DM each assignee with a card. Fire-and-forget.
+      if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+        require_once __DIR__ . '/chat/includes/notifications.php';
+        foreach (($_POST['assignees'] ?? []) as $uid) {
+          try { chat_notify_task_assigned($task_id, (int)$uid, (int)$user['id']); } catch (Throwable $e) {}
+        }
+      }
       flash_set('success', 'Task created.');
       if (in_array($status, ['Completed','Completed (Needs Manager Review)'], true)) redirect('manager_review.php');
       if (in_array($status, ['Approved','Approved (Ready to Submit)'], true)) redirect('manager_submit.php');

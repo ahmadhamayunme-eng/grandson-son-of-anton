@@ -1844,3 +1844,54 @@ function chat_unread_total_for_user(int $workspaceId, int $userId): int {
     return 0;
   }
 }
+
+/**
+ * SSE-tick worker: scan for tasks due in the next 24 hours where we haven't
+ * already pinged the assignee, then DM each one. Idempotent via the
+ * chat_due_reminders (task_id, user_id) PRIMARY KEY. Capped per call so a
+ * huge backfill doesn't stall the tick.
+ *
+ * Called from /chat/api/events.php inside the same loop that delivers
+ * scheduled messages.
+ */
+function chat_run_due_reminders(int $limit = 20): int {
+  if (!file_exists(__DIR__ . '/notifications.php')) return 0;
+  require_once __DIR__ . '/notifications.php';
+
+  try {
+    $pdo = db();
+    $stmt = $pdo->prepare(
+      "SELECT t.id AS task_id, ta.user_id, t.workspace_id
+       FROM tasks t
+       JOIN task_assignees ta ON ta.task_id = t.id
+       LEFT JOIN chat_due_reminders dr ON dr.task_id = t.id AND dr.user_id = ta.user_id
+       WHERE dr.task_id IS NULL
+         AND t.due_date IS NOT NULL
+         AND t.due_date <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+         AND t.due_date > NOW()
+         AND LOWER(t.status) NOT IN ('done','completed','closed','approved','submitted','submitted to client','archived')
+       ORDER BY t.due_date ASC
+       LIMIT ?"
+    );
+    $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+    if (empty($rows)) return 0;
+
+    $log = $pdo->prepare(
+      'INSERT IGNORE INTO chat_due_reminders (task_id, user_id, sent_at) VALUES (?, ?, ?)'
+    );
+    $sent = 0;
+    foreach ($rows as $r) {
+      $tid = (int)$r['task_id']; $uid = (int)$r['user_id'];
+      // Claim the slot first so concurrent ticks don't double-fire.
+      if ($log->execute([$tid, $uid, now()]) && $log->rowCount() > 0) {
+        chat_notify_task_due_soon($tid, $uid);
+        $sent++;
+      }
+    }
+    return $sent;
+  } catch (Throwable $e) {
+    return 0;
+  }
+}

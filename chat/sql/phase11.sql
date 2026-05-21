@@ -121,3 +121,14 @@ SET @col := (SELECT COUNT(*) FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'comments' AND COLUMN_NAME = 'chat_message_id');
 SET @sql := IF(@col = 0, 'ALTER TABLE comments ADD COLUMN chat_message_id INT NULL', 'SELECT 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 8. Due-soon reminder log so the SSE-tick doesn't re-DM the same person
+--    multiple times for the same task.
+CREATE TABLE IF NOT EXISTS chat_due_reminders (
+  task_id INT NOT NULL,
+  user_id INT NOT NULL,
+  sent_at DATETIME NOT NULL,
+  PRIMARY KEY (task_id, user_id),
+  CONSTRAINT fk_dr_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  CONSTRAINT fk_dr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

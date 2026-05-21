@@ -202,6 +202,13 @@ try {
         ->execute([$ws, $clientId, $newProjectId, $siteName, $entry['url'] ?: null, $entry['login_url'] ?: null, $entry['username'] ?: null, $entry['password'] !== '' ? $entry['password'] : null, $rowNotes ?: null, (int)($user['id'] ?? 0), now(), now()]);
     }
 
+    // Anton Connect — create the auto-linked chat channel for this project.
+    // Fails silently if the chat module is missing; never blocks the redirect.
+    if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
+      require_once __DIR__ . '/chat/includes/project_sync.php';
+      try { chat_project_sync($newProjectId); } catch (Throwable $e) {}
+    }
+
     flash_set('success', 'Project created.');
     redirect('projects.php');
   }

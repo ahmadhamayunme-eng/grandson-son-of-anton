@@ -131,9 +131,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($new_status === 'Submitted to Client') {
       $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$new_status, $new_note ?: null, $now, $u['id'], $now, $id, $ws]);
+      if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+        require_once __DIR__ . '/chat/includes/notifications.php';
+        try { chat_notify_submitted_to_client((int)$id, (int)$u['id']); } catch (Throwable $e) {}
+      }
     } else {
       $pdo->prepare("UPDATE tasks SET status=?, internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$new_status, $new_note ?: null, $now, $id, $ws]);
+      // If the user is the assignee setting status to a review-pending state,
+      // ping the managers so they know.
+      if (in_array($new_status, ['Completed','Completed (Needs Manager Review)'], true)) {
+        // Record the submission timestamp + author so reviews logic can find them.
+        $pdo->prepare("UPDATE tasks SET submitted_at = COALESCE(submitted_at, ?), submitted_by = COALESCE(submitted_by, ?) WHERE id = ?")
+            ->execute([$now, (int)$u['id'], $id]);
+        if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+          require_once __DIR__ . '/chat/includes/notifications.php';
+          try { chat_notify_submission_review_needed((int)$id, (int)$u['id']); } catch (Throwable $e) {}
+        }
+      }
     }
     flash_set('success', 'Task updated.');
     if ($can_manager && in_array($new_status, ['Completed','Completed (Needs Manager Review)'], true)) redirect('manager_review.php');
@@ -163,6 +178,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $pdo->prepare("INSERT INTO comments (workspace_id,task_id,author_user_id,body,created_at) VALUES (?,?,?,?,?)")
           ->execute([$ws, $id, $u['id'], $body, now()]);
     }
+    // Anton Connect — DM the assignees + creator about the new comment.
+    if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+      require_once __DIR__ . '/chat/includes/notifications.php';
+      try { chat_notify_task_comment((int)$id, $body, (int)$u['id']); } catch (Throwable $e) {}
+    }
     flash_set('success', 'Comment added.'); redirect("task_view.php?id=$id");
   }
   if (isset($_POST['manager_action'])) {
@@ -170,12 +190,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['manager_action'];
     if ($action === 'approve') {
       $pdo->prepare("UPDATE tasks SET status='Approved', updated_at=? WHERE id=? AND workspace_id=?")->execute([now(), $id, $ws]);
+      if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+        require_once __DIR__ . '/chat/includes/notifications.php';
+        try { chat_notify_submission_approved((int)$id, (int)$u['id']); } catch (Throwable $e) {}
+      }
       flash_set('success', 'Task approved and moved to Submit to Client.');
       redirect('manager_submit.php');
     } elseif ($action === 'reject') {
       $reason = trim($_POST['manager_reason'] ?? 'Needs changes.');
       $pdo->prepare("UPDATE tasks SET status='In Progress', internal_note=?, updated_at=? WHERE id=? AND workspace_id=?")
           ->execute([$reason, now(), $id, $ws]);
+      if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+        require_once __DIR__ . '/chat/includes/notifications.php';
+        try { chat_notify_submission_rejected((int)$id, $reason, (int)$u['id']); } catch (Throwable $e) {}
+      }
       flash_set('success', 'Task sent back to In Progress.');
     }
     redirect("task_view.php?id=$id");
@@ -185,6 +213,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $now = now();
     $pdo->prepare("UPDATE tasks SET status='Submitted to Client', submitted_at=?, submitted_by=?, updated_at=? WHERE id=? AND workspace_id=?")
         ->execute([$now, $u['id'], $now, $id, $ws]);
+    if (file_exists(__DIR__ . '/chat/includes/notifications.php')) {
+      require_once __DIR__ . '/chat/includes/notifications.php';
+      try { chat_notify_submitted_to_client((int)$id, (int)$u['id']); } catch (Throwable $e) {}
+    }
     flash_set('success', 'Task marked as Submitted to Client and archived.');
     redirect('completed_task_archive.php');
   }
