@@ -318,6 +318,28 @@ if ($currentChannel) {
         </a>
       </div>
 
+      <?php
+        // Cross-system bridge: link to AntonX pages right from the chat sidebar
+        // so the user doesn't bounce between the two views to find their work.
+        require_once __DIR__ . '/../partials/nav_helpers.php';
+        $myTasksCount  = nav_antonx_pending_total($uid, $ws);
+        $reviewsCount  = nav_reviews_pending_total($ws, (string)($user['role_name'] ?? ''));
+      ?>
+      <div class="side-section">
+        <a class="side-item<?= $myTasksCount > 0 ? ' unread' : '' ?>" href="/my_tasks.php">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <span class="name">My tasks</span>
+          <?php if ($myTasksCount > 0): ?><span class="badge"><?= $myTasksCount > 99 ? '99+' : (int)$myTasksCount ?></span><?php endif; ?>
+        </a>
+        <?php if (in_array(($user['role_name'] ?? ''), ['Manager','Super Admin','CEO'], true)): ?>
+        <a class="side-item<?= $reviewsCount > 0 ? ' unread' : '' ?>" href="/manager_review.php">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <span class="name">Reviews</span>
+          <?php if ($reviewsCount > 0): ?><span class="badge"><?= $reviewsCount > 99 ? '99+' : (int)$reviewsCount ?></span><?php endif; ?>
+        </a>
+        <?php endif; ?>
+      </div>
+
       <div class="side-section">
         <div class="side-section-head">
           <button class="label" data-action="toggle-section" data-section="channels">

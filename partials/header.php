@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/helpers.php';
+require_once __DIR__ . '/nav_helpers.php';
 $config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../config.php') : ['app'=>['name'=>'AntonX']];
 $pageTitle = $pageTitle ?? ($config['app']['name'] ?? 'AntonX');
 $pageHeadExtra = $pageHeadExtra ?? '';
@@ -7,6 +8,16 @@ $pageHeadExtra = $pageHeadExtra ?? '';
 // browser is forced to re-fetch on every deploy. Without this, stylesheet
 // changes silently get masked by browser cache even after a "hard refresh".
 $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
+
+// Anton Connect bell — combined chat-unread + task-pending count. Helpers
+// safe-fail if the user isn't logged in or the chat tables don't exist yet.
+$_navBellUser  = function_exists('auth_user') ? auth_user() : null;
+$_navBellUid   = (int)($_navBellUser['id'] ?? 0);
+$_navBellWs    = (int)($_navBellUser['workspace_id'] ?? 0);
+$_navBellTotal = $_navBellUid > 0 ? (
+    nav_chat_unread_total($_navBellUid, $_navBellWs)
+  + nav_antonx_pending_total($_navBellUid, $_navBellWs)
+) : 0;
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -56,4 +67,71 @@ $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
   <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>
   <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
 </button>
+<!-- Anton Connect bell: combined unread chat + open AntonX tasks count. Click
+     opens /chat/ (where the inbox view aggregates DMs + mentions). Hidden when
+     no user is logged in. -->
+<?php if ($_navBellUid > 0): ?>
+<a id="antonBell" class="anton-bell" href="chat/" title="Notifications · click to open chat" aria-label="Notifications">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 3h16l-2-3z"></path><path d="M9 20a3 3 0 006 0"></path></svg>
+  <?php if ($_navBellTotal > 0): ?>
+    <span class="anton-bell-badge"><?= $_navBellTotal > 99 ? '99+' : (int)$_navBellTotal ?></span>
+  <?php endif; ?>
+</a>
+<style>
+  /* Anton Connect bell — fixed top-right next to the theme toggle. Matches
+     theme-toggle dimensions so they sit on the same baseline. */
+  .anton-bell {
+    position: fixed;
+    top: 16px;
+    right: 74px;             /* 18 (toggle right) + 44 (toggle width) + 12 gap */
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9998;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .anton-bell:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); background: var(--surface-2); }
+  .anton-bell:active { transform: scale(0.94); }
+  .anton-bell svg { display: block; pointer-events: none; }
+  .anton-bell-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: oklch(0.70 0.20 25);
+    color: #fff;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+  .anton-bell.pulse {
+    animation: anton-bell-pulse 1.4s ease-in-out 3;
+    color: oklch(0.70 0.20 25);
+    border-color: oklch(0.70 0.20 25);
+  }
+  @keyframes anton-bell-pulse {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-1px) scale(1.06); }
+  }
+  @media (max-width: 560px) {
+    .anton-bell { width: 40px; height: 40px; top: 12px; right: 62px; }
+    .anton-bell svg { width: 18px; height: 18px; }
+  }
+</style>
+<?php endif; ?>
 <div class="app" data-screen-label="<?=h($pageTitle)?>">

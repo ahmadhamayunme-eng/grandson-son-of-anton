@@ -1049,7 +1049,107 @@ function chat_render_message_content(string $content, int $workspaceId): string 
   // "https://example.com" rendered as plain text. Same skip-list as mentions
   // (don't double-wrap inside existing <a>, <code>, <pre>).
   $html = chat_apply_autolinks_outside_protected($html);
-  return chat_apply_mentions_outside_protected($html, $users);
+  $html = chat_apply_mentions_outside_protected($html, $users);
+  // Cross-link AntonX entity tokens (task#1234, proj#slug, client#42, doc#9)
+  // into clickable pills. Same protected-region skip-list.
+  $html = chat_apply_entity_pills_outside_protected($html, $workspaceId);
+  return $html;
+}
+
+/**
+ * Wrap AntonX entity tokens (task#1234, proj#slug, client#42, doc#9) as
+ * clickable pills outside <a>/<code>/<pre>. The DB lookup pulls a pretty
+ * label so the pill shows the entity name, not just the id. Unknown entities
+ * fall through as plain text.
+ */
+function chat_apply_entity_pills_outside_protected(string $html, int $workspaceId): string {
+  $pattern = '#(<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<a\b[^>]*>.*?</a>)#si';
+  $parts = preg_split($pattern, $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+  if (!$parts) return $html;
+  $cache = ['task' => [], 'project' => [], 'client' => [], 'doc' => []];
+
+  $resolve = function (string $type, string $key) use (&$cache, $workspaceId): ?array {
+    if (isset($cache[$type][$key])) return $cache[$type][$key];
+    try {
+      $pdo = db();
+      switch ($type) {
+        case 'task':
+          $st = $pdo->prepare('SELECT id, title, status FROM tasks WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['title'], 'extra' => (string)$r['status']] : null;
+          break;
+        case 'project':
+          $isNum = ctype_digit($key);
+          if ($isNum) {
+            $st = $pdo->prepare('SELECT id, name FROM projects WHERE id = ? AND workspace_id = ?');
+            $st->execute([(int)$key, $workspaceId]);
+          } else {
+            // Match by slugified name.
+            $st = $pdo->prepare('SELECT id, name FROM projects WHERE workspace_id = ?');
+            $st->execute([$workspaceId]);
+            $r = null;
+            foreach ($st->fetchAll() as $row) {
+              if (chat_slugify((string)$row['name']) === $key) { $r = $row; break; }
+            }
+            $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+            break;
+          }
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+          break;
+        case 'client':
+          $st = $pdo->prepare('SELECT id, name FROM clients WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['name'], 'extra' => ''] : null;
+          break;
+        case 'doc':
+          $st = $pdo->prepare('SELECT id, title FROM docs WHERE id = ? AND workspace_id = ?');
+          $st->execute([(int)$key, $workspaceId]);
+          $r = $st->fetch();
+          $cache[$type][$key] = $r ? ['id' => (int)$r['id'], 'label' => (string)$r['title'], 'extra' => ''] : null;
+          break;
+        default:
+          $cache[$type][$key] = null;
+      }
+    } catch (Throwable $e) {
+      $cache[$type][$key] = null;
+    }
+    return $cache[$type][$key];
+  };
+
+  $regex = '/(^|[^a-z0-9_])(task|proj|project|client|doc)#([a-z0-9_-]+)\b/i';
+
+  $result = '';
+  foreach ($parts as $i => $part) {
+    if ($i % 2 === 1) { $result .= $part; continue; }
+    $result .= preg_replace_callback($regex, function ($m) use ($resolve) {
+      $prefix = $m[1];
+      $kind   = strtolower($m[2]);
+      $key    = strtolower($m[3]);
+      $type   = ($kind === 'proj') ? 'project' : $kind;
+      $found  = $resolve($type, $key);
+      if (!$found) {
+        // Leave the original text alone so users can fix typos / wait for create.
+        return $prefix . $kind . '#' . $key;
+      }
+      $href = '';
+      switch ($type) {
+        case 'task':    $href = '/task_details.php?id=' . $found['id']; break;
+        case 'project': $href = '/projects.php?id='     . $found['id']; break;
+        case 'client':  $href = '/clients.php?id='      . $found['id']; break;
+        case 'doc':     $href = '/doc_edit.php?id='     . $found['id']; break;
+      }
+      $cls = 'chat-entity chat-entity-' . $type;
+      $glyph = ['task' => '✓', 'project' => '#', 'client' => '◆', 'doc' => '📄'][$type] ?? '◇';
+      return $prefix . '<a class="' . $cls . '" href="' . h($href) . '">'
+           . '<span class="chat-entity-glyph">' . h($glyph) . '</span>'
+           . '<span class="chat-entity-label">' . h($found['label']) . '</span>'
+           . '</a>';
+    }, $part);
+  }
+  return $result;
 }
 
 /**

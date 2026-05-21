@@ -839,7 +839,7 @@ require_once __DIR__ . '/layout.php';
                   <span class="at-assignee-info">
                     <span class="at-av" style="background:<?= h($grad) ?>"><?= h($ini) ?></span>
                     <span>
-                      <span class="at-assignee-name"><?= h($m['name']) ?></span><br>
+                      <span class="at-assignee-name"><?= h($m['name']) ?><?= user_status_chip((int)$m['id']) ?></span><br>
                       <span class="at-assignee-role"><?= h($m['role_name']) ?></span>
                     </span>
                   </span>

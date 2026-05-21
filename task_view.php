@@ -496,7 +496,7 @@ require_once __DIR__ . '/layout.php';
             echo '<div class="comment" style="margin-left:' . $pad . 'px;">';
             echo '<div class="avatar" style="background:' . h($grad) . '">' . h(user_initials($author)) . '</div>';
             echo '<div class="comment-body">';
-            echo '<div class="comment-head"><span class="comment-name">' . h($author) . '</span><span class="comment-time">' . ($authorRole !== '' ? h($authorRole) . ' · ' : '') . h($c['created_at']) . '</span></div>';
+            echo '<div class="comment-head"><span class="comment-name">' . h($author) . user_status_chip((int)($c['author_id'] ?? 0)) . '</span><span class="comment-time">' . ($authorRole !== '' ? h($authorRole) . ' · ' : '') . h($c['created_at']) . '</span></div>';
             echo '<div class="comment-text">' . nl2br(h($c['body'])) . '</div>';
             echo '<button type="button" class="comment-reply-btn" data-author="' . h($author) . '" onclick="tvSetReply(' . $cid . ', this.dataset.author)">Reply</button>';
             echo '</div></div>';
@@ -555,7 +555,7 @@ require_once __DIR__ . '/layout.php';
                   <div class="assignee-info">
                     <div class="avatar" style="background:<?= h($grad) ?>"><?= h(user_initials((string)$au['name'])) ?></div>
                     <div>
-                      <div class="assignee-name"><?= h($au['name']) ?></div>
+                      <div class="assignee-name"><?= h($au['name']) ?><?= user_status_chip((int)$au['id']) ?></div>
                       <div class="assignee-role"><?= h($au['role_name']) ?></div>
                     </div>
                   </div>
