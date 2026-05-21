@@ -656,28 +656,83 @@ function chat_presence_ping(int $userId): void {
  *   timezone       IANA tz string, default 'UTC'
  */
 function chat_load_user_prefs(int $userId): array {
-  $stmt = db()->prepare(
-    'SELECT timezone, notify_dm, notify_mention, enter_to_send, dnd
-     FROM chat_user_prefs WHERE user_id = ?'
-  );
-  $stmt->execute([$userId]);
-  $row = $stmt->fetch();
+  // status_* columns are optional (status.sql migration) — fall back if
+  // they're missing on a DB that hasn't been migrated yet.
+  try {
+    $stmt = db()->prepare(
+      'SELECT timezone, notify_dm, notify_mention, enter_to_send, dnd,
+              status_emoji, status_text, status_expires_at
+       FROM chat_user_prefs WHERE user_id = ?'
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+  } catch (Throwable $e) {
+    $stmt = db()->prepare(
+      'SELECT timezone, notify_dm, notify_mention, enter_to_send, dnd
+       FROM chat_user_prefs WHERE user_id = ?'
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+  }
   if (!$row) {
     return [
-      'timezone'       => 'UTC',
-      'notify_dm'      => 1,
-      'notify_mention' => 1,
-      'enter_to_send'  => 1,
-      'dnd'            => 0,
+      'timezone'          => 'UTC',
+      'notify_dm'         => 1,
+      'notify_mention'    => 1,
+      'enter_to_send'     => 1,
+      'dnd'               => 0,
+      'status_emoji'      => null,
+      'status_text'       => null,
+      'status_expires_at' => null,
     ];
   }
+  // Honour the expires_at: clear in-memory if the status has aged out.
+  $exp = $row['status_expires_at'] ?? null;
+  $emoji = $row['status_emoji'] ?? null;
+  $text  = $row['status_text']  ?? null;
+  if ($exp !== null && strtotime((string)$exp) <= time()) {
+    $emoji = null; $text = null; $exp = null;
+  }
   return [
-    'timezone'       => (string)$row['timezone'],
-    'notify_dm'      => (int)$row['notify_dm'],
-    'notify_mention' => (int)$row['notify_mention'],
-    'enter_to_send'  => (int)$row['enter_to_send'],
-    'dnd'            => (int)($row['dnd'] ?? 0),
+    'timezone'          => (string)$row['timezone'],
+    'notify_dm'         => (int)$row['notify_dm'],
+    'notify_mention'    => (int)$row['notify_mention'],
+    'enter_to_send'     => (int)$row['enter_to_send'],
+    'dnd'               => (int)($row['dnd'] ?? 0),
+    'status_emoji'      => $emoji,
+    'status_text'       => $text,
+    'status_expires_at' => $exp,
   ];
+}
+
+/**
+ * Workspace-wide status map for rendering "@Name <emoji>" everywhere.
+ * Returns [ user_id => [ 'emoji' => string|null, 'text' => string|null ] ].
+ * Expired rows are filtered out. Falls back to an empty array if the
+ * status_* columns don't exist yet (status.sql migration pending).
+ */
+function chat_load_status_map(int $workspaceId): array {
+  try {
+    $stmt = db()->prepare(
+      "SELECT p.user_id, p.status_emoji, p.status_text, p.status_expires_at
+       FROM chat_user_prefs p
+       JOIN users u ON u.id = p.user_id
+       WHERE u.workspace_id = ?
+         AND p.status_emoji IS NOT NULL
+         AND (p.status_expires_at IS NULL OR p.status_expires_at > NOW())"
+    );
+    $stmt->execute([$workspaceId]);
+  } catch (Throwable $e) {
+    return [];
+  }
+  $out = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $out[(int)$r['user_id']] = [
+      'emoji' => (string)$r['status_emoji'],
+      'text'  => (string)($r['status_text'] ?? ''),
+    ];
+  }
+  return $out;
 }
 
 /**

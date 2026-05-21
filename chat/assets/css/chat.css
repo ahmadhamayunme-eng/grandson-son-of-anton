@@ -206,6 +206,138 @@ body > .app { height: 100vh; min-height: 100vh; max-height: 100vh; overflow: hid
   padding: 14px 16px 8px;
   border-bottom: 1px solid var(--line-0);
 }
+.ws-meta-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  width: calc(100% + 12px);
+  text-align: left;
+}
+.ws-meta-btn:hover { background: var(--bg-hover); color: var(--fg-1); }
+.ws-meta-btn .ws-name-inline { color: var(--fg-0); font-weight: 600; }
+.ws-meta-btn .ws-status-emoji { font-size: 14px; line-height: 1; }
+.ws-meta-btn .ws-status-emoji[hidden] { display: none; }
+.ws-meta-btn .ws-chev { margin-left: auto; opacity: 0.6; flex-shrink: 0; }
+
+/* Status emoji indicators sprinkled through the UI */
+.msg-status-emoji,
+.side-status-emoji {
+  font-size: 13px;
+  line-height: 1;
+  cursor: help;
+}
+.msg-status-emoji[hidden],
+.side-status-emoji[hidden] { display: none; }
+.msg-meta .msg-status-emoji { margin-left: 2px; }
+.side-item .side-status-emoji { margin-left: 4px; flex-shrink: 0; }
+
+/* User popmenu (chatUserMenu) — same base as other popmenus but with a header */
+.cx-popmenu.cx-popmenu-user { min-width: 220px; padding: 6px; }
+.cx-popmenu-header {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--line-0);
+  margin-bottom: 4px;
+}
+.cx-popmenu-name { font-size: 13.5px; font-weight: 700; color: var(--fg-0); }
+.cx-popmenu-sub {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Status modal — emoji button + preset chips */
+.status-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.status-emoji-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  color: var(--fg-0);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.status-emoji-btn:hover { border-color: var(--gold-line); }
+#statusTextInput {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-sm);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+#statusTextInput:focus { border-color: var(--gold-line); box-shadow: 0 0 0 2px var(--gold-soft); }
+
+.status-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: var(--r-sm);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.status-emoji-grid[hidden] { display: none; }
+.status-emoji-cell {
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.status-emoji-cell:hover { background: var(--bg-hover); }
+
+.status-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.status-preset {
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  color: var(--fg-1);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.status-preset:hover { background: var(--bg-hover); border-color: var(--line-1); color: var(--fg-0); }
 .ws-name {
   font-size: 15.5px;
   font-weight: 700;

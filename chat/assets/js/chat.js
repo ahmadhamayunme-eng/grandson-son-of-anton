@@ -121,6 +121,8 @@
   var mentionCounts = (boot.mentionCounts && typeof boot.mentionCounts === 'object')
                        ? boot.mentionCounts : {};
   var presenceMap   = boot.presenceMap || {};       // { userId: 'active'|'idle'|'offline'|'dnd' }
+  var statusMap     = (boot.statusMap && typeof boot.statusMap === 'object')
+                       ? boot.statusMap : {};       // { userId: { emoji, text } }
   var userPrefs     = boot.prefs || { enter_to_send: 1, notify_dm: 1, notify_mention: 1, dnd: 0 };
   var enterToSend   = parseInt(userPrefs.enter_to_send, 10) !== 0;
 
@@ -465,6 +467,7 @@
     if (!grouped) {
       metaHtml = '<div class="msg-meta">'
                +   '<span class="msg-author">' + escapeHtml(msg.author_name) + '</span>'
+               +   '<span class="msg-status-emoji" data-status-user-id="' + msg.user_id + '" hidden></span>'
                +   '<span class="msg-time">'   + escapeHtml(formatHm(msg.created_at)) + '</span>'
                + '</div>';
     }
@@ -632,6 +635,7 @@
     var grouped = !!(prev && prev.userId === msg.user_id && (msgTs - prev.ts) < 300);
     var wasAtBottom = isNearBottom(msgList, 60);
     msgList.appendChild(buildMessageEl(msg, grouped));
+    applyStatusEmojis();
     if (wasAtBottom) scrollMsgsToBottom();
   }
 
@@ -1242,7 +1246,8 @@
     if (picker && !picker.hidden &&
         !picker.contains(e.target) &&
         !e.target.closest('[data-action="add-reaction"]') &&
-        !e.target.closest('[data-action="open-emoji-composer"]')) {
+        !e.target.closest('[data-action="open-emoji-composer"]') &&
+        !e.target.closest('[data-action="pick-status-emoji"]')) {
       closeEmojiPicker();
     }
     if (mentionPopup && !mentionPopup.hidden &&
@@ -1259,12 +1264,18 @@
         !e.target.closest('[data-action="open-channel-menu"]')) {
       closeChannelMenu();
     }
+    if (userMenuEl && !userMenuEl.hidden &&
+        !userMenuEl.contains(e.target) &&
+        !e.target.closest('[data-action="open-user-menu"]')) {
+      closeUserMenu();
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       closeEmojiPicker();
       closeMsgMenu();
       closeChannelMenu();
+      closeUserMenu();
       hideMentionPopup();
     }
   });
@@ -1295,12 +1306,36 @@
   applyPresenceDots();
   function refreshPresence() {
     apiGet('list', 'presence.php', {}).then(function (res) {
-      if (!res.ok || !res.data || typeof res.data.presence !== 'object') return;
-      presenceMap = res.data.presence;
-      applyPresenceDots();
+      if (!res.ok || !res.data) return;
+      if (typeof res.data.presence === 'object') {
+        presenceMap = res.data.presence;
+        applyPresenceDots();
+      }
+      if (typeof res.data.statuses === 'object' && res.data.statuses) {
+        statusMap = res.data.statuses;
+        applyStatusEmojis();
+      }
     }).catch(function () {});
   }
   setInterval(refreshPresence, 30000);
+
+  // ===== Custom status (emoji + text shown next to names everywhere) =====
+  function applyStatusEmojis() {
+    document.querySelectorAll('[data-status-user-id]').forEach(function (el) {
+      var id = parseInt(el.getAttribute('data-status-user-id'), 10);
+      var s = statusMap[id];
+      if (s && s.emoji) {
+        el.textContent = s.emoji;
+        el.title = s.text || '';
+        el.hidden = false;
+      } else {
+        el.textContent = '';
+        el.title = '';
+        el.hidden = true;
+      }
+    });
+  }
+  applyStatusEmojis();
 
   // ===== Unread badges (sidebar) =====
   function setUnreadBadge(rowSelector, count, isMention) {
@@ -1577,6 +1612,106 @@
       window.location.href = '/chat/';
     });
   }
+
+  // ===== User profile menu (workspace header click) =====
+  var userMenuEl = $('#chatUserMenu');
+  function openUserMenu(anchor) {
+    if (!userMenuEl) return;
+    userMenuEl.hidden = false;
+    var rect = anchor.getBoundingClientRect();
+    var mh = userMenuEl.offsetHeight || 120;
+    var top = rect.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = rect.top - mh - 4;
+    var left = rect.left;
+    if (left + userMenuEl.offsetWidth + 8 > window.innerWidth) {
+      left = window.innerWidth - userMenuEl.offsetWidth - 8;
+    }
+    userMenuEl.style.top  = Math.max(8, top) + 'px';
+    userMenuEl.style.left = Math.max(8, left) + 'px';
+  }
+  function closeUserMenu() { if (userMenuEl) userMenuEl.hidden = true; }
+
+  // ===== Status modal =====
+  var statusForm = $('#statusForm');
+  var statusEmojiBtn = $('#statusEmojiBtn');
+  var statusEmojiValue = $('#statusEmojiValue');
+  var statusTextInput = $('#statusTextInput');
+  var statusExpiresSelect = $('#statusExpiresSelect');
+
+  function openStatusModal() {
+    closeUserMenu();
+    // Seed with current values from prefs.
+    if (statusEmojiValue) statusEmojiValue.textContent = userPrefs.status_emoji || '😀';
+    if (statusTextInput)  statusTextInput.value        = userPrefs.status_text  || '';
+    if (statusExpiresSelect) statusExpiresSelect.value = '0';
+    var err = $('#statusErr');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    openDialog('modalStatus');
+    if (statusTextInput) requestAnimationFrame(function () { statusTextInput.focus(); });
+  }
+  function toggleStatusEmojiGrid() {
+    var grid = $('#statusEmojiGrid');
+    if (!grid) return;
+    grid.hidden = !grid.hidden;
+  }
+  function setStatusEmoji(emoji) {
+    if (!emoji || !statusEmojiValue) return;
+    statusEmojiValue.textContent = emoji;
+    var grid = $('#statusEmojiGrid');
+    if (grid) grid.hidden = true;
+  }
+  function applyStatusPreset(btn) {
+    var emoji = btn.getAttribute('data-emoji') || '';
+    var text  = btn.getAttribute('data-text')  || '';
+    var exp   = btn.getAttribute('data-expires') || '0';
+    if (statusEmojiValue) statusEmojiValue.textContent = emoji;
+    if (statusTextInput)  statusTextInput.value = text;
+    if (statusExpiresSelect) statusExpiresSelect.value = exp;
+  }
+  function submitStatus(e) {
+    e.preventDefault();
+    var emoji = (statusEmojiValue && statusEmojiValue.textContent || '').trim();
+    var text  = (statusTextInput && statusTextInput.value || '').trim();
+    var exp   = parseInt(statusExpiresSelect && statusExpiresSelect.value || '0', 10) || 0;
+    if (!emoji) {
+      var err = $('#statusErr');
+      if (err) { err.textContent = 'Pick an emoji first.'; err.hidden = false; }
+      return;
+    }
+    var btn = statusForm.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    apiPost('set', 'status.php', { emoji: emoji, text: text, expires_in: exp })
+      .then(function (res) {
+        if (btn) btn.disabled = false;
+        if (!res.ok) {
+          var err = $('#statusErr');
+          if (err) { err.textContent = (res.data && res.data.message) || 'Could not save.'; err.hidden = false; }
+          return;
+        }
+        var s = res.data.status || { emoji: emoji, text: text };
+        userPrefs.status_emoji = s.emoji;
+        userPrefs.status_text  = s.text;
+        statusMap[CURRENT_USER_ID] = { emoji: s.emoji, text: s.text || '' };
+        applyStatusEmojis();
+        closeDialog('modalStatus');
+      })
+      .catch(function () {
+        if (btn) btn.disabled = false;
+        var err = $('#statusErr');
+        if (err) { err.textContent = 'Network error.'; err.hidden = false; }
+      });
+  }
+  function clearStatus() {
+    apiPost('clear', 'status.php', {}).then(function (res) {
+      if (!res.ok) return;
+      userPrefs.status_emoji = null;
+      userPrefs.status_text  = null;
+      delete statusMap[CURRENT_USER_ID];
+      applyStatusEmojis();
+      closeDialog('modalStatus');
+    });
+  }
+  if (statusForm) statusForm.addEventListener('submit', submitStatus);
 
   // ===== Sidebar collapse + section collapse =====
   var cxApp = $('.cx-app');
@@ -2535,9 +2670,41 @@
         e.preventDefault();
         leaveCurrentChannel();
         break;
+      case 'open-user-menu':
+        e.preventDefault();
+        e.stopPropagation();
+        openUserMenu(t);
+        break;
+      case 'open-status-modal':
+        e.preventDefault();
+        openStatusModal();
+        break;
+      case 'toggle-status-emoji-grid':
+        e.preventDefault();
+        toggleStatusEmojiGrid();
+        break;
+      case 'clear-status':
+        e.preventDefault();
+        clearStatus();
+        break;
       default:
         break;
     }
+  });
+
+  // Status preset chips don't have data-action — wire them up separately.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.status-preset');
+    if (!btn) return;
+    e.preventDefault();
+    applyStatusPreset(btn);
+  });
+  // Inline emoji-grid cells inside the status modal.
+  document.addEventListener('click', function (e) {
+    var cell = e.target.closest('.status-emoji-cell');
+    if (!cell) return;
+    e.preventDefault();
+    setStatusEmoji(cell.getAttribute('data-emoji') || '');
   });
 
   // ===== Hash scroll (#msg-N) — used by search results =====

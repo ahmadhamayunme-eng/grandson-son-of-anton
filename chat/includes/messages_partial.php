@@ -84,6 +84,7 @@ foreach ($currentMessages as $m):
         <?php if (!$grouped): ?>
           <div class="msg-meta">
             <span class="msg-author"><?= h($m['author_name']) ?></span>
+            <span class="msg-status-emoji" data-status-user-id="<?= (int)$m['user_id'] ?>" hidden></span>
             <?php if (!empty($m['parent_message_id']) && $showContext): ?><span class="msg-tag tag-reply">REPLY</span><?php endif; ?>
             <span class="msg-time"><?= h(date('H:i', $msgTs)) ?></span>
           </div>

@@ -29,7 +29,12 @@ switch ($action) {
     chat_json(['ok' => true, 'last_seen_at' => now()]);
 
   case 'list':
-    chat_json(['presence' => chat_presence_state_map($ws)]);
+    // Return presence + custom-status maps in one round-trip so the JS
+    // periodic refresh updates both with a single fetch.
+    chat_json([
+      'presence' => chat_presence_state_map($ws),
+      'statuses' => chat_load_status_map($ws),
+    ]);
 
   default:
     chat_json_error('unknown_action', "Unknown action: $action", 400);
