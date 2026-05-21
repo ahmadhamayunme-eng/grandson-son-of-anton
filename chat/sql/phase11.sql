@@ -1,33 +1,37 @@
 -- ============================================================================
--- Anton Connect — Phase 11 unification schema.
+-- Anton Jr. — Phase 11 unification schema.
 --
 -- Run ONCE on the live DB before deploying Phase 11. Idempotent: re-running
 -- is safe (column-add wrapped in conditional, CREATE TABLE IF NOT EXISTS).
 -- ============================================================================
 
--- 1. Mark a per-workspace system user "Anton Connect" used as the author of
+-- 1. Mark a per-workspace system user "Anton Jr." used as the author of
 --    every automated DM / channel post. Add a column to flag them; the
---    backfill statement below creates one Anton Connect per workspace if
+--    backfill statement below creates one Anton Jr. per workspace if
 --    none exists yet.
 SET @col := (SELECT COUNT(*) FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_system');
 SET @sql := IF(@col = 0, 'ALTER TABLE users ADD COLUMN is_system TINYINT(1) NOT NULL DEFAULT 0', 'SELECT 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- Backfill: one Anton Connect per workspace. Email is a synthetic local
+-- Backfill: one Anton Jr. per workspace. Email is a synthetic local
 -- address so the UNIQUE (workspace_id, email) constraint stays happy.
 -- We pick a role that exists; "Super Admin" is the most-permissioned default.
 INSERT INTO users (workspace_id, role_id, name, email, password_hash, is_active, is_system, created_at, updated_at)
 SELECT w.id,
        (SELECT id FROM roles WHERE name = 'Super Admin' LIMIT 1),
-       'Anton Connect',
-       CONCAT('anton-connect+', w.id, '@anton.local'),
-       '!!ANTON_CONNECT_NO_LOGIN!!',  -- not a valid bcrypt hash; login always fails
+       'Anton Jr.',
+       CONCAT('anton-jr+', w.id, '@anton.local'),
+       '!!ANTON_JR_NO_LOGIN!!',  -- not a valid bcrypt hash; login always fails
        1, 1, NOW(), NOW()
 FROM workspaces w
 WHERE NOT EXISTS (
   SELECT 1 FROM users u WHERE u.workspace_id = w.id AND u.is_system = 1
 );
+
+-- Rename any pre-existing "Anton Connect" rows from an earlier draft of this
+-- migration. Idempotent — second run is a no-op.
+UPDATE users SET name = 'Anton Jr.' WHERE is_system = 1 AND name = 'Anton Connect';
 
 -- 2. Per-workspace automation config (which channel hosts standup, etc.).
 CREATE TABLE IF NOT EXISTS chat_automations (

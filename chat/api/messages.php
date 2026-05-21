@@ -268,14 +268,14 @@ function msg_action_send(PDO $pdo, int $ws, int $uid, array $user): never {
     throw $e;
   }
 
-  // Anton Connect — if this is a thread reply on a message linked to a task,
+  // Anton Jr. — if this is a thread reply on a message linked to a task,
   // mirror it as an AntonX comment. Outside the txn so a bridge failure
   // can't roll back the user's actual message.
   if ($parentMessageId > 0 && file_exists(__DIR__ . '/../includes/comment_mirror.php')) {
     require_once __DIR__ . '/../includes/comment_mirror.php';
     try { chat_mirror_thread_reply_to_comment($parentMessageId, $messageId, $content, $uid); } catch (Throwable $e) {}
   }
-  // Anton Connect — if this DM is to Anton Connect, capture the standup reply.
+  // Anton Jr. — if this DM is to Anton Jr., capture the standup reply.
   if ($conversationId > 0 && file_exists(__DIR__ . '/../includes/standup.php')) {
     require_once __DIR__ . '/../includes/standup.php';
     try { chat_standup_capture_reply($ws, $uid, $content, $conversationId); } catch (Throwable $e) {}

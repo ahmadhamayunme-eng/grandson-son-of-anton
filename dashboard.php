@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManage) {
     foreach (($_POST['assignees'] ?? []) as $uid) {
       $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$taskId, (int)$uid]);
     }
-    // Anton Connect — sync project channel members for the new assignees.
+    // Anton Jr. — sync project channel members for the new assignees.
     if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
       require_once __DIR__ . '/chat/includes/project_sync.php';
       try { chat_project_sync((int)$projectId); } catch (Throwable $e) {}
@@ -657,7 +657,7 @@ require_once __DIR__ . '/layout.php';
 
   <aside class="rail">
     <?php
-      // Anton Connect — recent unread chat (DMs + @mentions) widget. Built
+      // Anton Jr. — recent unread chat (DMs + @mentions) widget. Built
       // inline so the existing rail layout stays intact. Falls back silently
       // if the chat tables don't exist on a fresh install.
       $unreadChat = [];

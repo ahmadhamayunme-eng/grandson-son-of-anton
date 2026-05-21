@@ -46,8 +46,8 @@ function chat_mirror_comment_to_thread(int $taskId, int $commentId, string $body
               . '<blockquote><p>' . nl2br(h(trim($body))) . '</p></blockquote>';
 
     // Post as the comment author by writing a regular chat_messages row, but
-    // mark it as Anton Connect since we don't have a chat session for the
-    // AntonX user. Either approach works; using Anton Connect keeps the
+    // mark it as Anton Jr. since we don't have a chat session for the
+    // AntonX user. Either approach works; using Anton Jr. keeps the
     // "system bridge" feel and prevents the chat sidebar from acting like the
     // author posted from chat.
     $newMsgId = chat_post_as_system(
@@ -68,7 +68,7 @@ function chat_mirror_comment_to_thread(int $taskId, int $commentId, string $body
       } catch (Throwable $e) {}
     }
   } catch (Throwable $e) {
-    error_log('[Anton Connect] chat_mirror_comment_to_thread failed: ' . $e->getMessage());
+    error_log('[Anton Jr.] chat_mirror_comment_to_thread failed: ' . $e->getMessage());
   }
 }
 
@@ -101,6 +101,6 @@ function chat_mirror_thread_reply_to_comment(int $anchorMessageId, int $newMessa
     );
     $ins->execute([$ws, $taskId, $authorUserId, $plain, now(), $newMessageId]);
   } catch (Throwable $e) {
-    error_log('[Anton Connect] chat_mirror_thread_reply_to_comment failed: ' . $e->getMessage());
+    error_log('[Anton Jr.] chat_mirror_thread_reply_to_comment failed: ' . $e->getMessage());
   }
 }

@@ -9,7 +9,7 @@ $pageHeadExtra = $pageHeadExtra ?? '';
 // changes silently get masked by browser cache even after a "hard refresh".
 $_antonCssV = @filemtime(__DIR__ . '/../styles/anton.css') ?: '1';
 
-// Anton Connect bell — combined chat-unread + task-pending count. Helpers
+// Anton Jr. bell — combined chat-unread + task-pending count. Helpers
 // safe-fail if the user isn't logged in or the chat tables don't exist yet.
 $_navBellUser  = function_exists('auth_user') ? auth_user() : null;
 $_navBellUid   = (int)($_navBellUser['id'] ?? 0);
@@ -67,7 +67,7 @@ $_navBellTotal = $_navBellUid > 0 ? (
   <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>
   <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
 </button>
-<!-- Anton Connect bell: combined unread chat + open AntonX tasks count. Click
+<!-- Anton Jr. bell: combined unread chat + open AntonX tasks count. Click
      opens /chat/ (where the inbox view aggregates DMs + mentions). Hidden when
      no user is logged in. -->
 <?php if ($_navBellUid > 0):
@@ -97,7 +97,7 @@ $_navBellTotal = $_navBellUid > 0 ? (
   <?php endif; ?>
 </a>
 <style>
-  /* Anton Connect bell — fixed top-right next to the theme toggle. Matches
+  /* Anton Jr. bell — fixed top-right next to the theme toggle. Matches
      theme-toggle dimensions so they sit on the same baseline. */
   .anton-bell {
     position: fixed;

@@ -96,7 +96,7 @@ function client_logo_html(int $clientId, string $name, string $class='client-log
 }
 
 /**
- * Anton Connect — render the user's chat-set status emoji + tooltip text as a
+ * Anton Jr. — render the user's chat-set status emoji + tooltip text as a
  * small inline chip. Empty string if the user has no current status or the
  * status_* columns don't exist yet (DB not migrated to Phase 10 status.sql).
  * Cached in-process to keep dashboard / user-list pages from doing N queries.

@@ -844,7 +844,7 @@ if ($currentChannel) {
 <dialog class="cx-modal cx-modal-wide" id="modalConvertTask" aria-labelledby="modalConvertTaskTitle">
   <form class="cx-modal-form" id="convertTaskForm">
     <h2 class="cx-modal-title" id="modalConvertTaskTitle">Create task from message</h2>
-    <p class="cx-modal-help">A new AntonX task gets created from this message. The chat message gets a "Tracked in task#…" footer linking back, and the assignee is DM'd by Anton Connect.</p>
+    <p class="cx-modal-help">A new AntonX task gets created from this message. The chat message gets a "Tracked in task#…" footer linking back, and the assignee is DM'd by Anton Jr..</p>
     <input type="hidden" id="convertTaskMessageId" value="">
     <label class="cx-modal-field">
       <span class="cx-modal-label">Title</span>

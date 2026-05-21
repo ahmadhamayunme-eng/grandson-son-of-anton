@@ -1,5 +1,5 @@
 <?php
-// chat/includes/standup.php — Anton Connect daily standup automation.
+// chat/includes/standup.php — Anton Jr. daily standup automation.
 //
 // Cron-less: every SSE worker tick checks if any workspace has hit its
 // standup_at time today and hasn't been pinged yet. Each participant gets
@@ -130,7 +130,7 @@ function _chat_standup_collate(int $ws, int $channelId, string $forDate): void {
 }
 
 /**
- * Called from chat/api/messages.php after a DM to Anton Connect lands. If the
+ * Called from chat/api/messages.php after a DM to Anton Jr. lands. If the
  * thread that the user is replying in matches a standup prompt, save the
  * answer keyed by date so the cutoff job can roll it up.
  */
@@ -140,7 +140,7 @@ function chat_standup_capture_reply(int $workspaceId, int $userId, string $conte
   if (!$system) return;
 
   try {
-    // Confirm the DM is between the user and Anton Connect.
+    // Confirm the DM is between the user and Anton Jr..
     $st = db()->prepare(
       'SELECT 1 FROM chat_direct_conversation_members WHERE conversation_id = ? AND user_id = ?'
     );
@@ -148,7 +148,7 @@ function chat_standup_capture_reply(int $workspaceId, int $userId, string $conte
     if (!$st->fetchColumn()) return;
 
     // Was the most recent prior message in this DM a standup prompt from
-    // Anton Connect within the last 24h? If so, attach this reply to the
+    // Anton Jr. within the last 24h? If so, attach this reply to the
     // next-unanswered question for today's date.
     $cur = db()->prepare(
       'SELECT id, content FROM chat_messages

@@ -71,7 +71,7 @@ $icons = [
   }
   .nav-item.active .nav-item-badge { background: oklch(0.70 0.20 25); color: #fff; }
 
-  /* Anton Connect — chat status emoji shown inline next to user names. */
+  /* Anton Jr. — chat status emoji shown inline next to user names. */
   .user-status-chip {
     display: inline-block;
     font-size: 0.85em;
