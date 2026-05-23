@@ -218,6 +218,68 @@ $pageHeadExtra = <<<HTML
   .table-foot { padding: 12px 18px; border-top: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .table-foot b { color: var(--text-muted); font-weight: 500; }
   .empty-row { padding: 32px 16px; text-align: center; color: var(--text-dim); font-size: 13px; font-style: italic; }
+
+  /* ===== Mobile: stack each task as a card =====
+     The 6-column table doesn't fit on a 375-430px screen; titles wrap to
+     4 lines and Project/Status/Due get crushed. On mobile we re-layout
+     each row as a vertical card with title at the top, secondary info
+     in a meta strip, and the status/Open button at the bottom. */
+  @media (max-width: 768px) {
+    .table-card { border-radius: 12px; }
+    table.tasks { font-size: 14px; }
+    table.tasks thead { display: none; }
+    table.tasks, table.tasks tbody, table.tasks tr { display: block; }
+    table.tasks tbody tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 12px;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.tasks tbody tr:last-child { border-bottom: none; }
+    table.tasks tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+    }
+    /* Task title cell takes top-left; "Open" button cell hugs top-right */
+    table.tasks tbody td:nth-child(1) { grid-column: 1; grid-row: 1; }
+    table.tasks tbody td:nth-child(6) { grid-column: 2; grid-row: 1; }
+    /* Client + Project on the second row, side by side */
+    table.tasks tbody td:nth-child(2),
+    table.tasks tbody td:nth-child(3) {
+      grid-column: span 1;
+      grid-row: 2;
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+    table.tasks tbody td:nth-child(2) { grid-column: 1; }
+    table.tasks tbody td:nth-child(3) { grid-column: 2; text-align: right; }
+    /* Status pill on row 3 left, due on row 3 right */
+    table.tasks tbody td:nth-child(4) { grid-column: 1; grid-row: 3; }
+    table.tasks tbody td:nth-child(5) { grid-column: 2; grid-row: 3; text-align: right; }
+
+    .task-cell { gap: 10px; }
+    .task-title { font-size: 15px; line-height: 1.3; }
+    .task-id   { font-size: 11px; }
+    .open-btn { padding: 8px 10px; font-size: 12px; }
+    .open-btn span { display: none; }
+    .due-cell { align-items: flex-end; }
+    .client-mini-name { font-size: 12.5px; }
+    .status-inline-select { font-size: 12.5px; padding: 5px 10px; }
+    .empty-row {
+      display: block !important;
+      grid-column: 1 / -1 !important;
+    }
+    .table-foot {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      text-align: center;
+    }
+  }
 </style>
 HTML;
 

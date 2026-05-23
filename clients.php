@@ -253,6 +253,46 @@ $pageHeadExtra = <<<HTML
   .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--bg); }
   .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; }
   .icon-close:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ===== Mobile: clients table → card stack =====
+     The 7-col table (checkbox + Client + Tag + Status + Projects + Last
+     Active + Actions) doesn't fit on a 375px viewport. Each row becomes
+     a card with the client identity on top, secondary metadata in a
+     wrap-friendly row, and action buttons below. */
+  @media (max-width: 768px) {
+    table.clients { font-size: 14px; }
+    table.clients thead { display: none; }
+    table.clients, table.clients tbody, table.clients tr { display: block; }
+    table.clients tbody tr {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.clients tbody td {
+      display: inline-block;
+      border: none;
+      padding: 2px 0;
+      vertical-align: middle;
+      margin-right: 8px;
+      min-width: 0;
+    }
+    table.clients tbody td:first-child { float: right; margin-right: 0; }
+    /* The Client column (with avatar + name) takes the full first line. */
+    table.clients tbody td:nth-child(2),
+    table.clients tbody td:nth-child(2 of :not(:first-child)) {
+      display: block;
+      margin-bottom: 6px;
+    }
+    /* Action buttons row at the bottom — full width, right-aligned. */
+    .row-actions {
+      opacity: 1 !important;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+    /* Tabs strip needs to clear the hamburger zone. */
+    .scope-tabs { gap: 6px; }
+    /* Stats strip (TOTAL/ACTIVE/PAUSED/PROJECTS) stays as a 2×2 grid
+       (anton.css mobile rule handles it via the generic selector). */
+  }
 </style>
 HTML;
 
