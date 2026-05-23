@@ -22,6 +22,38 @@
   --success-soft: rgba(34, 197, 94, 0.14);
   --info-soft: rgba(120, 120, 120, 0.14);
   --shadow-card: 0 2px 8px rgba(0,0,0,0.25);
+
+  /* ===== Fluid type scale (mobile-first, capped on desktop) =====
+     Used by .t-body / .t-small / h1..h3 helpers and selectively across the
+     design. Per-page styles can still hard-code sizes; these are the
+     defaults a sensible component reaches for. */
+  --fs-small: clamp(12px, 2vw, 13px);
+  --fs-body:  clamp(14px, 2.4vw, 15px);
+  --fs-lead:  clamp(15px, 2.6vw, 16px);
+  --fs-h3:    clamp(17px, 3.4vw, 20px);
+  --fs-h2:    clamp(20px, 4.6vw, 26px);
+  --fs-h1:    clamp(26px, 6.4vw, 36px);
+
+  /* ===== Safe-area tokens =====
+     Computed once so individual components don't have to repeat env(...).
+     `0px` fallback so non-mobile browsers behave identically. */
+  --sai-top:    env(safe-area-inset-top,    0px);
+  --sai-right:  env(safe-area-inset-right,  0px);
+  --sai-bottom: env(safe-area-inset-bottom, 0px);
+  --sai-left:   env(safe-area-inset-left,   0px);
+
+  /* ===== Bottom-nav height =====
+     A real CSS var so any page can reserve space (`padding-bottom`) under
+     fixed content. Set to 0 on desktop; flipped to 56px in the mobile
+     breakpoint where the bottom tab bar actually shows. */
+  --bottom-nav-h: 0px;
+
+  /* ===== Keyboard inset =====
+     Updated by partials/footer.php (visualViewport listener) to the height
+     of the on-screen keyboard. Components that need to sit above the
+     keyboard read this (the chat composer does). 0 when no keyboard. */
+  --keyboard-inset: 0px;
+
   color-scheme: dark;
 }
 
@@ -441,8 +473,10 @@ textarea.input { resize: vertical; min-height: 64px; }
 .theme-toggle,
 button.theme-toggle {
   position: fixed !important;
-  top: 16px !important;
-  right: 18px !important;
+  /* Safe-area-aware so the button sits below the iPhone notch / island and
+     clear of the right rounded corner on landscape. */
+  top: calc(var(--sai-top) + 16px) !important;
+  right: calc(var(--sai-right) + 18px) !important;
   left: auto !important;
   bottom: auto !important;
   width: 44px !important;
@@ -503,7 +537,8 @@ html.light .theme-toggle .ico-moon { display: block; }
 @media (max-width: 560px) {
   .theme-toggle, button.theme-toggle {
     width: 40px !important; height: 40px !important;
-    top: 12px !important; right: 12px !important;
+    top: calc(var(--sai-top) + 12px) !important;
+    right: calc(var(--sai-right) + 12px) !important;
   }
   .theme-toggle svg { width: 18px; height: 18px; }
 }
@@ -587,8 +622,8 @@ body.nav-open { overflow: hidden; }
 .nav-hamburger {
   display: none;
   position: fixed;
-  top: 16px;
-  left: 16px;
+  top: calc(var(--sai-top) + 16px);
+  left: calc(var(--sai-left) + 16px);
   z-index: 1001;
   width: 44px;
   height: 44px;
@@ -703,7 +738,10 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
 /* ── 560px  phones — matches theme-toggle/bell 560px breakpoint ─── */
 @media (max-width: 560px) {
   .topbar { padding: 0 112px 0 64px; }
-  .nav-hamburger { top: 12px; left: 12px; }
+  .nav-hamburger {
+    top: calc(var(--sai-top) + 12px);
+    left: calc(var(--sai-left) + 12px);
+  }
   .flash { margin: 8px 12px 0; }
 }
 
@@ -759,3 +797,326 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
   .app .main .content     { padding: 10px 10px 16px; }
   .app .main .page-header { padding: 6px 10px 4px; }
 }
+
+/* ===================================================================
+   MOBILE BOTTOM TAB BAR
+   ===================================================================
+   This is a multi-section app — Dashboard, Search, Chat, Tasks, plus
+   secondary modules behind a "More" drawer. A bottom tab bar (the
+   Slack / Instagram / Linear pattern for multi-section mobile UIs) is
+   the primary mobile nav. The drawer is still available via "More"
+   for the long tail (Clients, Projects, Docs, Admin, …) but the five
+   most-used destinations live one thumb-tap away.
+
+   Markup is rendered by partials/nav.php inside the .app container so
+   the active state can be picked from $activeKey server-side. Hidden
+   on desktop via the `display: none` default below; revealed at the
+   same 768px breakpoint as the off-canvas sidebar. */
+
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  :root { --bottom-nav-h: 56px; }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 990;
+    /* Sit ABOVE the iPhone home indicator. Inner row keeps its 56px
+       height; the env() padding adds the indicator gap below. */
+    padding-bottom: var(--sai-bottom);
+    padding-left:   var(--sai-left);
+    padding-right:  var(--sai-right);
+    background: rgba(10, 10, 10, 0.92);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-top: 1px solid var(--border);
+    /* Hide when the on-screen keyboard is open. The visualViewport
+       listener in partials/footer.php toggles body.kb-open. */
+  }
+  html.light .bottom-nav { background: rgba(255, 255, 255, 0.92); }
+  body.kb-open .bottom-nav { transform: translateY(150%); }
+  .bottom-nav {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bottom-nav-row {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    height: 56px;
+  }
+
+  .bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 4px;
+    text-decoration: none;
+    color: var(--text-muted);
+    background: none;
+    border: 0;
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    position: relative;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: color 0.12s ease;
+  }
+  .bottom-nav-item svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+  .bottom-nav-item .label {
+    font-size: 10.5px;
+    letter-spacing: -0.005em;
+  }
+  .bottom-nav-item:active { transform: scale(0.94); }
+  .bottom-nav-item.active { color: var(--accent); }
+  /* Light mode: a yellow icon on white is washed out. Use the same dark
+     neutral the rest of the file flips to for ex-yellow text. */
+  html.light .bottom-nav-item.active { color: #3f3f46; }
+  .bottom-nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 3px;
+    border-radius: 0 0 4px 4px;
+    background: var(--accent);
+  }
+
+  .bottom-nav-item .bn-badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 18px);
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    background: oklch(0.70 0.20 25);
+    color: #fff;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--bg);
+  }
+  html.light .bottom-nav-item .bn-badge { box-shadow: 0 0 0 2px #fff; }
+
+  /* Reserve space at the bottom of every scrollable page so the last
+     row of content isn't trapped under the tab bar. */
+  body { padding-bottom: calc(var(--bottom-nav-h) + var(--sai-bottom)); }
+  /* Pages that lock the body (chat, modals) opt-out by setting their
+     own padding. */
+  body.no-bottom-pad { padding-bottom: 0; }
+}
+
+/* ===================================================================
+   ACTION SHEETS / BOTTOM SHEETS — global JS utility
+   Built by partials/footer.php (window.AntonSheet / window.AntonConfirm)
+   This is the mobile-native replacement for browser confirm/alert and
+   the surface where long-press context menus, the "More" tab overflow
+   menu, and any chat message action menu live.
+   =================================================================== */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.sheet-backdrop.open { opacity: 1; }
+html.light .sheet-backdrop { background: rgba(24, 24, 27, 0.35); }
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2001;
+  background: var(--surface);
+  color: var(--text);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  /* Cushion below the last button row above the home indicator. */
+  padding: 8px 16px calc(16px + var(--sai-bottom));
+  transform: translateY(100%);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.35);
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.sheet.open { transform: translateY(0); }
+.sheet-grabber {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  margin: 6px auto 12px;
+}
+.sheet-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 4px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.sheet-msg {
+  font-size: var(--fs-body);
+  color: var(--text);
+  padding: 4px 4px 14px;
+  line-height: 1.45;
+}
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sheet-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 12px;
+  min-height: 48px;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.12s ease, transform 0.05s ease;
+  text-decoration: none;
+}
+.sheet-action svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.9; }
+.sheet-action:hover { background: var(--surface-2); }
+.sheet-action:active { background: var(--surface-hover); transform: scale(0.985); }
+.sheet-action.danger { color: #fca5a5; }
+html.light .sheet-action.danger { color: #b91c1c; }
+.sheet-action.danger:hover { background: var(--danger-soft); }
+.sheet-action.primary { color: var(--accent-on); background: var(--accent); }
+html.light .sheet-action.primary { color: var(--accent-on); }
+.sheet-action.primary:hover { background: var(--accent-hover); }
+.sheet-cancel-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* When a sheet is open, lock body scroll without the iOS-bounce shift. */
+body.sheet-open { overflow: hidden; touch-action: none; }
+
+/* ===================================================================
+   TOASTS — minimal, replaces ad-hoc alert() for non-blocking errors
+   =================================================================== */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--sai-bottom) + var(--bottom-nav-h) + 16px);
+  transform: translateX(-50%);
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  width: min(420px, calc(100vw - 24px));
+}
+.toast {
+  pointer-events: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  transform: translateY(10px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: var(--danger-soft); }
+.toast.success { border-color: rgba(34, 197, 94, 0.35); color: #86efac; background: var(--success-soft); }
+html.light .toast.error { color: #b91c1c; }
+html.light .toast.success { color: #166534; }
+
+/* ===================================================================
+   GLOBAL MOBILE INTERACTION POLISH
+   =================================================================== */
+@media (max-width: 768px) {
+  /* No 300ms tap delay on every interactive primitive. */
+  a, button, [role="button"], .nav-item, label, input, select, textarea,
+  .bottom-nav-item, .sheet-action, .pill, .chip {
+    touch-action: manipulation;
+  }
+  /* Prevent iOS rubber-band bounce on the body — only intentional scroll
+     containers should scroll. (Chat opts out and locks body itself.) */
+  html, body {
+    overscroll-behavior-y: none;
+  }
+  /* Modal overlays cover the safe-area corners on notched devices. */
+  .app .main .modal-overlay {
+    padding-top: max(16px, var(--sai-top));
+    padding-bottom: max(16px, calc(var(--sai-bottom) + var(--bottom-nav-h)));
+  }
+}
+
+/* Subtle floating-action button — used by chat's jump-to-latest and any
+   page that wants a thumb-zone primary action. */
+.fab {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-on);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.fab:hover { background: var(--accent-hover); }
+.fab:active { transform: scale(0.93); }

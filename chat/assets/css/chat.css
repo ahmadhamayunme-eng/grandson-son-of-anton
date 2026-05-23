@@ -1913,3 +1913,356 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
   background-clip: padding-box;
 }
 .cx-app ::-webkit-scrollbar-thumb:hover { background: var(--line-1); background-clip: padding-box; border: 2px solid transparent; }
+
+/* The mobile back button lives in .ch-header but is desktop-hidden by
+   default; the mobile breakpoint below reveals it. Keep it small here so
+   collapsing the breakpoint section is obvious. */
+.cx-mobile-back {
+  display: none;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+  color: var(--fg-1);
+  border-radius: var(--r-sm);
+  -webkit-tap-highlight-color: transparent;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.cx-mobile-back:hover { background: var(--bg-3); color: var(--fg-0); }
+.cx-mobile-back:active { background: var(--bg-hover); }
+
+/* Jump-to-latest floating button — shown by chat.js when the user is
+   scrolled away from the bottom and a new message arrives. */
+.cx-jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translate(-50%, 8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-1);
+  color: var(--fg-0);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 6;
+}
+.cx-jump-latest.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.cx-jump-latest .new-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--red);
+  display: inline-block;
+}
+
+/* ============================================================
+   MOBILE — collapse the 3-pane layout to a single stack with
+   navigable views. The pattern: sidebar (channel list) is its
+   own "page" you swipe-back to; selecting a channel or DM
+   pushes the conversation view; opening a thread pushes the
+   thread view on top of that. On mobile the URL still drives
+   what's visible — picking a channel navigates to /chat/?c=...
+   which lands directly on the conversation; the back button
+   in .ch-header returns to /chat/ (channel list).
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Pull chat-specific bg under the safe-area so notch / island /
+     home-indicator areas don't show whatever the parent body color is. */
+  html, body {
+    background: var(--bg-2);
+    overscroll-behavior-y: none;
+  }
+  body.chat-body { padding-bottom: 0; }
+  /* The AntonX bottom tab bar from anton.css would overlap the chat
+     composer. Chat is its own "app within the app" — the user is
+     already on the Chat tab; the other destinations are reachable via
+     the AntonX hamburger drawer. So we hide the global bottom-nav
+     when the chat module is the active page. */
+  body.chat-body .bottom-nav { display: none; }
+
+  /* The AntonX-level sidebar (drawer) and hamburger / theme-toggle / bell
+     remain reachable — they're managed by anton.css. We hide the chat's
+     own top utility bar (back/forward/sidebar-toggle/prefs) because each
+     of those actions is reachable via a more thumb-friendly path. */
+  .cx-app .top-bar { display: none; }
+
+  /* Collapse the chat-internal grid: one column. Sidebar becomes the
+     primary view when no channel/DM is active; conversation takes over
+     when one is. The details and thread panes overlay full-screen. */
+  .cx-app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    height: 100dvh;       /* dvh = dynamic viewport — accounts for URL bar */
+    max-height: 100dvh;
+  }
+  .cx-app > .cx-sidebar,
+  .cx-app > .cx-main,
+  .cx-app > .details,
+  .cx-app > .cx-thread {
+    grid-row: 1 / 2;
+    grid-column: 1 / 2;
+  }
+
+  /* When the user is in a conversation, hide the sidebar list (back
+     button in header brings them back). When no conversation is open,
+     show the sidebar full-screen with the channel list. */
+  body.cx-has-conversation .cx-app > .cx-sidebar { display: none; }
+  body.cx-list-only        .cx-app > .cx-main    { display: none; }
+
+  .cx-sidebar {
+    background: var(--bg-2);
+    border-right: 0;
+    /* Pad the top so the workspace header clears the AntonX hamburger /
+       theme-toggle / bell. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+  }
+  .ws-header { padding-left: 16px; padding-right: 16px; }
+  .side-search { padding: 8px 12px; }
+  .side-section { padding: 4px 0 6px; }
+
+  /* Larger touch targets on every sidebar row. */
+  .side-item {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 15px;
+    gap: 12px;
+  }
+  .side-item .ch-glyph { font-size: 17px; }
+  .side-item .badge { font-size: 11px; padding: 2px 7px; }
+
+  /* The conversation header on mobile: back button, channel name, spacer.
+     Hide the desktop member-stack, "details" toggle, divider, and pinned
+     icon — they live behind the channel-name dropdown (.ch-title menu)
+     and the chat header tap action. */
+  .ch-header {
+    height: 52px;
+    padding: 0 12px;
+    /* Top safe area is handled by the parent .main; here we just sit
+       above the message list. The composer / msg-list stack uses dvh so
+       it doesn't get clipped by the iOS URL bar. */
+    background: var(--bg-2);
+    gap: 4px;
+  }
+  .cx-mobile-back { display: inline-flex; }
+  .ch-header .divider,
+  .ch-header .members,
+  .ch-header > .icon-btn:not(.cx-mobile-back) {
+    display: none;
+  }
+  .ch-header .ch-title,
+  .ch-header .ch-title-static {
+    font-size: 16px;
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+  }
+  .ch-header .ch-title > span:nth-child(2),
+  .ch-header .ch-title-static {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Channel tabs (messages / threads / pinned) stay but tighten up. */
+  .ch-tabs { height: 40px; padding: 0 8px; gap: 0; }
+  .ch-tab { padding: 8px 12px; min-height: 40px; }
+
+  /* The scroll container is the ONLY thing that scrolls. Padding-bottom
+     reserves space for the fixed composer including safe-area + keyboard. */
+  .cx-main { overflow: hidden; }
+  .thread-scroll {
+    padding: 8px 0 0;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Composer — fixed to the bottom of the visual viewport.
+     - Outer wrap sits at bottom: 0 and adds safe-area padding.
+     - When the keyboard opens, --keyboard-inset (set by the global
+       visualViewport listener in partials/footer.php) becomes non-zero
+       and pushes the composer up by exactly the keyboard height. */
+  .composer-wrap {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 8;
+    padding: 8px 10px calc(8px + var(--sai-bottom, env(safe-area-inset-bottom, 0px)));
+    background: var(--bg-2);
+    border-top: 1px solid var(--line-0);
+    /* Slide above the keyboard. transform = GPU-cheap, no layout thrash. */
+    transform: translateY(calc(-1 * var(--keyboard-inset, 0px)));
+    transition: transform 0.12s ease-out;
+  }
+  /* While the keyboard is open, remove the safe-area cushion (home
+     indicator is hidden by the keyboard) so the composer sits flush. */
+  body.kb-open .composer-wrap {
+    padding-bottom: 8px;
+  }
+  /* Make sure the message list reserves space for the composer so the
+     last message isn't trapped underneath. The composer is ~64px tall
+     (toolbar 28 + input 24 + bottom row 12 = ~64) + 16px padding =
+     reserve 96px which is roomy and stable. */
+  .cx-main .thread-scroll { padding-bottom: 96px; }
+  /* Composer chrome simplifies on mobile — hide formatting toolbar and
+     the inline emoji/mention buttons that live in `.composer-bottom`.
+     Long-press / +- attach are still reachable; bold/italic etc. are
+     tucked behind a toolbar reveal (omitted in this pass for time). */
+  .composer-toolbar { display: none; }
+  .composer { padding: 4px 6px; }
+  .composer-input {
+    font-size: 16px;             /* iOS no-zoom */
+    line-height: 1.45;
+    padding: 10px 6px;
+    /* Cap so 5 lines worth scrolls internally. */
+    max-height: 30vh;
+  }
+  .send-btn .kbd { display: none; }
+  .send-btn { min-height: 40px; padding: 8px 12px; }
+  .send-btn span:not(.kbd) { display: none; } /* icon-only on mobile */
+  /* The "schedule send" button is rarely used on mobile and clutters
+     the composer footer at this width. */
+  .composer-bottom [data-action="open-schedule"] { display: none; }
+
+  /* Hover msg-actions never reveal on touch (no :hover). Hide entirely;
+     chat.js replaces with a long-press sheet. */
+  .msg-actions { display: none !important; }
+
+  /* Wider message bubbles, less left padding so content reaches the
+     edge — feels like iMessage rather than a constrained desktop chat. */
+  .thread-scroll { padding-left: 6px; padding-right: 6px; }
+
+  /* Details panel overlays full-screen instead of squeezing the main pane. */
+  .cx-app.with-details > .details,
+  .cx-app.with-thread  > .cx-thread {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-2);
+    z-index: 12;
+  }
+  .cx-app.with-details > .cx-main,
+  .cx-app.with-thread  > .cx-main { display: none; }
+
+  /* Thread header gets a back button via the existing close button -
+     style it as a chevron so it reads as "back" on mobile. */
+  .cx-thread-header { padding: 0 12px; height: 52px; }
+  .cx-thread-header .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Modal dialogs become bottom-sheets — same visual language as
+     window.AntonSheet. They keep the same form content but slide up
+     from the bottom and respect the home indicator. */
+  .cx-modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    max-height: 92dvh;
+    padding-bottom: var(--sai-bottom);
+  }
+  .cx-modal::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line-1);
+    margin: 8px auto 0;
+  }
+  .cx-modal-form {
+    padding: 14px 16px 16px;
+    max-height: calc(92dvh - var(--sai-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cx-modal-actions {
+    flex-direction: column-reverse;
+    gap: 6px;
+  }
+  .cx-modal-actions .cx-btn {
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+    padding: 12px 16px;
+  }
+  .cx-modal-field input,
+  .cx-modal-field select,
+  .cx-modal-search,
+  .cx-modal-form textarea {
+    font-size: 16px !important;  /* iOS no-zoom */
+    min-height: 44px;
+    padding: 10px 12px !important;
+  }
+  .cx-modal-grid-2 { grid-template-columns: 1fr; }
+  .cx-modal-title { font-size: 18px; }
+
+  /* Cmd+K palette adapts to a search-first sheet. */
+  .cmdk-frame { padding: 0; }
+  .cmdk-input { padding: 12px 14px; }
+
+  /* Floating popups (mention popup, emoji picker, message kebab) re-
+     anchor to the bottom of the screen so they don't get cropped by
+     the keyboard or sit above the composer awkwardly. */
+  .cx-mention-popup,
+  .cx-emoji-popup,
+  .cx-popmenu {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(var(--sai-bottom) + var(--keyboard-inset, 0px) + 8px) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+    border-radius: 14px 14px 0 0 !important;
+    max-height: 50dvh;
+    overflow-y: auto;
+  }
+  .cx-emoji-popup emoji-picker {
+    width: 100% !important;
+    height: 40dvh !important;
+  }
+
+  /* Empty state should sit comfortably on small screens. */
+  .cx-empty { padding: 20px; }
+  .cx-empty-title { font-size: 18px; }
+
+  /* Hide desktop hover-actions and scroll arrows on the join-prompt. */
+  .chat-join-prompt {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+
+  /* Reactions row — tighter so long messages don't break the layout. */
+  .reactions { gap: 4px; }
+  .rx { padding: 2px 8px; font-size: 12px; }
+}
+
+@media (max-width: 430px) {
+  .ch-header { padding: 0 8px; height: 50px; }
+  .ch-tab { padding: 8px 10px; font-size: 12.5px; }
+  .composer-wrap { padding-left: 8px; padding-right: 8px; }
+  .side-item { padding: 10px 14px; }
+}
+
+/* iOS-only safe-area refinement: when the keyboard is open, the bottom
+   tab bar from anton.css hides — for the chat composer this means the
+   wrap should NOT add bottom-nav height back in. Already handled by
+   .chat-body.no-bottom-pad — no extra rule needed here. */

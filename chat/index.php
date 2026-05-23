@@ -143,7 +143,12 @@ if ($globalView === '') {
 }
 
 // Default landing if nothing specified.
-if ($currentChannel === null && $currentDm === null && $currentSlug === '' && $currentDmId === 0 && $globalView === '') {
+// Default landing: redirect to the first channel/DM EXCEPT when the user is
+// on mobile (where /chat/ with no args is the channel-list "home" view that
+// the back button returns to). The User-Agent sniff is a coarse heuristic;
+// good enough since the redirect is a UX nicety, not a security gate.
+$_isMobileUA = (bool)preg_match('/Mobi|Android|iPhone|iPad|iPod/i', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+if (!$_isMobileUA && $currentChannel === null && $currentDm === null && $currentSlug === '' && $currentDmId === 0 && $globalView === '') {
   if (!empty($userChannels)) {
     header('Location: /chat/?c=' . urlencode($userChannels[0]['slug']), true, 303);
     exit;
@@ -214,7 +219,15 @@ if ($currentChannel) {
 <head>
   <base href="/">
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Chat must own keyboard handling and safe-area sizing fully — the
+       composer sits above the keyboard via visualViewport. viewport-fit
+       lets env(safe-area-inset-*) resolve on notched phones. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="csrf-token" content="<?= h(csrf_token()) ?>">
   <script>
     (function() {
@@ -235,10 +248,18 @@ if ($currentChannel) {
   <link rel="stylesheet" href="chat/assets/css/chat.css?v=<?= h((string)$_chatCssV) ?>">
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1.21.0/index.js"></script>
 </head>
-<body>
+<body class="chat-body no-bottom-pad<?= ($currentChannel || $currentDm || $globalView) ? ' cx-has-conversation' : ' cx-list-only' ?>">
 <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle dark / light mode">
   <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>
   <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+</button>
+<!-- AntonX hamburger — chat/index.php has its own <head> (doesn't include
+     partials/header.php) so the global drawer-opening button isn't rendered
+     for free. Render it here so the user can pop into Dashboard / Tasks /
+     Clients without leaving chat manually. CSS in anton.css governs
+     visibility (hidden on desktop, shown ≤768px). -->
+<button type="button" id="navHamburger" class="nav-hamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="antonNav">
+  <span></span><span></span><span></span>
 </button>
 
 <div class="app" data-screen-label="<?= h($pageTitle) ?>">
@@ -438,6 +459,9 @@ if ($currentChannel) {
     if ($globalView === 'threads'):
   ?>
     <header class="ch-header">
+      <a class="cx-mobile-back" href="/chat/" aria-label="Back to channels">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <h1 class="ch-title-static">Threads</h1>
       <span class="spacer"></span>
     </header>
@@ -456,6 +480,9 @@ if ($currentChannel) {
     </div>
   <?php elseif ($globalView === 'inbox'): ?>
     <header class="ch-header">
+      <a class="cx-mobile-back" href="/chat/" aria-label="Back to channels">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <h1 class="ch-title-static">Inbox</h1>
       <span class="spacer"></span>
     </header>
@@ -472,6 +499,9 @@ if ($currentChannel) {
     </div>
   <?php elseif ($globalView === 'saved'): ?>
     <header class="ch-header">
+      <a class="cx-mobile-back" href="/chat/" aria-label="Back to channels">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <h1 class="ch-title-static">Saved</h1>
       <span class="spacer"></span>
     </header>
@@ -488,6 +518,9 @@ if ($currentChannel) {
     </div>
   <?php elseif ($currentChannel): ?>
     <header class="ch-header">
+      <a class="cx-mobile-back" href="/chat/" aria-label="Back to channels">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <button class="ch-title" data-action="open-channel-menu" data-channel-id="<?= (int)$currentChannel['id'] ?>" data-channel-slug="<?= h($currentChannel['slug']) ?>">
         <span class="glyph"><?= $currentChannel['is_private'] ? '🔒' : '#' ?></span>
         <span><?= h($currentChannel['slug']) ?></span>
@@ -582,6 +615,9 @@ if ($currentChannel) {
 
   <?php elseif ($currentDm): ?>
     <header class="ch-header">
+      <a class="cx-mobile-back" href="/chat/" aria-label="Back to channels">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <button class="ch-title">
         <span class="glyph">@</span>
         <span><?= h(chat_dm_display_name($currentDm)) ?></span>
@@ -951,10 +987,26 @@ if ($currentChannel) {
     btn.addEventListener('click', function(){
       var isLight = document.documentElement.classList.toggle('light');
       try { localStorage.setItem('anton-theme', isLight ? 'light' : 'dark'); } catch (e) {}
+      // Keep the runtime theme-color meta in sync so the mobile browser
+      // chrome flips on theme change instead of waiting for a reload.
+      var meta = document.querySelector('meta[name="theme-color"][data-runtime]');
+      if (meta) meta.setAttribute('content', isLight ? '#f7f7f8' : '#0a0a0a');
     });
   })();
+  // Mark this page in ANTON_ACTIVE so partials/footer.php sets the active
+  // tab in both the AntonX drawer and the bottom-nav. (Chat doesn't show
+  // the bottom-nav, but the drawer's active-state still matters.)
+  window.ANTON_ACTIVE = 'chat';
 </script>
-<script src="chat/assets/js/chat.js?v=<?= h((string)$_chatJsV) ?>"></script>
+<!-- Chat's own JS is loaded with `defer` so it executes after the globals
+     in partials/footer.php are defined — chat.js's mobile long-press
+     handler binds at IIFE-init and looks up window.AntonSheet on use, but
+     the toast helper falls back to alert() if AntonToast isn't defined
+     yet, so defer is purely about ordering of two synchronous scripts. -->
+<script defer src="chat/assets/js/chat.js?v=<?= h((string)$_chatJsV) ?>"></script>
+<!-- The shared AntonX footer renders Bootstrap JS, sets up the hamburger
+     drawer, theme toggle, visualViewport keyboard listener, and the
+     global AntonSheet / AntonConfirm / AntonToast primitives. It also
+     emits the trailing </body></html>, so nothing else may follow. -->
+<?php include __DIR__ . '/../partials/footer.php'; ?>
 <?php if (ob_get_level() > 0) { ob_end_flush(); } ?>
-</body>
-</html>

@@ -22,10 +22,27 @@ $_navBellTotal = $_navBellUid > 0 ? (
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- viewport-fit=cover is required for env(safe-area-inset-*) to resolve on
+       notched iPhones / Dynamic-Island devices; interactive-widget=resizes-content
+       gives us the same content-resize behavior on Android as iOS so the
+       composer / fixed CTAs land above the keyboard predictably. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="format-detection" content="telephone=no">
+  <!-- Browser-chrome tint. The same #FACC15 yellow that the .theme-color JS
+       below overrides per-mode. -->
+  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+  <!-- PWA / iOS home-screen hints so the app feels installable. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="anton x">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="partials/antonx-favicon.png">
   <!-- FOUC-safe theme init: runs BEFORE any CSS link so the right palette is
        applied on the first paint. Reads `anton-theme` from localStorage; if
-       absent, falls back to the user's OS preference. -->
+       absent, falls back to the user's OS preference. Also syncs the
+       theme-color meta so the mobile browser chrome matches the active theme
+       (not just the OS preference). -->
   <script>
     (function() {
       try {
@@ -33,6 +50,12 @@ $_navBellTotal = $_navBellUid > 0 ? (
         var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
         var theme = saved || (prefersLight ? 'light' : 'dark');
         if (theme === 'light') document.documentElement.classList.add('light');
+        var color = theme === 'light' ? '#f7f7f8' : '#0a0a0a';
+        var meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.content = color;
+        meta.setAttribute('data-runtime', '1');
+        document.head.appendChild(meta);
       } catch (e) {}
     })();
   </script>
@@ -101,8 +124,10 @@ $_navBellTotal = $_navBellUid > 0 ? (
      theme-toggle dimensions so they sit on the same baseline. */
   .anton-bell {
     position: fixed;
-    top: 16px;
-    right: 74px;             /* 18 (toggle right) + 44 (toggle width) + 12 gap */
+    /* Safe-area-aware: respects the notch / Dynamic Island. Falls back to a
+       plain 16px on devices that don't expose the env var. */
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    right: calc(env(safe-area-inset-right, 0px) + 74px); /* 18 + 44 + 12 gap */
     width: 44px;
     height: 44px;
     border-radius: 999px;
@@ -148,7 +173,11 @@ $_navBellTotal = $_navBellUid > 0 ? (
     50%      { transform: translateY(-1px) scale(1.06); }
   }
   @media (max-width: 560px) {
-    .anton-bell { width: 40px; height: 40px; top: 12px; right: 62px; }
+    .anton-bell {
+      width: 40px; height: 40px;
+      top: calc(env(safe-area-inset-top, 0px) + 12px);
+      right: calc(env(safe-area-inset-right, 0px) + 62px);
+    }
     .anton-bell svg { width: 18px; height: 18px; }
   }
 </style>
