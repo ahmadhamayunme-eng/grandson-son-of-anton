@@ -81,6 +81,8 @@ $icons = [
     vertical-align: -1px;
   }
 </style>
+<!-- Mobile nav overlay — clicking this closes the sidebar drawer -->
+<div class="nav-overlay" id="navOverlay" aria-hidden="true"></div>
 <aside class="sidebar">
   <a class="brand" href="dashboard.php" aria-label="anton x">
     <span class="brand-logo"><?= file_get_contents(__DIR__ . '/antonx-logo.svg') ?></span>

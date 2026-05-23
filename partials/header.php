@@ -153,4 +153,11 @@ $_navBellTotal = $_navBellUid > 0 ? (
   }
 </style>
 <?php endif; ?>
+<!-- Hamburger button — hidden on desktop via CSS, shown at ≤768px.
+     Toggles `body.nav-open` which slides the sidebar drawer in/out. -->
+<button type="button" id="navHamburger" class="nav-hamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="antonNav">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
 <div class="app" data-screen-label="<?=h($pageTitle)?>">
