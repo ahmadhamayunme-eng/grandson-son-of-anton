@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 
 // The URL of the hosted PHP app. Change this to your actual domain.
-const APP_URL = 'https://anton.speedxmarketing.com'; // e.g. https://system.speedxmarketing.com
+const APP_URL = 'https://anton.speedxmarketing.com';
 
 function createWindow() {
   const win = new BrowserWindow({
