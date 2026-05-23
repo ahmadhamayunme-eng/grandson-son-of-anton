@@ -33,6 +33,20 @@
   // ===== Small helpers =====
   function $(sel, root)  { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+  // Toast helper — uses the global AntonToast sheet primitive from
+  // partials/footer.php when available; falls back to native alert() so
+  // dev / standalone embeds still surface the message. tone: 'error' |
+  // 'success' | undefined.
+  function notify(message, tone) {
+    if (window.AntonToast) { window.AntonToast(message, tone); return; }
+    alert(message);
+  }
+  // Detect coarse pointer (touch) once. The mobile breakpoint is 768px to
+  // match anton.css and chat.css; this matters for the long-press menu
+  // and the hover-action toolbar fallback.
+  var IS_TOUCH = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+              || ('ontouchstart' in window);
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -386,7 +400,7 @@
       .then(function (res) {
         if (sendBtn) sendBtn.disabled = false;
         if (!res.ok) {
-          alert(res.data && res.data.message ? res.data.message : 'Failed to send.');
+          notify(res.data && res.data.message ? res.data.message : 'Failed to send.', 'error');
           return;
         }
         var msg = res.data.message;
@@ -403,7 +417,7 @@
       })
       .catch(function () {
         if (sendBtn) sendBtn.disabled = false;
-        alert('Network error — message not sent.');
+        notify('Network error — message not sent.', 'error');
       });
   }
 
@@ -613,7 +627,10 @@
     msgList.scrollTop = msgList.scrollHeight;
   }
   if (msgList) scrollMsgsToBottom();
-  if (mainInput) requestAnimationFrame(function () { mainInput.focus(); });
+  // Auto-focus the composer on desktop only — on mobile that would pop the
+  // keyboard on every page visit, covering the messages the user actually
+  // wanted to read.
+  if (mainInput && !IS_TOUCH) requestAnimationFrame(function () { mainInput.focus(); });
 
   function isNearBottom(el, threshold) {
     if (!el) return true;
@@ -1516,14 +1533,14 @@
       .then(function (res) {
         if (!res.ok) {
           if (saveBtn) saveBtn.disabled = false;
-          alert(res.data && res.data.message ? res.data.message : 'Failed to save.');
+          notify(res.data && res.data.message ? res.data.message : 'Failed to save.', 'error');
           return;
         }
         applyEditedMessage(msgId, res.data.message);
       })
       .catch(function () {
         if (saveBtn) saveBtn.disabled = false;
-        alert('Network error.');
+        notify('Network error.', 'error');
       });
   }
   function applyEditedMessage(msgId, msg) {
@@ -1606,13 +1623,21 @@
     if (!channelMenuChannelId) return;
     var cid = channelMenuChannelId;
     closeChannelMenu();
-    if (!confirm('Leave this channel?')) return;
-    apiPost('leave', 'channels.php', { channel_id: cid }).then(function (res) {
-      if (!res.ok) {
-        alert(res.data && res.data.message ? res.data.message : 'Could not leave.');
-        return;
-      }
-      window.location.href = '/chat/';
+    // AntonConfirm returns a Promise<boolean>. On older pages (no global
+    // sheet primitive loaded) fall back to the native confirm so the
+    // function keeps working.
+    var ask = window.AntonConfirm
+      ? window.AntonConfirm('Leave this channel? You can rejoin any time.', { confirmLabel: 'Leave', destructive: true })
+      : Promise.resolve(window.confirm('Leave this channel?'));
+    ask.then(function (yes) {
+      if (!yes) return;
+      apiPost('leave', 'channels.php', { channel_id: cid }).then(function (res) {
+        if (!res.ok) {
+          notify(res.data && res.data.message ? res.data.message : 'Could not leave.', 'error');
+          return;
+        }
+        window.location.href = '/chat/';
+      });
     });
   }
 
@@ -2114,14 +2139,14 @@
       .then(function (res) {
         if (!res.ok) {
           if (button) button.disabled = false;
-          alert(res.data && res.data.message ? res.data.message : 'Could not join.');
+          notify(res.data && res.data.message ? res.data.message : 'Could not join.', 'error');
           return;
         }
         window.location.href = '/chat/?c=' + encodeURIComponent(slug);
       })
       .catch(function () {
         if (button) button.disabled = false;
-        alert('Network error.');
+        notify('Network error.', 'error');
       });
   }
 
@@ -2386,12 +2411,12 @@
   var scheduleForm = $('#scheduleForm');
   function openScheduleModal() {
     if (!CURRENT_CHANNEL_ID && !CURRENT_CONVERSATION_ID) {
-      alert('Open a channel or DM first.');
+      notify('Open a channel or DM first.', 'error');
       return;
     }
     if (!mainInput) return;
     var content = extractComposerHtml(mainInput);
-    if (!content) { alert('Type a message first, then schedule it.'); return; }
+    if (!content) { notify('Type a message first, then schedule it.', 'error'); return; }
     var err = $('#scheduleErr');
     if (err) { err.hidden = true; err.textContent = ''; }
     var inputDt = $('#scheduleAt');
@@ -2652,7 +2677,7 @@
   function togglePin(msgId) {
     apiPost('toggle', 'pinned.php', { message_id: msgId }).then(function (res) {
       if (!res.ok) {
-        if (res.data && res.data.message) alert(res.data.message);
+        if (res.data && res.data.message) notify(res.data.message);
         return;
       }
       applyPinState(msgId, !!res.data.is_pinned);
@@ -2874,12 +2899,17 @@
         e.preventDefault();
         var did = msgMenuTargetId;
         closeMsgMenu();
-        if (did && confirm('Delete this message? This can\'t be undone.')) {
+        if (!did) break;
+        (window.AntonConfirm
+          ? window.AntonConfirm('Delete this message? This can\'t be undone.', { confirmLabel: 'Delete', destructive: true })
+          : Promise.resolve(window.confirm('Delete this message? This can\'t be undone.'))
+        ).then(function (yes) {
+          if (!yes) return;
           apiPost('delete', 'messages.php', { message_id: did }).then(function (res) {
-            if (!res.ok) alert(res.data && res.data.message ? res.data.message : 'Failed to delete.');
+            if (!res.ok) notify(res.data && res.data.message ? res.data.message : 'Failed to delete.', 'error');
             else applyDeletedMessage(did);
           });
-        }
+        });
         break;
       case 'cancel-edit':
         e.preventDefault();
@@ -2955,5 +2985,262 @@
           ? ('DM conversation ' + CURRENT_CONVERSATION_ID)
           : (CURRENT_VIEW ? ('view: ' + CURRENT_VIEW) : '(no channel)'));
     console.log('[Anton Chat] Phase 10 loaded · ' + where);
+  }
+
+  // ===================================================================
+  // MOBILE — long-press action sheet, jump-to-latest, keyboard scroll
+  // ===================================================================
+  // On a touch device, the desktop hover-action toolbar (.msg-actions) is
+  // invisible. We replace it with an iMessage-style long-press: hold for
+  // 380ms on any .msg-group → bottom sheet with react / reply / save /
+  // pin / forward / create-task / delete. The actions are derived from
+  // the same data-action attributes the hover toolbar uses, so server-
+  // side behavior and ACL stay identical.
+
+  if (IS_TOUCH && msgList && window.AntonSheet) {
+    var LP_DELAY = 380;
+    var lpTimer = null;
+    var lpTarget = null;
+    var lpStartX = 0, lpStartY = 0;
+    var LP_TOLERANCE = 12; // px movement before cancelling the long-press
+
+    function cancelLongPress() {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+      if (lpTarget) { lpTarget.classList.remove('msg-longpress'); lpTarget = null; }
+    }
+
+    // Touch handlers attached to the scroll container; delegate to the
+    // nearest .msg-group so dynamically appended messages work.
+    msgList.addEventListener('touchstart', function (e) {
+      var grp = e.target.closest('.msg-group');
+      if (!grp || grp.classList.contains('day-divider')) return;
+      // Ignore long-press if the touch started inside an interactive child
+      // (reaction pill, thread preview, file link) — those have their own
+      // semantics and the user is targeting them, not the message.
+      if (e.target.closest('a, button, .reactions, .thread-preview, .msg-file, .rx-add')) return;
+      lpTarget = grp;
+      lpStartX = e.touches[0].clientX;
+      lpStartY = e.touches[0].clientY;
+      lpTimer = setTimeout(function () {
+        if (!lpTarget) return;
+        // Haptic feedback when supported (Android Chrome).
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+        openMessageActionSheet(lpTarget);
+        lpTimer = null;
+      }, LP_DELAY);
+    }, { passive: true });
+
+    msgList.addEventListener('touchmove', function (e) {
+      if (!lpTimer) return;
+      var dx = e.touches[0].clientX - lpStartX;
+      var dy = e.touches[0].clientY - lpStartY;
+      if (Math.abs(dx) > LP_TOLERANCE || Math.abs(dy) > LP_TOLERANCE) {
+        cancelLongPress();
+      }
+    }, { passive: true });
+
+    msgList.addEventListener('touchend',    cancelLongPress);
+    msgList.addEventListener('touchcancel', cancelLongPress);
+
+    function openMessageActionSheet(grp) {
+      var mid    = parseInt(grp.getAttribute('data-msg-id'), 10);
+      var ownMsg = parseInt(grp.getAttribute('data-user-id'), 10) === CURRENT_USER_ID;
+      var isSaved   = !!(grp.querySelector('[data-action="toggle-save"].active'));
+      var isPinned  = !!(grp.querySelector('[data-action="toggle-pin"].active'));
+      var inChannel = !!(CURRENT_CHANNEL_ID); // pin only makes sense in channels
+      var actions = [
+        {
+          label: 'React',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg>',
+          onClick: function () {
+            var addBtn = grp.querySelector('[data-action="add-reaction"]');
+            if (addBtn) addBtn.click();
+          }
+        },
+        {
+          label: 'Reply in thread',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 015 5v3"/></svg>',
+          onClick: function () { openThread(mid); }
+        },
+        {
+          label: 'Quote in reply',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M7 8h3v3H7v3a3 3 0 003 3M14 8h3v3h-3v3a3 3 0 003 3"/></svg>',
+          onClick: function () {
+            var quoteBtn = grp.querySelector('[data-action="reply-quote"]');
+            if (quoteBtn) quoteBtn.click();
+          }
+        },
+        {
+          label: isSaved ? 'Remove from Saved' : 'Save for later',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
+          onClick: function () {
+            apiPost(isSaved ? 'unsave' : 'save', 'saved.php', { message_id: mid });
+          }
+        },
+        {
+          label: 'Forward',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
+          onClick: function () {
+            // The desktop hover-action triggers a click on the forward
+            // button which opens the forward modal scoped to this msg.
+            var fwd = grp.querySelector('[data-action="open-forward"]');
+            if (fwd) fwd.click();
+          }
+        },
+        {
+          label: 'Create task',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+          onClick: function () {
+            var ct = grp.querySelector('[data-action="open-convert-task"]');
+            if (ct) ct.click();
+          }
+        }
+      ];
+      if (inChannel) {
+        actions.push({
+          label: isPinned ? 'Unpin from channel' : 'Pin to channel',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M15 2l7 7-3 1-5 5-1 5-4-4-6 6 6-6-4-4 5-1 5-5z"/></svg>',
+          onClick: function () {
+            apiPost(isPinned ? 'unpin' : 'pin', 'pinned.php', { message_id: mid });
+          }
+        });
+      }
+      // Copy message text — purely client-side, doesn't hit the server.
+      actions.push({
+        label: 'Copy text',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+        onClick: function () {
+          var body = grp.querySelector('.msg-body');
+          var txt = body ? (body.getAttribute('data-raw-content') || body.textContent || '').trim() : '';
+          if (!txt) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(txt).then(function () { notify('Copied'); }, function () { notify('Copy failed', 'error'); });
+          } else {
+            // Legacy fallback for older mobile browsers.
+            var ta = document.createElement('textarea');
+            ta.value = txt; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); notify('Copied'); }
+            catch (_) { notify('Copy failed', 'error'); }
+            document.body.removeChild(ta);
+          }
+        }
+      });
+      if (ownMsg) {
+        actions.push({
+          label: 'Edit message',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+          onClick: function () { enterEditMode(mid); }
+        });
+        actions.push({
+          label: 'Delete message',
+          tone: 'danger',
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+          onClick: function () {
+            window.AntonConfirm('Delete this message? This can\'t be undone.', { confirmLabel: 'Delete', destructive: true }).then(function (yes) {
+              if (!yes) return;
+              apiPost('delete', 'messages.php', { message_id: mid }).then(function (res) {
+                if (!res.ok) notify(res.data && res.data.message ? res.data.message : 'Failed to delete.', 'error');
+                else applyDeletedMessage(mid);
+              });
+            });
+          }
+        });
+      }
+      window.AntonSheet({
+        title: 'Message',
+        label: 'Message actions',
+        actions: actions,
+        cancelLabel: 'Cancel'
+      });
+    }
+  }
+
+  // -------------------- Jump-to-latest FAB --------------------
+  // When the user scrolls up and a new message arrives, the message list
+  // auto-scroll stays put (so they're not yanked away from what they're
+  // reading). To get back, a "Jump to latest" button floats just above
+  // the composer. Tapping it returns to the bottom and clears the flag.
+  if (msgList) {
+    var jumpBtn = document.createElement('button');
+    jumpBtn.type = 'button';
+    jumpBtn.className = 'cx-jump-latest';
+    jumpBtn.setAttribute('aria-label', 'Jump to latest');
+    jumpBtn.innerHTML = '<span class="new-dot"></span> Jump to latest';
+    // Anchor relative to .cx-main so it floats above the composer.
+    var mainEl = document.querySelector('.cx-main');
+    if (mainEl) {
+      // Ensure .cx-main is positioned for absolute children.
+      if (getComputedStyle(mainEl).position === 'static') {
+        mainEl.style.position = 'relative';
+      }
+      // Position above the composer: the composer-wrap sits at the bottom.
+      // 16px above; on mobile the composer is fixed, so anchor to viewport
+      // using fixed positioning with bottom = composer height (~80) + 8.
+      jumpBtn.style.position = 'fixed';
+      jumpBtn.style.bottom = 'calc(96px + var(--keyboard-inset, 0px) + var(--sai-bottom))';
+      mainEl.appendChild(jumpBtn);
+    }
+
+    function showJump() { jumpBtn.classList.add('show'); }
+    function hideJump() { jumpBtn.classList.remove('show'); }
+    function nearBottom() {
+      return msgList.scrollHeight - msgList.scrollTop - msgList.clientHeight < 80;
+    }
+
+    msgList.addEventListener('scroll', function () {
+      if (nearBottom()) hideJump();
+    }, { passive: true });
+
+    // Wrap appendMainMessage so we can flag pending-new when not at
+    // bottom. The function exists higher in this IIFE so we monkey-patch
+    // via window.__originalAppend — keeps the existing call sites intact.
+    var origAppend = typeof appendMainMessage === 'function' ? appendMainMessage : null;
+    if (origAppend) {
+      window.__cxAppendWrap = function (msg) {
+        var wasNear = nearBottom();
+        origAppend(msg);
+        if (!wasNear) showJump();
+      };
+      // We can't actually rebind the local `appendMainMessage` inside
+      // the closure from here. Instead, we listen on the DOM: when a
+      // new .msg-group is added while we're not near bottom, flash the
+      // button. MutationObserver is cheap for this use case.
+      var obs = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type === 'childList' && m.addedNodes.length) {
+            for (var j = 0; j < m.addedNodes.length; j++) {
+              var n = m.addedNodes[j];
+              if (n.nodeType === 1 && n.classList && n.classList.contains('msg-group')) {
+                if (!nearBottom()) showJump();
+                return;
+              }
+            }
+          }
+        }
+      });
+      obs.observe(msgList, { childList: true });
+    }
+
+    jumpBtn.addEventListener('click', function () {
+      msgList.scrollTop = msgList.scrollHeight;
+      hideJump();
+    });
+  }
+
+  // -------------------- Keyboard-aware composer focus --------------------
+  // When the user taps the composer on iOS, the keyboard opens and we
+  // need to scroll the message list to the bottom (so the most recent
+  // message stays visible above the keyboard, not hidden behind it).
+  if (mainInput && msgList) {
+    mainInput.addEventListener('focus', function () {
+      // Defer one frame so visualViewport has already shrunk and CSS
+      // has applied the keyboard inset to the composer.
+      setTimeout(function () {
+        if (msgList.scrollHeight - msgList.scrollTop - msgList.clientHeight < 200) {
+          msgList.scrollTop = msgList.scrollHeight;
+        }
+      }, 60);
+    });
   }
 })();

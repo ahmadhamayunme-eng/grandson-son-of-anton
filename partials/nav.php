@@ -133,3 +133,46 @@ $icons = [
     </div>
   </div>
 </aside>
+
+<!-- ===================================================================
+     MOBILE BOTTOM TAB BAR
+     Five-tap nav for the primary destinations. The drawer sidebar above
+     still holds the full destination list; the bottom bar surfaces only
+     what's reached daily. The "More" tab opens a bottom sheet listing
+     every other module via partials/footer.php JS.
+     Hidden on desktop via CSS; visible at ≤768px.
+     =================================================================== -->
+<nav class="bottom-nav" id="antonBottomNav" aria-label="Primary">
+  <div class="bottom-nav-row">
+    <a class="bottom-nav-item<?= $activeKey === 'dashboard' ? ' active' : '' ?>"
+       href="dashboard.php" data-key="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span class="label">Home</span>
+    </a>
+    <a class="bottom-nav-item<?= $activeKey === 'my-tasks' ? ' active' : '' ?>"
+       href="my_tasks.php" data-key="my-tasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span class="label">Tasks</span>
+      <?php if ($navAntonxPending > 0): ?>
+        <span class="bn-badge"><?= $navAntonxPending > 9 ? '9+' : (int)$navAntonxPending ?></span>
+      <?php endif; ?>
+    </a>
+    <a class="bottom-nav-item<?= $activeKey === 'chat' ? ' active' : '' ?>"
+       href="chat/" data-key="chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="label">Chat</span>
+      <?php if ($navChatUnread > 0): ?>
+        <span class="bn-badge"><?= $navChatUnread > 9 ? '9+' : (int)$navChatUnread ?></span>
+      <?php endif; ?>
+    </a>
+    <a class="bottom-nav-item<?= $activeKey === 'search' ? ' active' : '' ?>"
+       href="search.php" data-key="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span class="label">Search</span>
+    </a>
+    <button type="button" class="bottom-nav-item" data-action="open-more-sheet" aria-label="More">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span class="label">More</span>
+    </button>
+  </div>
+</nav>
