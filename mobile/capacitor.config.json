@@ -1,0 +1,10 @@
+{
+  "appId": "com.speedx.antonx",
+  "appName": "AntonX",
+  "webDir": "src",
+  "server": {
+    "url": "https://anton.speedxmarketing.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  }
+}
