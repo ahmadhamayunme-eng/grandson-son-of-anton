@@ -458,6 +458,30 @@ $pageHeadExtra = <<<HTML
   .workload-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--success)); border-radius: 999px; }
   .workload-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
   @media (max-width: 1280px) { .content { grid-template-columns: 1fr; } }
+  @media (max-width: 1024px) {
+    .content { padding: 24px 24px 40px; }
+    .page-header { padding: 18px 24px 4px; }
+  }
+  @media (max-width: 768px) {
+    .content { padding: 16px 16px 28px; gap: 20px; }
+    .page-header { padding: 12px 16px 4px; flex-wrap: wrap; gap: 10px; }
+    .page-title { font-size: clamp(18px, 5vw, 26px); }
+    .page-sub { font-size: 12px; }
+    .quick-actions { flex-wrap: wrap; gap: 6px; }
+    .cal-cell { min-height: 72px; padding: 6px 6px 8px; }
+    .cal-dow { padding: 8px 6px 6px; font-size: 9.5px; }
+    .modal-overlay { padding: 16px 12px; }
+    .modal-card { max-width: 100%; }
+    .at-body { padding: 16px 16px 6px; max-height: 80vh; }
+    .at-title-field { font-size: 20px; }
+    .modal-body { padding: 14px; max-height: 72vh; }
+    .worker-tasks { padding-left: 0 !important; }
+  }
+  @media (max-width: 430px) {
+    .content { padding: 12px 12px 20px; gap: 14px; }
+    .page-header { padding: 8px 12px 4px; }
+    .quick-btn { padding: 8px 10px; font-size: 12px; }
+  }
 
   /* Quick-create buttons in the page header */
   .quick-actions { display: inline-flex; align-items: center; gap: 8px; }

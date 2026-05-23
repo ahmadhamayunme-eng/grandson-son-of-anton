@@ -324,6 +324,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     @media (max-width: 480px) {
       .auth-card { padding: 26px 22px 22px; }
       .auth-title { font-size: 19px; }
+      /* 16px minimum prevents iOS viewport auto-zoom on input focus */
+      .auth-input { font-size: 16px; min-height: 48px; }
+      .auth-submit { font-size: 16px; min-height: 52px; }
+    }
+    @media (max-width: 375px) {
+      .auth-shell { padding: 20px 12px; }
+      .auth-card { padding: 22px 16px 18px; }
     }
   </style>
 </head>
