@@ -1,0 +1,82 @@
+name: Build Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'        # triggers on v1.0.0, v1.2.3, etc.
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: dist/*.exe
+            name: Windows (.exe)
+          - os: macos-latest
+            platform: mac
+            artifact: dist/*.dmg
+            name: macOS (.dmg)
+          - os: ubuntu-latest
+            platform: linux
+            artifact: dist/*.AppImage
+            name: Linux (.AppImage)
+
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: desktop
+
+      - name: Build
+        run: npm run build:${{ matrix.platform }}
+        working-directory: desktop
+        env:
+          # Skips macOS code signing — remove these lines if you add a cert
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Skips Windows code signing
+          WIN_CSC_LINK: ''
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AntonX-${{ matrix.platform }}
+          path: desktop/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only create a release when triggered by a version tag
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          name: AntonX ${{ github.ref_name }}

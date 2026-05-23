@@ -2,6 +2,7 @@
   "name": "antonx",
   "version": "1.0.0",
   "description": "AntonX Business Management System",
+  "author": "SpeedX Marketing",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
