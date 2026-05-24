@@ -468,14 +468,116 @@ $pageHeadExtra = <<<HTML
     .page-title { font-size: clamp(18px, 5vw, 26px); }
     .page-sub { font-size: 12px; }
     .quick-actions { flex-wrap: wrap; gap: 6px; }
-    .cal-cell { min-height: 72px; padding: 6px 6px 8px; }
-    .cal-dow { padding: 8px 6px 6px; font-size: 9.5px; }
     .modal-overlay { padding: 16px 12px; }
     .modal-card { max-width: 100%; }
     .at-body { padding: 16px 16px 6px; max-height: 80vh; }
     .at-title-field { font-size: 20px; }
     .modal-body { padding: 14px; max-height: 72vh; }
     .worker-tasks { padding-left: 0 !important; }
+
+    /* ===== Monthly Task Calendar → AGENDA LIST on mobile =====
+       The 7-column grid is unreadable at phone widths (titles get cropped
+       to "Submit Last...", weekends fall off the right, dense weeks tower
+       past sparse ones). On mobile we flatten the grid to a vertical
+       agenda — each in-month day is a section with its date and a
+       full-width list of tasks under it. Out-of-month padding days are
+       hidden, empty days are collapsed (or hidden when not today). */
+    .cal-grid {
+      display: block !important;
+      background: transparent;
+      gap: 0;
+      border-radius: 0;
+    }
+    .cal-dow { display: none; }
+    /* Padding days from the previous/next month aren't useful in agenda */
+    .cal-cell.dim { display: none !important; }
+    /* Days with "No tasks" disappear unless they're today (we still want
+       to anchor "today" in the agenda visually). :has() is widely
+       supported on mobile (Safari 15.4+, Chrome 105+); browsers without
+       it fall back to showing the empty rows in collapsed form below. */
+    .cal-cell:not(.today):has(> .cal-empty) { display: none; }
+
+    /* Each in-month day becomes a row: date heading on top, tasks below.
+       No background tint, no fixed min-height — let content dictate. */
+    .cal-cell {
+      background: transparent !important;
+      min-height: 0;
+      padding: 14px 0 10px;
+      border-top: 1px solid var(--border);
+      gap: 10px;
+      border-radius: 0;
+    }
+    /* Strip the desktop "today" frame so the highlight isn't doubled. */
+    .cal-cell.today::before { display: none; }
+    .cal-cell.today {
+      background: var(--accent-soft) !important;
+      border-top: 0;
+      border-left: 3px solid var(--accent);
+      padding: 14px 12px 12px;
+      margin: 4px -4px;
+      border-radius: 10px;
+    }
+    /* Date heading — larger, bold, includes the weekday context via the
+       cal-num badge or a visual tag for "Today". */
+    .cal-date { padding: 0; align-items: center; gap: 10px; }
+    .cal-day {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: 0;
+      font-family: inherit;
+    }
+    .cal-cell.today .cal-day { color: var(--text); }
+    .cal-num {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--accent-on, #1a1400);
+      background: var(--accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    /* Tasks become full-width cards with readable titles. */
+    .cal-task {
+      padding: 12px 14px;
+      border-radius: 10px;
+      border-left-width: 3px;
+    }
+    .cal-task .t-title {
+      font-size: 14px;
+      line-height: 1.35;
+      -webkit-line-clamp: unset;
+      line-clamp: unset;
+      display: block;
+      overflow: visible;
+    }
+    .cal-task .t-meta {
+      font-size: 11.5px;
+      margin-top: 5px;
+      gap: 6px;
+    }
+    /* Fallback for browsers without :has(): empty rows shrink to a single
+       muted line instead of taking up a whole card's worth of space. */
+    .cal-empty {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-style: italic;
+      padding: 0;
+    }
+    /* "+N more" becomes a tappable summary line linking out to My Tasks
+       (we just style it; the click target is the row itself). */
+    .cal-more {
+      display: block;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      padding: 8px 4px 0;
+      font-weight: 500;
+    }
+    .cal-more::before { content: '+ '; color: var(--text-dim); }
+    /* Footer legend on a wrap line on mobile (was a single row). */
+    .cal-foot { flex-wrap: wrap; gap: 10px 14px; padding: 12px 14px; }
   }
   @media (max-width: 430px) {
     .content { padding: 12px 12px 20px; gap: 14px; }
