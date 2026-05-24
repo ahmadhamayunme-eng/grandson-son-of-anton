@@ -1982,7 +1982,7 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     background: var(--bg-2);
     overscroll-behavior-y: none;
   }
-  body.chat-body { padding-bottom: 0; }
+  body.chat-body { padding-bottom: 0; padding-top: 0; }
   /* The AntonX bottom tab bar from anton.css would overlap the chat
      composer. Chat is its own "app within the app" — the user is
      already on the Chat tab; the other destinations are reachable via
@@ -1996,28 +1996,65 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
      of those actions is reachable via a more thumb-friendly path. */
   .cx-app .top-bar { display: none; }
 
-  /* Collapse the chat-internal grid: one column. Sidebar becomes the
-     primary view when no channel/DM is active; conversation takes over
-     when one is. The details and thread panes overlay full-screen. */
+  /* ============================================================
+     MOBILE CHAT LAYOUT — position:fixed panes (no grid math)
+     ============================================================
+     Previous attempt used CSS grid with all 4 panes overlapping in
+     a single cell + visibility toggles via body classes. That
+     produced a blank screen in production (grid cell collapsed to
+     0×0 inside the nested .app → .main → .cx-app chain). The
+     position:fixed approach is bulletproof: each pane is anchored
+     to the viewport with explicit width/height, and a single
+     z-index ordering controls which one is in front.
+
+     Visibility rules:
+     - Always: cx-sidebar is the bottom layer (channel/DM list)
+     - body.cx-has-conversation: cx-main rises above sidebar
+     - .cx-app.with-thread: thread overlays everything
+     - .cx-app.with-details: details overlay everything
+  */
   .cx-app {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    height: 100dvh;       /* dvh = dynamic viewport — accounts for URL bar */
+    display: block !important;
+    position: relative;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
     max-height: 100dvh;
+    overflow: hidden;
   }
   .cx-app > .cx-sidebar,
   .cx-app > .cx-main,
   .cx-app > .details,
   .cx-app > .cx-thread {
-    grid-row: 1 / 2;
-    grid-column: 1 / 2;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    /* Wipe the grid-row/grid-column rules from desktop. */
+    grid-row: auto;
+    grid-column: auto;
   }
-
-  /* When the user is in a conversation, hide the sidebar list (back
-     button in header brings them back). When no conversation is open,
-     show the sidebar full-screen with the channel list. */
-  body.cx-has-conversation .cx-app > .cx-sidebar { display: none; }
-  body.cx-list-only        .cx-app > .cx-main    { display: none; }
+  /* Bottom layer: channel list. Always present. */
+  .cx-app > .cx-sidebar { z-index: 2; display: flex !important; }
+  /* Conversation pane: visible only when a channel/DM is open. */
+  .cx-app > .cx-main { z-index: 3; display: none; }
+  body.cx-has-conversation .cx-app > .cx-main { display: flex !important; }
+  /* Thread and details overlay everything when toggled by JS. */
+  .cx-app.with-details > .details {
+    z-index: 4; display: flex !important; flex-direction: column;
+    background: var(--bg-2);
+  }
+  .cx-app.with-thread > .cx-thread {
+    z-index: 5; display: flex !important; flex-direction: column;
+    background: var(--bg-2);
+  }
+  /* Hidden by default; the rules above flip them on when needed. */
+  .cx-app:not(.with-details) > .details { display: none !important; }
+  .cx-app:not(.with-thread)  > .cx-thread { display: none !important; }
 
   .cx-sidebar {
     background: var(--bg-2);

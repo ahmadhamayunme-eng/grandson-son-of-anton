@@ -689,8 +689,18 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
     overflow-y: auto;
     overflow-x: hidden;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    /* Respect the iPhone notch / island when the drawer is open. */
+    padding-top: var(--sai-top);
+    padding-bottom: var(--sai-bottom);
   }
   body.nav-open .sidebar { transform: translateX(0); }
+
+  /* The hamburger sits at top:16 left:16, so when the drawer is open the
+     X icon overlaps the first ~44px of the .brand row. Push the brand
+     logo right when the drawer is open so the X doesn't crop "anton". */
+  body.nav-open .brand {
+    padding-left: 60px;
+  }
 
   /* Reveal the hamburger button */
   .nav-hamburger { display: inline-flex; }
@@ -779,23 +789,107 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
 }
 
 @media (max-width: 768px) {
-  .app .main .content     { padding: 16px 16px 28px; gap: 20px; }
-  .app .main .page-header { padding: 12px 16px 4px; flex-wrap: wrap; gap: 10px; }
-  .app .main .page-title  { font-size: clamp(18px, 5vw, 26px); }
-  .app .main .page-sub    { font-size: 12px; }
+  /* Prevent any per-page content (table, calendar grid, hero card) from
+     pushing the whole .main wide. Per-page horizontal scroll containers
+     (.table-scroll, calendars) still work — they scroll inside their own
+     bounding box. */
+  .app .main {
+    overflow-x: hidden;
+    min-width: 0;
+  }
+
+  /* The hamburger is fixed at top:16 left:16, 44×44px, so the top-left
+     ~60px-wide corner is permanently occupied by the button. Every page
+     in the app renders a .page-header (breadcrumb + title + actions) in
+     normal flow, starting at left=16px — so the breadcrumb "Back" button
+     ends up underneath the hamburger and gets cropped to "ack".
+     Fix: indent the .page-header so its content starts past the
+     hamburger. 60px clears the button itself + 12px of breathing room. */
+  .app .main .content     { padding: 16px 16px 28px; gap: 20px; min-width: 0; }
+  .app .main .page-header {
+    padding: 12px 16px 4px calc(60px + var(--sai-left));
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+  }
+  .app .main .page-title  { font-size: clamp(18px, 5vw, 26px); min-width: 0; word-break: break-word; }
+  .app .main .page-sub    { font-size: 12px; min-width: 0; }
+
   /* Modal overlays launched from any page */
   .app .main .modal-overlay { padding: 16px 12px; }
   .app .main .modal-card    { max-width: 100%; }
+
+  /* Quick-action button rows on dashboards / list pages — wrap by default
+     and use the full width if there's a primary CTA. */
+  .quick-actions,
+  .page-header-right,
+  .ph-right,
+  .filter-row,
+  .filter-bar,
+  .toolbar-row,
+  .actions-row {
+    flex-wrap: wrap !important;
+    width: 100%;
+    gap: 8px !important;
+    min-width: 0;
+  }
+  .quick-actions .quick-btn,
+  .page-header-right .btn,
+  .ph-right .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Long-running side-effect: horizontally scrolling stat-card strips on
+     dashboards / my_tasks / clients. Force them to wrap into a 2×N grid
+     so users can see all stats at once. */
+  .stat-row,
+  .stat-cards,
+  .page-stats,
+  .stats-strip,
+  .at-status-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    overflow: visible !important;
+    min-width: 0;
+  }
+
+  /* Any block that overflows horizontally inside a content card on mobile
+     should scroll inside that card, NOT push the whole page wide. */
+  .app .main .content > * { min-width: 0; max-width: 100%; }
+
+  /* Tab strips at the top of pages: scroll horizontally inside their
+     container instead of cropping behind the hamburger. */
+  .scope-tabs,
+  .section-nav,
+  .tabs-row,
+  .ph-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .scope-tabs::-webkit-scrollbar,
+  .section-nav::-webkit-scrollbar,
+  .tabs-row::-webkit-scrollbar,
+  .ph-tabs::-webkit-scrollbar { display: none; }
 }
 
 @media (max-width: 430px) {
   .app .main .content     { padding: 12px 12px 20px; gap: 14px; }
-  .app .main .page-header { padding: 8px 12px 4px; }
+  /* Preserve the 60px left inset that clears the hamburger — DO NOT
+     reset to 12px here or the breadcrumb will be cropped again. */
+  .app .main .page-header { padding: 8px 12px 4px calc(60px + var(--sai-left)); }
 }
 
 @media (max-width: 375px) {
   .app .main .content     { padding: 10px 10px 16px; }
-  .app .main .page-header { padding: 6px 10px 4px; }
+  .app .main .page-header { padding: 6px 10px 4px calc(56px + var(--sai-left)); }
 }
 
 /* ===================================================================
