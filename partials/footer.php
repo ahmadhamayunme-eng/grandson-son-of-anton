@@ -295,17 +295,58 @@
   // (Clients, Projects, Docs, Logins, Account, Reviews, Submit, Admin,
   // Logout) lives in a sheet that pops up when the user taps "More". The
   // entries are derived directly from the drawer sidebar so the two
-  // stay in sync without server changes.
+  // stay in sync without server changes. The sheet also surfaces the
+  // theme toggle and the notifications affordance — those used to live
+  // as floating top-corner buttons but are hidden on mobile (per UX
+  // feedback), so they're reachable from "More" instead.
   (function(){
     var btn = document.querySelector('#antonBottomNav [data-action="open-more-sheet"]');
     if (!btn || !window.AntonSheet) return;
     var BOTTOM_PRIMARY = ['dashboard','my-tasks','chat','search'];
 
+    // SVG icons used by the prepended "Notifications" and "Theme" rows.
+    var ICON_BELL  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 3h16l-2-3z"/><path d="M9 20a3 3 0 006 0"/></svg>';
+    var ICON_SUN   = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+    var ICON_MOON  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+    function toggleTheme() {
+      var isLight = document.documentElement.classList.toggle('light');
+      try { localStorage.setItem('anton-theme', isLight ? 'light' : 'dark'); } catch (e) {}
+      // Keep the runtime theme-color meta in sync.
+      var meta = document.querySelector('meta[name="theme-color"][data-runtime]');
+      if (meta) meta.setAttribute('content', isLight ? '#f7f7f8' : '#0a0a0a');
+    }
+
     btn.addEventListener('click', function(e){
       e.preventDefault();
-      // Build the list of "More" entries from the live sidebar so the
-      // role-based visibility is preserved automatically.
       var entries = [];
+
+      // Theme toggle — first row so the most-tapped utility is fastest
+      // to reach. Label shows what the tap WILL do (the inverse of
+      // current state) so the action is self-evident.
+      var isLightNow = document.documentElement.classList.contains('light');
+      entries.push({
+        label: isLightNow ? 'Switch to dark mode' : 'Switch to light mode',
+        icon: isLightNow ? ICON_MOON : ICON_SUN,
+        onClick: toggleTheme
+      });
+
+      // Notifications — the old floating bell pointed to /chat/ where
+      // the inbox view aggregates DMs and mentions. Same destination,
+      // surfaced as a labelled row with the live unread count if any.
+      var bellBadge = document.querySelector('#antonBell .anton-bell-badge');
+      var bellLabel = 'Notifications';
+      if (bellBadge && bellBadge.textContent.trim()) {
+        bellLabel = 'Notifications · ' + bellBadge.textContent.trim();
+      }
+      entries.push({
+        label: bellLabel,
+        icon: ICON_BELL,
+        onClick: function(){ window.location.href = 'chat/'; }
+      });
+
+      // Build the rest of the "More" entries from the live sidebar so
+      // role-based visibility is preserved automatically.
       document.querySelectorAll('#antonNav .nav-item').forEach(function(a){
         var key = a.getAttribute('data-key') || '';
         if (BOTTOM_PRIMARY.indexOf(key) !== -1) return; // already in tab bar
@@ -324,6 +365,7 @@
           onClick: function(){ window.location.href = href; }
         });
       });
+
       window.AntonSheet({
         title: 'More',
         label: 'More navigation',

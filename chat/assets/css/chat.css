@@ -1982,18 +1982,16 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     background: var(--bg-2);
     overscroll-behavior-y: none;
   }
-  body.chat-body { padding-bottom: 0; padding-top: 0; }
-  /* The AntonX bottom tab bar from anton.css would overlap the chat
-     composer. Chat is its own "app within the app" — the user is
-     already on the Chat tab; the other destinations are reachable via
-     the AntonX hamburger drawer. So we hide the global bottom-nav
-     when the chat module is the active page. */
-  body.chat-body .bottom-nav { display: none; }
+  /* Per the "everything routes through the bottom bar" UX rule, chat
+     SHOWS the AntonX bottom-nav on mobile too. The composer sits
+     ABOVE it (see .composer-wrap rule further down). Reserve space at
+     the bottom of body for the bottom-nav so the chat layout doesn't
+     get clipped under it. */
+  body.chat-body { padding-top: 0; }
 
-  /* The AntonX-level sidebar (drawer) and hamburger / theme-toggle / bell
-     remain reachable — they're managed by anton.css. We hide the chat's
-     own top utility bar (back/forward/sidebar-toggle/prefs) because each
-     of those actions is reachable via a more thumb-friendly path. */
+  /* The chat's own top utility bar (back/forward/sidebar-toggle/prefs)
+     hides on mobile — each of those actions is reachable via a more
+     thumb-friendly path. */
   .cx-app .top-bar { display: none; }
 
   /* ============================================================
@@ -2022,6 +2020,10 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     max-height: 100dvh;
     overflow: hidden;
   }
+  /* Each chat pane fills the viewport top→just above the bottom-nav.
+     The bottom inset reserves space for the global AntonX bottom-nav
+     (which is now shown on chat too per the "everything in the bottom
+     bar" rule) plus the iPhone home-indicator cushion. */
   .cx-app > .cx-sidebar,
   .cx-app > .cx-main,
   .cx-app > .details,
@@ -2030,10 +2032,10 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: calc(var(--bottom-nav-h) + var(--sai-bottom));
     width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: auto;
+    max-height: none;
     /* Wipe the grid-row/grid-column rules from desktop. */
     grid-row: auto;
     grid-column: auto;
@@ -2059,9 +2061,11 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
   .cx-sidebar {
     background: var(--bg-2);
     border-right: 0;
-    /* Pad the top so the workspace header clears the AntonX hamburger /
-       theme-toggle / bell. */
-    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+    /* Hamburger / bell / theme-toggle are hidden on mobile, so the
+       workspace header only needs to clear the iPhone notch / status
+       bar. The bottom-nav reservation is handled by the cx-app pane
+       rule above (bottom: bottom-nav-h + sai-bottom). */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
   }
   .ws-header { padding-left: 16px; padding-right: 16px; }
   .side-search { padding: 8px 12px; }
@@ -2082,11 +2086,13 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
      icon — they live behind the channel-name dropdown (.ch-title menu)
      and the chat header tap action. */
   .ch-header {
-    height: 52px;
-    padding: 0 12px;
-    /* Top safe area is handled by the parent .main; here we just sit
-       above the message list. The composer / msg-list stack uses dvh so
-       it doesn't get clipped by the iOS URL bar. */
+    height: auto;
+    min-height: 52px;
+    /* Pad the top by sai-top so the back button + channel name sit
+       below the iPhone notch / status bar. The chat panes are
+       position:fixed at top:0, so the safe-area inset has to come
+       from the header itself. */
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px 12px;
     background: var(--bg-2);
     gap: 4px;
   }
@@ -2132,19 +2138,24 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    /* Sit ABOVE the AntonX bottom-nav (which is now visible on chat too)
+       and the iPhone home indicator. When the keyboard opens the
+       bottom-nav transforms off-screen via the body.kb-open rule, so
+       we collapse the bottom inset to just the keyboard offset. */
+    bottom: calc(var(--bottom-nav-h) + var(--sai-bottom));
     z-index: 8;
-    padding: 8px 10px calc(8px + var(--sai-bottom, env(safe-area-inset-bottom, 0px)));
+    padding: 8px 10px 8px;
     background: var(--bg-2);
     border-top: 1px solid var(--line-0);
     /* Slide above the keyboard. transform = GPU-cheap, no layout thrash. */
     transform: translateY(calc(-1 * var(--keyboard-inset, 0px)));
-    transition: transform 0.12s ease-out;
+    transition: transform 0.12s ease-out, bottom 0.15s ease-out;
   }
-  /* While the keyboard is open, remove the safe-area cushion (home
-     indicator is hidden by the keyboard) so the composer sits flush. */
+  /* While the keyboard is open, the bottom-nav is hidden (translateY 150%
+     from anton.css), so the composer sinks back to the viewport edge —
+     no bottom-nav inset needed. The transform handles keyboard offset. */
   body.kb-open .composer-wrap {
-    padding-bottom: 8px;
+    bottom: 0;
   }
   /* Make sure the message list reserves space for the composer so the
      last message isn't trapped underneath. The composer is ~64px tall

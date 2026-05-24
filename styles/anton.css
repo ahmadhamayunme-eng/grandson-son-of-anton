@@ -673,6 +673,20 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
 /* ── 768px  Tablet portrait + all phones — the main layout pivot ── */
 @media (max-width: 768px) {
 
+  /* ===== Mobile nav: bottom bar IS the nav. =====
+     Per user feedback, the floating top-left hamburger, top-right bell,
+     and top-right theme toggle are all hidden on mobile. Every action
+     they exposed is reachable from the bottom-nav (theme toggle and
+     notifications surface inside the "More" sheet; all drawer
+     destinations are listed in the same sheet). This keeps the top of
+     the screen clean for content. */
+  .nav-hamburger,
+  .anton-bell,
+  .theme-toggle,
+  button.theme-toggle {
+    display: none !important;
+  }
+
   /* Off-canvas sidebar: collapse the two-column grid to one column
      and move the sidebar to a fixed drawer that slides in from the left. */
   .app { grid-template-columns: 1fr; }
@@ -798,16 +812,13 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
     min-width: 0;
   }
 
-  /* The hamburger is fixed at top:16 left:16, 44×44px, so the top-left
-     ~60px-wide corner is permanently occupied by the button. Every page
-     in the app renders a .page-header (breadcrumb + title + actions) in
-     normal flow, starting at left=16px — so the breadcrumb "Back" button
-     ends up underneath the hamburger and gets cropped to "ack".
-     Fix: indent the .page-header so its content starts past the
-     hamburger. 60px clears the button itself + 12px of breathing room. */
+  /* Hamburger / bell / theme-toggle are hidden on mobile (above), so the
+     .page-header can use normal symmetric padding again. Top inset is
+     just a safe-area cushion so the breadcrumb / Back row sits below
+     the iPhone notch / status bar. */
   .app .main .content     { padding: 16px 16px 28px; gap: 20px; min-width: 0; }
   .app .main .page-header {
-    padding: 12px 16px 4px calc(60px + var(--sai-left));
+    padding: calc(var(--sai-top) + 12px) 16px 4px 16px;
     flex-wrap: wrap;
     gap: 10px;
     min-width: 0;
@@ -882,14 +893,12 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
 
 @media (max-width: 430px) {
   .app .main .content     { padding: 12px 12px 20px; gap: 14px; }
-  /* Preserve the 60px left inset that clears the hamburger — DO NOT
-     reset to 12px here or the breadcrumb will be cropped again. */
-  .app .main .page-header { padding: 8px 12px 4px calc(60px + var(--sai-left)); }
+  .app .main .page-header { padding: calc(var(--sai-top) + 8px) 12px 4px 12px; }
 }
 
 @media (max-width: 375px) {
   .app .main .content     { padding: 10px 10px 16px; }
-  .app .main .page-header { padding: 6px 10px 4px calc(56px + var(--sai-left)); }
+  .app .main .page-header { padding: calc(var(--sai-top) + 6px) 10px 4px 10px; }
 }
 
 /* ===================================================================
