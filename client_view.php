@@ -380,33 +380,112 @@ $pageHeadExtra = <<<HTML
       flex-wrap: wrap;
       row-gap: 2px;
     }
-    /* Actions row: horizontal-scroll strip; each button is its own
-       tappable pill, no overlap. */
+    /* Actions: stacked 2-row grid instead of a horizontal scroll strip.
+       The scroll strip was clipping the primary "+ New Project" CTA on
+       the right edge (the "t" was hidden), and a button getting cut is
+       a worse UX failure than a slightly taller header block. Layout:
+         Row 1: [ Website Logins ] [ Edit Client ]   (secondary, 50/50)
+         Row 2: [    + New Project    ]              (primary, full-width)
+       If a role only sees 1 or 2 buttons (e.g. non-manager), the auto
+       grid columns still fit cleanly. */
     .ch-actions {
-      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      margin-left: -16px;
-      margin-right: -16px;
-      padding: 4px 16px 4px;
+      width: 100%;
+      flex-wrap: unset;
+      overflow: visible;
+      margin: 0;
+      padding: 0;
     }
     .ch-actions::-webkit-scrollbar { display: none; }
     .ch-actions .btn {
-      flex-shrink: 0;
-      min-height: 40px;
-      padding: 8px 14px;
+      min-height: 44px;
+      padding: 10px 12px;
       font-size: 13px;
+      justify-content: center;
+      width: 100%;
     }
+    /* The primary CTA (the yellow + New Project button) spans both
+       columns on its own row. */
+    .ch-actions .btn-primary { grid-column: 1 / -1; }
 
-    /* Section-nav tabs: scroll horizontally so all three (Overview /
-       Projects / Docs) stay reachable. Already 768-aware globally
-       in anton.css but reinforced here so the desktop sticky
-       backdrop-blur doesn't bleed into the page padding. */
     .section-nav-inner { padding: 0 16px; }
     .section-nav a { padding: 12px 12px; font-size: 12.5px; }
+
+    /* ===== TABLE → CARD LAYOUT on mobile =====
+       The Projects and Documents tables on this page both use
+       table.gen — 5-6 narrow columns crammed sideways and the user
+       had to horizontally scroll to see the rest. Convert each row
+       to a vertical card so all the info is visible without scroll.
+       Project layout:
+         Row 1: [ project name (link) ] [ status pill ]
+         Row 2: [ Type · Active count · Last activity ]
+         Row 3: [ Open ]   [ Delete ]
+       Docs layout (same pattern):
+         Row 1: title
+         Row 2: project · author
+         Row 3: updated date / actions row
+    */
+    table.gen { font-size: 14px; }
+    table.gen thead { display: none; }
+    table.gen, table.gen tbody, table.gen tr { display: block; }
+    table.gen tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    table.gen tbody tr:last-child { border-bottom: none; }
+    table.gen tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    /* Project table — 6 columns: name | type | status | active | last act | actions */
+    table.gen tbody tr td:nth-child(1) { grid-column: 1; grid-row: 1; font-size: 15px; }
+    table.gen tbody tr td:nth-child(1) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table.gen tbody tr td:nth-child(2),
+    table.gen tbody tr td:nth-child(3),
+    table.gen tbody tr td:nth-child(4),
+    table.gen tbody tr td:nth-child(5) {
+      grid-column: 1 / -1;
+      grid-row: auto;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    /* Status pill keeps its position next to the title on row 1. */
+    table.gen tbody tr td:nth-child(3) {
+      grid-column: 2;
+      grid-row: 1;
+      text-align: right;
+    }
+    /* Type / Active / Last activity collapse to a single meta row. */
+    table.gen tbody tr td:nth-child(2),
+    table.gen tbody tr td:nth-child(4),
+    table.gen tbody tr td:nth-child(5) {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    /* Actions row: full width, right-aligned. */
+    table.gen tbody tr td:last-child {
+      grid-column: 1 / -1;
+      grid-row: auto;
+      margin-top: 4px;
+    }
+    .row-actions { justify-content: flex-end; gap: 8px; }
+    .btn-tiny { padding: 8px 14px; font-size: 13px; min-height: 36px; }
+    .empty-state {
+      display: block !important;
+      grid-column: 1 / -1 !important;
+      grid-row: auto !important;
+      padding: 18px 8px !important;
+      text-align: center;
+    }
   }
 </style>
 HTML;
