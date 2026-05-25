@@ -864,7 +864,6 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
      so users can see all stats at once. */
   .stat-row,
   .stat-cards,
-  .page-stats,
   .stats-strip,
   .at-status-grid {
     display: grid !important;
@@ -872,6 +871,63 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
     gap: 8px !important;
     overflow: visible !important;
     min-width: 0;
+  }
+
+  /* ===== .page-stats — page-header stats row =====
+     Used by Clients, Projects, and Website Logins as the right-side
+     block of the page-header (4 numbered stats: Total / Active /
+     Paused / Projects). The desktop layout floats these in the
+     top-right corner; on mobile that produces a 2×2 grid hovering next
+     to the title block and visually colliding with the toolbar / CTA
+     button below it.
+     Re-present as a single horizontal chip-pill row beneath the title.
+     Each stat becomes [num · LABEL] in a pill with subtle border, so
+     they read as quick at-a-glance facts (and can scroll sideways
+     if a page ever adds a 5th+ stat). Title block above stays clean,
+     toolbar below has its own row. */
+  .app .main > .page-header .page-stats,
+  .app .main > .page-header > .page-stats {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    grid-template-columns: none !important;
+    width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-top: 4px;
+    padding: 2px 0;
+    align-items: stretch;
+  }
+  .app .main > .page-header .page-stats::-webkit-scrollbar,
+  .app .main > .page-header > .page-stats::-webkit-scrollbar { display: none; }
+  .app .main > .page-header .page-stats .stat,
+  .app .main > .page-header > .page-stats .stat {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    padding: 7px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    text-align: left;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .app .main > .page-header .page-stats .stat-num,
+  .app .main > .page-header > .page-stats .stat-num {
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .app .main > .page-header .page-stats .stat-label,
+  .app .main > .page-header > .page-stats .stat-label {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
   }
 
   /* Any block that overflows horizontally inside a content card on mobile
