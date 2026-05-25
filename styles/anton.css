@@ -806,10 +806,18 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
   /* Prevent any per-page content (table, calendar grid, hero card) from
      pushing the whole .main wide. Per-page horizontal scroll containers
      (.table-scroll, calendars) still work — they scroll inside their own
-     bounding box. */
+     bounding box.
+     padding-bottom reserves space for the fixed bottom-nav: because the
+     anton.css base rule sets `body { height: 100% }`, putting padding on
+     body itself doesn't extend the scrollable document — content
+     overflows body's capped box and the last few rows hide behind the
+     bottom-nav. Adding the padding to .main (which IS in-flow and grows
+     with content) is what actually pushes the last row above the
+     bottom-nav. 28px breathing room over the nav itself. */
   .app .main {
     overflow-x: hidden;
     min-width: 0;
+    padding-bottom: calc(var(--bottom-nav-h) + var(--sai-bottom) + 28px);
   }
 
   /* Hamburger / bell / theme-toggle are hidden on mobile (above), so the
