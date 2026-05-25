@@ -371,6 +371,89 @@ $pageHeadExtra = <<<HTML
     .meta-cell:nth-child(2) { border-right: none; }
     .meta-cell:nth-child(1), .meta-cell:nth-child(2) { border-bottom: 1px solid var(--border); }
   }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed everything in the top of the page slammed into one
+     64px row: back button hidden under the status bar, breadcrumb wrapping
+     onto a second line, Lock + Save changes piling on the right, then the
+     pill row + title bunched up immediately underneath. Restructure:
+     - Topbar stops being sticky (it'd eat ~120px of the viewport once it
+       stacks) and becomes a normal vertical block. Top padding respects
+       the safe-area inset so the back button clears the notch/status bar.
+     - Row 1: back button + breadcrumb (the "current" page name in the
+       breadcrumb is hidden — the H1 below already shows it).
+     - Row 2: Lock + Save changes as a 2-up, 50/50 grid of 44px-tall
+       full-width buttons.
+     - Task header pills wrap on small phones, title scales down, meta-
+       strip collapses to a single column. */
+  @media (max-width: 768px) {
+    .topbar {
+      height: auto;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding: calc(var(--sai-top) + 12px) 16px 12px;
+      position: static;
+      background: transparent;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .breadcrumb-left {
+      flex-wrap: wrap;
+      gap: 10px;
+      min-width: 0;
+      width: 100%;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .breadcrumb .current { display: none; }
+    .breadcrumb a {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 45vw;
+    }
+    .topbar-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .topbar-actions form {
+      display: block !important;
+      width: 100%;
+    }
+    .topbar-actions .btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      font-size: 13px;
+      justify-content: center;
+    }
+
+    .content { gap: 20px; }
+    .task-header { margin-bottom: 18px; }
+    .task-meta-top { gap: 6px; margin-bottom: 10px; }
+    .task-meta-top .pill { font-size: 11px; padding: 3px 8px; }
+    .task-title-h {
+      font-size: clamp(20px, 5.8vw, 26px);
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+    .task-subactions { gap: 12px; font-size: 11.5px; flex-wrap: wrap; }
+
+    .meta-strip { grid-template-columns: 1fr; margin-bottom: 20px; }
+    .meta-cell {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+    }
+    .meta-cell:last-child { border-bottom: none; }
+  }
 </style>
 HTML;
 
