@@ -441,6 +441,162 @@ $pageHeadExtra = <<<HTML
     .overview-grid { grid-template-columns: 1fr; }
     .summary-meta { grid-template-columns: 1fr; }
   }
+
+  /* ===== MOBILE (≤768px) =====
+     Three problems from the user's screenshots:
+     1. .project-head — 4 action buttons (Project Docs / Website Logins /
+        Add Phase / Add Task) stacked on the right and overlapped the
+        title block ("Elite X" + "Nelson VanDenburgh") on the left.
+     2. .phase-head — phase title + P-NN badge + Delete Phase + Add Task
+        crammed into a single flex row → buttons overflow / wrap awkwardly.
+     3. table.tasks-table — 5-column task grid forced horizontal scroll
+        and cropped DUE / ACTIONS off the right edge. */
+  @media (max-width: 768px) {
+    /* Match the 16px page column the rest of the app uses. */
+    .project-head {
+      padding: 16px 16px 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+    }
+    .ph-left {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .ph-left > div { width: 100%; min-width: 0; }
+    .ph-left .back-wrap { padding-top: 0; }
+    .project-title {
+      font-size: clamp(20px, 5.6vw, 26px);
+      line-height: 1.2;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      word-break: break-word;
+    }
+    .project-title .icon-tile { width: 36px; height: 36px; font-size: 12px; }
+    .project-meta {
+      font-size: 12px;
+      gap: 6px;
+      flex-wrap: wrap;
+      row-gap: 4px;
+    }
+
+    /* Actions: 2-row grid, no horizontal scroll. Two secondary buttons
+       (Project Docs / Website Logins) on row 1 sharing 50/50, two primary
+       CTAs (Add Phase / Add Task) on row 2 sharing 50/50. Each button
+       full-width within its cell, 44px tap target. Non-manager only
+       sees the two secondaries → they just take row 1, no awkward gap. */
+    .ph-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+      flex-wrap: unset;
+    }
+    .ph-actions .btn {
+      min-height: 44px;
+      padding: 10px 12px;
+      font-size: 13px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    /* Section-nav (Overview / Tasks / Docs) — horizontal scroll inside
+       its own container so tabs never hide behind anything. */
+    .section-nav-inner { padding: 0 16px; gap: 0; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .section-nav-inner::-webkit-scrollbar { display: none; }
+    .section-nav a { flex-shrink: 0; padding: 12px 12px; font-size: 12.5px; }
+
+    /* Phase head — title row and actions row stack vertically. */
+    .phase-head {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+    .phase-title { font-size: 15px; }
+    .phase-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .phase-actions form,
+    .phase-actions > * { width: 100%; }
+    .phase-actions .btn-tiny,
+    .phase-actions .btn {
+      width: 100%;
+      min-height: 40px;
+      padding: 9px 12px !important;
+      font-size: 13px !important;
+      justify-content: center;
+    }
+
+    /* ===== TASKS TABLE → vertical cards =====
+       5 cols (Task / Status / Assignees / Due / Actions) → re-laid as
+       grid-areas like my_tasks. Title row 1 full-width, status + due
+       row 2, assignees + actions row 3. */
+    table.tasks-table thead { display: none; }
+    table.tasks-table, table.tasks-table tbody, table.tasks-table tr { display: block; }
+    table.tasks-table tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "title  title"
+        "status due"
+        "assg   actions";
+      gap: 6px 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    table.tasks-table tbody tr:last-child { border-bottom: none; }
+    table.tasks-table tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    table.tasks-table tbody td:nth-child(1) { grid-area: title; font-size: 15px; line-height: 1.3; }
+    table.tasks-table tbody td:nth-child(1) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table.tasks-table tbody td:nth-child(2) { grid-area: status; }
+    table.tasks-table tbody td:nth-child(3) { grid-area: assg; font-size: 12.5px; color: var(--text-muted); }
+    table.tasks-table tbody td:nth-child(4) { grid-area: due; text-align: right; font-size: 12px; color: var(--text-muted); }
+    table.tasks-table tbody td:nth-child(5) { grid-area: actions; text-align: right; }
+
+    /* ===== DOCS TOOLBAR — search + New Doc + Upload =====
+       Default `grid-template-columns: 1fr auto auto` squashed the
+       search input. Stack: search row 1 full-width, two action buttons
+       share row 2. */
+    .docs-toolbar {
+      grid-template-columns: 1fr 1fr;
+      padding: 12px 14px;
+      gap: 8px;
+    }
+    .docs-toolbar .search-box { grid-column: 1 / -1; }
+    .docs-toolbar .search-box input { font-size: 16px; padding: 11px 12px 11px 36px; min-height: 44px; }
+    .docs-toolbar .btn { min-height: 44px; padding: 10px 12px; font-size: 13px; justify-content: center; width: 100%; }
+
+    /* Doc rows: same vertical-card pattern. */
+    .doc-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "title  meta"
+        "actions actions";
+      gap: 6px 12px;
+      padding: 12px 14px;
+    }
+    .doc-row .doc-title { font-size: 14px; }
+
+    /* Section headers: title + count + see-all link */
+    .section-head { flex-wrap: wrap; gap: 8px; }
+    .section-title { font-size: 14px; }
+
+    /* Activity list — keep readable, single-column. */
+    .activity-list { padding: 4px 0; }
+  }
 </style>
 HTML;
 
