@@ -164,6 +164,74 @@ $pageHeadExtra = <<<HTML
   .keyhints .hint { display: inline-flex; align-items: center; gap: 6px; }
   .keyhints .k { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: var(--text-muted); min-width: 18px; text-align: center; }
   .empty-results { padding: 32px 0; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+  /* ===== MOBILE =====
+     Two issues seen on a phone:
+     1. ".scope-meta" (Indexing N records · last sync now) was crammed
+        into the right side of the scope-tabs row and wrapped to 3 awkward
+        lines next to the tab pills. Hide it on mobile — it's a status
+        nicety, not actionable, and the tabs row needs all the horizontal
+        room it can get.
+     2. ".result-row .body .meta" is a flex row of [project · client ·
+        TASK-id]. With no flex-wrap and narrow viewport space, each
+        word-set wraps inside its own column, producing the column-stack
+        "jumbled words" effect. Let it wrap properly + truncate. */
+  @media (max-width: 768px) {
+    .scope-row { flex-wrap: wrap; gap: 0; }
+    .scope-meta { display: none; }
+    .scope-tabs {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .scope-tabs::-webkit-scrollbar { display: none; }
+    .scope-tabs .tab { flex-shrink: 0; padding: 12px 14px; }
+
+    .results-section { padding: 12px 14px; }
+    .results-head { margin-bottom: 6px; }
+
+    /* Result rows: convert from flex-row to a stack. Title on top,
+       meta on its own line (now allowed to wrap and ellipsis on
+       overflow), date on the right of meta line. */
+    .result-row {
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 4px;
+    }
+    .result-row .body { min-width: 0; flex: 1 1 auto; }
+    .result-row .body .title {
+      font-size: 14px;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .result-row .body .meta {
+      font-size: 11.5px;
+      flex-wrap: wrap;
+      row-gap: 2px;
+      column-gap: 6px;
+      align-items: center;
+      min-width: 0;
+    }
+    /* Each meta segment stays on one line; the row wraps between
+       segments instead of breaking words mid-segment. */
+    .result-row .body .meta > * {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .result-row .trailing {
+      align-self: flex-start;
+      margin-top: 2px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+  }
 </style>
 HTML;
 
