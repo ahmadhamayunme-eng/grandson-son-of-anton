@@ -225,13 +225,54 @@ $pageHeadExtra = <<<HTML
      each row as a vertical card with title at the top, secondary info
      in a meta strip, and the status/Open button at the bottom. */
   @media (max-width: 768px) {
+    /* ===== TOOLBAR — search + filter + apply =====
+       Default desktop is `grid-template-columns: 1fr auto auto` with the
+       status select min-width 150px. On a 360px viewport the search-box
+       gets squeezed to ~50px (placeholder reads "Se") and the Apply
+       button overflows the right edge. Re-flow on two rows: search row
+       full-width, filter + Apply share the second row. */
+    .toolbar {
+      grid-template-columns: 1fr auto;
+      padding: 16px 16px 14px;
+      gap: 10px;
+    }
+    .search-box { grid-column: 1 / -1; }
+    .search-box input { font-size: 16px; padding: 12px 14px 12px 40px; min-height: 44px; }
+    .filter-select { min-width: 0; width: 100%; font-size: 14px; padding: 12px 32px 12px 14px; min-height: 44px; }
+    .toolbar .btn-primary { white-space: nowrap; min-height: 44px; padding: 10px 16px; }
+
+    /* ===== STAT TILES — 3 cards in a tight row =====
+       Default is `repeat(3, 1fr)` with 14px gap and tall padding. On
+       phone widths the tiles get crowded and the third one falls past
+       the edge. Slim them down: smaller icon (32px), smaller numbers,
+       tighter padding. Keeps the at-a-glance horizontal pattern; falls
+       back to a 2×2 stack at the very narrow 375px breakpoint. */
+    .stat-tiles { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px; }
+    .stat-tile { padding: 10px 10px; gap: 10px; border-radius: 12px; min-width: 0; }
+    .stat-tile .ico { width: 32px; height: 32px; }
+    .stat-tile .ico svg { width: 15px; height: 15px; }
+    .stat-tile .num { font-size: 20px; }
+    .stat-tile .lbl { font-size: 9.5px; letter-spacing: 0.06em; margin-top: 2px; }
+
+    /* ===== TASK ROWS → card layout =====
+       Re-laid as a CSS grid with explicit areas so each piece has a
+       known column and we don't get "auto"-sized column overflow.
+       Title spans both cols on row 1, Open button goes full-width on
+       the bottom row, client/project share row 2, status/due share
+       row 3. minmax(0, ...) on every column prevents the long task
+       title from blowing the grid out. */
     .table-card { border-radius: 12px; }
     table.tasks { font-size: 14px; }
     table.tasks thead { display: none; }
     table.tasks, table.tasks tbody, table.tasks tr { display: block; }
     table.tasks tbody tr {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas:
+        "title    title"
+        "client   project"
+        "status   due"
+        "open     open";
       gap: 6px 12px;
       align-items: center;
       padding: 14px 16px;
@@ -243,35 +284,72 @@ $pageHeadExtra = <<<HTML
       padding: 0;
       border: none;
       min-width: 0;
+      max-width: 100%;
     }
-    /* Task title cell takes top-left; "Open" button cell hugs top-right */
-    table.tasks tbody td:nth-child(1) { grid-column: 1; grid-row: 1; }
-    table.tasks tbody td:nth-child(6) { grid-column: 2; grid-row: 1; }
-    /* Client + Project on the second row, side by side */
-    table.tasks tbody td:nth-child(2),
+    table.tasks tbody td:nth-child(1) { grid-area: title; }
+    table.tasks tbody td:nth-child(2) { grid-area: client; }
     table.tasks tbody td:nth-child(3) {
-      grid-column: span 1;
-      grid-row: 2;
+      grid-area: project;
+      text-align: right;
       font-size: 12.5px;
       color: var(--text-muted);
     }
-    table.tasks tbody td:nth-child(2) { grid-column: 1; }
-    table.tasks tbody td:nth-child(3) { grid-column: 2; text-align: right; }
-    /* Status pill on row 3 left, due on row 3 right */
-    table.tasks tbody td:nth-child(4) { grid-column: 1; grid-row: 3; }
-    table.tasks tbody td:nth-child(5) { grid-column: 2; grid-row: 3; text-align: right; }
+    table.tasks tbody td:nth-child(4) { grid-area: status; }
+    table.tasks tbody td:nth-child(5) { grid-area: due; text-align: right; }
+    table.tasks tbody td:nth-child(6) { grid-area: open; margin-top: 4px; }
 
-    .task-cell { gap: 10px; }
-    .task-title { font-size: 15px; line-height: 1.3; }
+    /* Task title — allow up to 2 lines, ellipsis past that. */
+    .task-cell { gap: 10px; align-items: flex-start; }
+    .task-title {
+      font-size: 15px;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
     .task-id   { font-size: 11px; }
-    .open-btn { padding: 8px 10px; font-size: 12px; }
-    .open-btn span { display: none; }
-    .due-cell { align-items: flex-end; }
-    .client-mini-name { font-size: 12.5px; }
-    .status-inline-select { font-size: 12.5px; padding: 5px 10px; }
+    .client-mini-name {
+      font-size: 12.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .project-link {
+      font-size: 12.5px;
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Open button — full-width at the bottom, easier to tap. */
+    .open-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    .open-btn span { display: inline; }
+
+    /* Due cell on the right column, vertical stack (date / rel). */
+    .due-cell {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+      font-size: 12px;
+    }
+    .due-cell .relative { font-size: 11px; }
+
+    /* Inline status select — readable size, tap-friendly. */
+    .status-inline-select { font-size: 12.5px; padding: 6px 22px 6px 18px; min-height: 32px; }
+
     .empty-row {
       display: block !important;
       grid-column: 1 / -1 !important;
+      grid-area: unset !important;
     }
     .table-foot {
       flex-direction: column;
@@ -279,6 +357,14 @@ $pageHeadExtra = <<<HTML
       gap: 6px;
       text-align: center;
     }
+  }
+
+  /* Very narrow phones (iPhone SE 375px and below) — stat tiles
+     break to a 2×2 grid (3rd tile full-width on row 2) so the icons
+     and numbers don't get crushed. */
+  @media (max-width: 380px) {
+    .stat-tiles { grid-template-columns: 1fr 1fr; }
+    .stat-tile:nth-child(3) { grid-column: 1 / -1; }
   }
 </style>
 HTML;
