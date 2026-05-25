@@ -254,6 +254,16 @@ $pageHeadExtra = <<<HTML
     .stat-tile .num { font-size: 20px; }
     .stat-tile .lbl { font-size: 9.5px; letter-spacing: 0.06em; margin-top: 2px; }
 
+    /* ===== TABLE WRAP — align with the toolbar / stat tiles =====
+       Desktop padding is `20px 32px 28px` — on mobile the 32px
+       horizontal padding would push the task card 16px further inset
+       than the toolbar / stat tiles above (which use 16px). Override
+       so all the top-level panels on this page sit on the same column.
+       (anton.css also enforces this globally via .app .main > .table-wrap,
+       this is a per-page belt-and-suspenders so the layout intent is
+       obvious when reading my_tasks.php in isolation.) */
+    .table-wrap { padding: 20px 16px 28px; }
+
     /* ===== TASK ROWS → card layout =====
        Re-laid as a CSS grid with explicit areas so each piece has a
        known column and we don't get "auto"-sized column overflow.

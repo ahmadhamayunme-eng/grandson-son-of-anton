@@ -897,11 +897,59 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
   .section-nav::-webkit-scrollbar,
   .tabs-row::-webkit-scrollbar,
   .ph-tabs::-webkit-scrollbar { display: none; }
+
+  /* ===== Page-panel horizontal padding normalization =====
+     Many pages render their top-level sections (page-header, toolbar,
+     stat strips, table wraps, panels) with the desktop pattern
+     `max-width: 1640px; margin: 0 auto; width: 100%; padding: Y 32px`.
+     The 32px horizontal padding looks right on a wide desktop but on
+     a phone it puts the inner content ~32px from the screen edge,
+     while sibling sections that happen to use 16px end up ~16px from
+     the edge — producing the visible misalignment seen on My Tasks
+     (task card sits ~16px further inset than the toolbar / stat
+     tiles above it).
+     Normalize every common top-level panel selector to 16px on
+     mobile so the whole page stays on the same column. !important
+     because per-page styles often use the `padding: Ypx 32px` shorthand
+     at the same specificity, so a non-important rule would lose. */
+  .app .main > .page-header,
+  .app .main > .toolbar,
+  .app .main > .stat-tiles,
+  .app .main > .stat-row,
+  .app .main > .stats-strip,
+  .app .main > .page-stats,
+  .app .main > .table-wrap,
+  .app .main > .filter-row,
+  .app .main > .toolbar-row,
+  .app .main > .actions-row,
+  .app .main > .panel,
+  .app .main > .section,
+  .app .main > .content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
 }
 
 @media (max-width: 430px) {
   .app .main .content     { padding: 12px 12px 20px; gap: 14px; }
   .app .main .page-header { padding: calc(var(--sai-top) + 8px) 12px 4px 12px; }
+  /* Tighten the same panel selectors a touch on very narrow phones. */
+  .app .main > .page-header,
+  .app .main > .toolbar,
+  .app .main > .stat-tiles,
+  .app .main > .stat-row,
+  .app .main > .stats-strip,
+  .app .main > .page-stats,
+  .app .main > .table-wrap,
+  .app .main > .filter-row,
+  .app .main > .toolbar-row,
+  .app .main > .actions-row,
+  .app .main > .panel,
+  .app .main > .section,
+  .app .main > .content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
 }
 
 @media (max-width: 375px) {
