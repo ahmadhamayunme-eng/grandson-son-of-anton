@@ -561,10 +561,31 @@ $pageHeadExtra = <<<HTML
     }
     table.tasks-table tbody td:nth-child(1) { grid-area: title; font-size: 15px; line-height: 1.3; }
     table.tasks-table tbody td:nth-child(1) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    table.tasks-table tbody td:nth-child(2) { grid-area: status; }
+    table.tasks-table tbody td:nth-child(2) { grid-area: status; min-width: 0; }
     table.tasks-table tbody td:nth-child(3) { grid-area: assg; font-size: 12.5px; color: var(--text-muted); }
     table.tasks-table tbody td:nth-child(4) { grid-area: due; text-align: right; font-size: 12px; color: var(--text-muted); }
     table.tasks-table tbody td:nth-child(5) { grid-area: actions; text-align: right; }
+
+    /* Status pill <select>: on mobile the desktop padding (4px top/bottom +
+       line-height 1.3) leaves no room for descenders on values like "In
+       Progress" / "Approved (Ready to Submit)" — the 'g'/'p'/'y' get
+       clipped by the pill border. Also the select naturally sizes to the
+       widest option ("Completed (Needs Manager Review)") and overflows the
+       half-width status cell. Constrain to the cell width and give the
+       text enough vertical room. */
+    .status-inline { display: block; width: 100%; max-width: 100%; }
+    .status-inline-select {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 6px 26px 6px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      min-height: 30px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     /* ===== DOCS TOOLBAR — search + New Doc + Upload =====
        Default `grid-template-columns: 1fr auto auto` squashed the
