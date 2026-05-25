@@ -339,6 +339,75 @@ $pageHeadExtra = <<<HTML
   @media (max-width: 768px) { .c-8, .c-6, .c-4, .c-3 { grid-column: span 12; } .overview-grid { grid-template-columns: 1fr; } }
   .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; }
   .icon-close:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ===== MOBILE =====
+     The client header was a flex row [title-block | actions-block] with
+     space-between. On a narrow viewport the 3 action buttons (Website
+     Logins / Edit Client / + New Project) wrapped to a column on the
+     right and overlapped the wrapping client name on the left — total
+     visual chaos as shown in the user screenshot.
+     Stack the whole header vertically on mobile: back-button row,
+     title row, meta row, then a horizontal scrolling actions row at
+     the bottom so all three buttons stay reachable without
+     overlapping anything. */
+  @media (max-width: 768px) {
+    /* Match the 16px page column the rest of the app uses. */
+    .client-head {
+      padding: 16px 16px 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+    }
+    .ch-left {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .ch-left > div { width: 100%; min-width: 0; }
+    .ch-left .back-wrap { padding-top: 0; }
+    .client-title {
+      font-size: clamp(20px, 5.6vw, 26px);
+      line-height: 1.2;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      word-break: break-word;
+    }
+    .client-title .icon-tile { width: 36px; height: 36px; font-size: 12px; }
+    .client-meta {
+      font-size: 12px;
+      gap: 6px;
+      flex-wrap: wrap;
+      row-gap: 2px;
+    }
+    /* Actions row: horizontal-scroll strip; each button is its own
+       tappable pill, no overlap. */
+    .ch-actions {
+      width: 100%;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      margin-left: -16px;
+      margin-right: -16px;
+      padding: 4px 16px 4px;
+    }
+    .ch-actions::-webkit-scrollbar { display: none; }
+    .ch-actions .btn {
+      flex-shrink: 0;
+      min-height: 40px;
+      padding: 8px 14px;
+      font-size: 13px;
+    }
+
+    /* Section-nav tabs: scroll horizontally so all three (Overview /
+       Projects / Docs) stay reachable. Already 768-aware globally
+       in anton.css but reinforced here so the desktop sticky
+       backdrop-blur doesn't bleed into the page padding. */
+    .section-nav-inner { padding: 0 16px; }
+    .section-nav a { padding: 12px 12px; font-size: 12.5px; }
+  }
 </style>
 HTML;
 
