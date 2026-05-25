@@ -131,6 +131,96 @@ $pageHeadExtra = <<<HTML
   @media (max-width: 768px) { .c-8, .c-4 { grid-column: span 12; } }
   .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; }
   .icon-close:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the docs table forced 5 columns ("Doc / Client /
+     Updated / Author / Open") into ~360px of phone width — every cell
+     wrapped to 2-3 lines and the row heights jumped around. The fix is
+     the same "table → vertical card" pattern used on my_tasks /
+     client_view / project_view: hide thead, lay each row out as a grid
+     of named areas (title / meta / actions) so nothing has to scroll
+     sideways. Also tighten the header, toolbar and folder grid for the
+     16px page column. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 12px;
+    }
+    .page-header-left { gap: 12px; }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+    .page-header > .btn { width: 100%; min-height: 44px; justify-content: center; }
+
+    /* Toolbar: search row 1 full-width, project filter + Apply share row 2. */
+    .toolbar {
+      grid-template-columns: 1fr 1fr;
+      padding: 14px 16px 12px;
+      gap: 8px;
+    }
+    .toolbar .search-box { grid-column: 1 / -1; }
+    .toolbar .search-box input { font-size: 16px; padding: 11px 14px 11px 40px; min-height: 44px; }
+    .filter-select { min-width: 0; width: 100%; font-size: 14px; min-height: 44px; padding: 10px 32px 10px 12px; }
+    .toolbar .btn { width: 100%; min-height: 44px; justify-content: center; padding: 10px 12px; font-size: 13px; }
+
+    /* Folder grid: keep two-up where possible, one-up on narrow phones. */
+    .folders {
+      grid-template-columns: 1fr;
+      padding: 0 16px 16px;
+      gap: 10px;
+    }
+
+    /* Tabs: horizontal-scroll inside their own container so they never
+       hide behind anything, never push the page wider. */
+    .tabs-row {
+      padding: 0 16px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+    }
+    .tabs-row::-webkit-scrollbar { display: none; }
+    .tabs-row a { flex-shrink: 0; padding: 12px 12px; font-size: 12.5px; }
+
+    .table-wrap { padding: 0 16px; margin: 12px auto 24px; }
+
+    /* Table → cards. Hide thead, each <tr> becomes a 3-row stack:
+       title (full width) / client + updated / author + open button.
+       No horizontal scroll, every doc is fully visible. */
+    table.docs { font-size: 13px; }
+    table.docs thead { display: none; }
+    table.docs, table.docs tbody, table.docs tr { display: block; }
+    table.docs tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "title  title"
+        "client updated"
+        "author actions";
+      gap: 6px 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    table.docs tbody tr:last-child { border-bottom: none; }
+    table.docs tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    table.docs tbody td:nth-child(1) { grid-area: title; }
+    table.docs tbody td:nth-child(1) .doc-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; }
+    table.docs tbody td:nth-child(2) { grid-area: client; font-size: 12.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table.docs tbody td:nth-child(3) { grid-area: updated; text-align: right; font-size: 12px; color: var(--text-muted); }
+    table.docs tbody td:nth-child(4) { grid-area: author; font-size: 12.5px; min-width: 0; }
+    table.docs tbody td:nth-child(4) .person { min-width: 0; }
+    table.docs tbody td:nth-child(4) .person span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table.docs tbody td:nth-child(5) { grid-area: actions; text-align: right !important; }
+    table.docs tbody td:nth-child(5) .btn-tiny { min-height: 32px; padding: 6px 12px; font-size: 12px; }
+  }
 </style>
 HTML;
 
