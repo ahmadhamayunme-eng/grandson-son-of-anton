@@ -246,6 +246,154 @@ $pageHeadExtra = <<<HTML
   .table-foot .sec-note { display: inline-flex; align-items: center; gap: 6px; }
   .table-foot .sec-note svg { width: 12px; height: 12px; color: var(--accent); }
   .empty-state { padding: 48px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the 7/8-column logins table clipped inside the
+     panel — only Client/Project + (truncated) Username visible, Website
+     / Password / URL / Notes / Actions all hidden. Convert to vertical
+     cards. Also tighten the header + filter chips + form for the
+     standard 16px page column. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 12px;
+    }
+    .page-header-left { gap: 12px; }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+
+    .top-search-wrap { padding: 14px 16px 0; }
+    .top-search input { font-size: 16px; padding: 12px 14px 12px 44px; min-height: 48px; border-radius: 10px; }
+    .top-search svg { left: 14px; width: 16px; height: 16px; }
+
+    .body-wrap { padding: 14px 16px 24px; gap: 14px; }
+
+    /* Add / Edit Login panel + form */
+    .panel-head { padding: 12px 14px; }
+    .panel-title { font-size: 13px; }
+    .form-body { padding: 14px; gap: 12px; }
+    .field .input, .field .select { font-size: 16px; min-height: 44px; padding: 0 12px; }
+    .field textarea.input { font-size: 14px; min-height: 88px; padding: 12px; }
+    .pwd-wrap .input { padding-right: 46px; }
+    .form-foot { padding: 12px 14px; gap: 10px; }
+    .form-foot-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .form-foot-actions .btn { min-height: 44px; justify-content: center; font-size: 13px; width: 100%; }
+    .save-hint { width: 100%; order: -1; }
+
+    /* Filter chips: wrap into a tidy row, no horizontal scroll trap */
+    .table-toolbar { padding: 12px 14px; }
+    .filter-chips { width: 100%; gap: 6px; }
+    .filter-chips button { font-size: 12px; padding: 7px 10px; min-height: 36px; }
+
+    /* Bulk strip — stack the count msg and Clear/Delete buttons */
+    .bulk-strip { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+    .bulk-strip .actions { margin-left: 0; width: 100%; }
+    .bulk-strip .actions .btn { flex: 1; min-height: 40px; justify-content: center; }
+
+    /* ===== TABLE → VERTICAL CARDS =====
+       Hide thead, drop the bulk-select checkbox column on mobile (the
+       bulk-delete UX needs a wider screen anyway). Each <tr> becomes a
+       stack: site / client-project / username + password / url + notes
+       / actions. Long emails and usernames wrap instead of overflowing. */
+    table.logins thead { display: none; }
+    table.logins, table.logins tbody, table.logins tr { display: block; }
+    table.logins tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas:
+        "site    site"
+        "client  client"
+        "user    pw"
+        "url     notes"
+        "actions actions";
+      gap: 10px 12px;
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
+    }
+    table.logins tbody tr:last-child { border-bottom: none; }
+    table.logins tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    /* Hide the bulk-select checkbox td (it's always the td whose direct
+       child is the .row-check label) */
+    table.logins tbody td:has(> .row-check) { display: none; }
+
+    /* Manager rows have 8 tds (with checkbox in slot 1); non-manager rows
+       have 7. Map each role by nth-of-type so the layout works for both. */
+    table.logins tbody tr:has(.row-check) td:nth-child(2) { grid-area: site; }
+    table.logins tbody tr:has(.row-check) td:nth-child(3) { grid-area: client; }
+    table.logins tbody tr:has(.row-check) td:nth-child(4) { grid-area: user; }
+    table.logins tbody tr:has(.row-check) td:nth-child(5) { grid-area: pw; }
+    table.logins tbody tr:has(.row-check) td:nth-child(6) { grid-area: url; }
+    table.logins tbody tr:has(.row-check) td:nth-child(7) { grid-area: notes; }
+    table.logins tbody tr:has(.row-check) td:nth-child(8) { grid-area: actions; }
+
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(1) { grid-area: site; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(2) { grid-area: client; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(3) { grid-area: user; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(4) { grid-area: pw; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(5) { grid-area: url; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(6) { grid-area: notes; }
+    table.logins tbody tr:not(:has(.row-check)) td:nth-child(7) { grid-area: actions; }
+
+    /* Cell contents — let long strings wrap, surface the labels that
+       were in the thead. */
+    .site-cell { gap: 10px; }
+    .site-favicon { width: 36px; height: 36px; font-size: 12px; }
+    .site-name { font-size: 14.5px; word-break: break-word; }
+    .site-url { font-size: 11px; word-break: break-all; }
+
+    .cp-cell { gap: 4px; }
+    .cp-client { font-size: 13px; }
+    .cp-project { font-size: 11.5px; padding-left: 26px; }
+
+    .username-cell {
+      flex-wrap: wrap;
+      font-size: 12.5px;
+      word-break: break-all;
+      min-width: 0;
+    }
+    .username-cell span[data-copy-text] { min-width: 0; overflow-wrap: anywhere; }
+    .copy-btn { opacity: 1 !important; width: 28px; height: 28px; flex-shrink: 0; }
+    .copy-btn svg { width: 13px; height: 13px; }
+
+    .pw-cell { flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .pw-dots { min-width: 0; font-size: 13px; }
+    .reveal-btn { min-height: 32px; padding: 5px 10px; font-size: 11.5px; }
+
+    .open-link { font-size: 12.5px; }
+    .notes-cell { max-width: none; white-space: normal; line-height: 1.4; font-size: 12px; }
+
+    .row-actions {
+      width: 100%;
+      gap: 8px;
+      justify-content: stretch;
+    }
+    .row-actions form { flex: 1; display: flex; }
+    .btn-tiny.edit, .btn-tiny.delete {
+      flex: 1;
+      min-height: 40px;
+      justify-content: center;
+      padding: 8px 12px;
+      font-size: 12.5px;
+    }
+
+    .table-foot {
+      padding: 12px 14px;
+      font-size: 11.5px;
+      gap: 6px;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
 </style>
 HTML;
 
