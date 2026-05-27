@@ -824,9 +824,9 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
      .page-header can use normal symmetric padding again. Top inset is
      just a safe-area cushion so the breadcrumb / Back row sits below
      the iPhone notch / status bar. */
-  .app .main .content     { padding: 16px 16px 28px; gap: 20px; min-width: 0; }
+  .app .main .content     { padding: 16px 8px 28px; gap: 20px; min-width: 0; }
   .app .main .page-header {
-    padding: calc(var(--sai-top) + 12px) 16px 4px 16px;
+    padding: calc(var(--sai-top) + 12px) 8px 4px 8px;
     flex-wrap: wrap;
     gap: 10px;
     min-width: 0;
@@ -984,16 +984,25 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
   .app .main > .client-head,
   .app .main > .project-head,
   .app .main > .task-head,
-  .app .main > .section-nav {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+  .app .main > .section-nav,
+  .app .main > .body-wrap,
+  .app .main > .body-stack,
+  .app .main > .body-grid,
+  .app .main > .cards,
+  .app .main > .tabs-row,
+  .app .main > .search-wrap,
+  .app .main > .top-search-wrap,
+  .app .main > .folders,
+  .app .main > .settings-tabs {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
   }
 }
 
 @media (max-width: 430px) {
-  .app .main .content     { padding: 12px 12px 20px; gap: 14px; }
-  .app .main .page-header { padding: calc(var(--sai-top) + 8px) 12px 4px 12px; }
-  /* Tighten the same panel selectors a touch on very narrow phones. */
+  .app .main .content     { padding: 12px 8px 20px; gap: 14px; }
+  .app .main .page-header { padding: calc(var(--sai-top) + 8px) 8px 4px 8px; }
+  /* Keep the same slim 8px gutter on very narrow phones. */
   .app .main > .page-header,
   .app .main > .toolbar,
   .app .main > .stat-tiles,
@@ -1010,15 +1019,24 @@ body.nav-open .nav-hamburger span:nth-child(3) { transform: translateY(-7px) rot
   .app .main > .client-head,
   .app .main > .project-head,
   .app .main > .task-head,
-  .app .main > .section-nav {
-    padding-left: 12px !important;
-    padding-right: 12px !important;
+  .app .main > .section-nav,
+  .app .main > .body-wrap,
+  .app .main > .body-stack,
+  .app .main > .body-grid,
+  .app .main > .cards,
+  .app .main > .tabs-row,
+  .app .main > .search-wrap,
+  .app .main > .top-search-wrap,
+  .app .main > .folders,
+  .app .main > .settings-tabs {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
   }
 }
 
 @media (max-width: 375px) {
-  .app .main .content     { padding: 10px 10px 16px; }
-  .app .main .page-header { padding: calc(var(--sai-top) + 6px) 10px 4px 10px; }
+  .app .main .content     { padding: 10px 8px 16px; }
+  .app .main .page-header { padding: calc(var(--sai-top) + 6px) 8px 4px 8px; }
 }
 
 /* ===================================================================
