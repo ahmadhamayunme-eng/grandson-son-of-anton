@@ -382,6 +382,62 @@ $pageHeadExtra = <<<HTML
     .body-grid { grid-template-columns: 1fr; }
     .stats-row { grid-template-columns: 1fr; }
   }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the 5-column users table (Name / Email / Role /
+     Status / Actions) overflowing — only Name + a clipped Email were
+     visible, Role / Status / Edit / Delete scrolled off the right edge.
+     Convert to vertical cards. */
+  @media (max-width: 768px) {
+    .users-toolbar { padding: 12px 14px; }
+    .users-toolbar .search-box { max-width: none; min-width: 0; width: 100%; flex: 1 1 100%; }
+    .users-toolbar .search-box input { font-size: 16px; min-height: 44px; padding: 11px 12px 11px 36px; }
+    .filter-pills { width: 100%; }
+
+    /* Table → cards. Hide thead, stack each row:
+         avatar + name (full width)
+         email (full width)
+         role + status
+         actions (Edit / Delete, full width) */
+    .users-table thead { display: none; }
+    .users-table, .users-table tbody, .users-table tr { display: block; }
+    .users-table tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "user    user"
+        "email   email"
+        "role    status"
+        "actions actions";
+      gap: 8px 12px;
+      padding: 14px 16px;
+    }
+    .users-table tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .users-table tbody td:nth-child(1) { grid-area: user; }
+    .users-table tbody td:nth-child(2) { grid-area: email; }
+    .users-table tbody td:nth-child(3) { grid-area: role; }
+    .users-table tbody td:nth-child(4) { grid-area: status; text-align: right; }
+    .users-table tbody td:nth-child(5) { grid-area: actions; }
+
+    .user-email { font-size: 12.5px; word-break: break-all; }
+    .row-actions { justify-content: stretch; gap: 8px; }
+    .row-actions form { flex: 1; display: flex; }
+    .btn-tiny.edit, .btn-tiny.delete {
+      flex: 1;
+      min-height: 40px;
+      justify-content: center;
+      padding: 8px 12px;
+      font-size: 12.5px;
+    }
+
+    .users-foot { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 16px; }
+  }
 </style>
 HTML;
 
