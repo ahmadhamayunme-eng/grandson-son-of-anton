@@ -31,6 +31,13 @@ function status_action_set(PDO $pdo, int $ws, int $uid): never {
   chat_api_require_post();
   chat_api_require_csrf();
 
+  // The status_* columns ship in chat/sql/status.sql, which may not have
+  // been applied yet. Add them lazily so saving a status works instead of
+  // throwing on the INSERT below.
+  if (!chat_ensure_status_columns($pdo)) {
+    chat_json_error('migration_failed', 'Status storage is unavailable. Please run the chat status migration.', 500);
+  }
+
   // Trim + cap the emoji to a few code points so we don't store something
   // wild. mb_substr is fine for emoji ZWJ sequences (counts as one).
   $emoji = trim((string)($_POST['emoji'] ?? ''));
@@ -75,6 +82,9 @@ function status_action_set(PDO $pdo, int $ws, int $uid): never {
 function status_action_clear(PDO $pdo, int $ws, int $uid): never {
   chat_api_require_post();
   chat_api_require_csrf();
+  if (!chat_ensure_status_columns($pdo)) {
+    chat_json_error('migration_failed', 'Status storage is unavailable. Please run the chat status migration.', 500);
+  }
   $now = now();
   $sql = 'INSERT INTO chat_user_prefs (user_id, status_emoji, status_text, status_expires_at, updated_at)
           VALUES (?, NULL, NULL, NULL, ?)

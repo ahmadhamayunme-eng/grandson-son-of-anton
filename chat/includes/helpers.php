@@ -719,6 +719,36 @@ function chat_presence_ping(int $userId): void {
  *   notify_mention 1 = browser notification on @user / @here / @channel
  *   timezone       IANA tz string, default 'UTC'
  */
+
+/**
+ * Ensure the optional status_* columns added by chat/sql/status.sql exist.
+ * Reads fall back gracefully when they're absent, but writes (set/clear
+ * status) need the columns present or they throw. On a DB that hasn't run
+ * the migration this lazily adds them once so the feature self-heals
+ * instead of returning a "Bad response." Returns true if the columns are
+ * available afterwards.
+ */
+function chat_ensure_status_columns(PDO $pdo): bool {
+  try {
+    $has = $pdo->query("SHOW COLUMNS FROM chat_user_prefs LIKE 'status_emoji'")->fetch();
+    if ($has) return true;
+    $pdo->exec(
+      'ALTER TABLE chat_user_prefs
+         ADD COLUMN status_emoji      VARCHAR(16)  NULL,
+         ADD COLUMN status_text       VARCHAR(120) NULL,
+         ADD COLUMN status_expires_at DATETIME     NULL'
+    );
+    return true;
+  } catch (Throwable $e) {
+    // Another request may have added them concurrently — re-check.
+    try {
+      return (bool)$pdo->query("SHOW COLUMNS FROM chat_user_prefs LIKE 'status_emoji'")->fetch();
+    } catch (Throwable $e2) {
+      return false;
+    }
+  }
+}
+
 function chat_load_user_prefs(int $userId): array {
   // status_* columns are optional (status.sql migration) — fall back if
   // they're missing on a DB that hasn't been migrated yet.
