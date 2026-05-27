@@ -287,6 +287,84 @@ $pageHeadExtra = <<<HTML
     .body-grid { grid-template-columns: 1fr; }
     .sec-nav { position: static; flex-direction: row; flex-wrap: wrap; }
   }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshots showed each card-head squeezing its title and the
+     description into one row, so "Profile picture" wrapped to two lines
+     while "JPG, PNG, WEBP… max 2 MB" piled up on the right; the section
+     nav, profile row, file picker, password inputs and the card foot
+     were all still on their desktop layouts. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 10px;
+    }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+
+    .body-grid { padding: 16px 16px 28px; gap: 16px; }
+
+    /* Section nav → horizontal pill tabs that scroll if needed. The
+       "Sections" label is redundant next to two self-explanatory pills. */
+    .sec-nav {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .sec-nav::-webkit-scrollbar { display: none; }
+    .sec-nav .lbl { display: none; }
+    .sec-nav a {
+      flex-shrink: 0;
+      white-space: nowrap;
+      border-left: 0;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 9px 14px;
+    }
+    .sec-nav a.active { border-color: rgba(250,204,21,0.4); }
+
+    /* Card head stacks: icon + title on row 1, description on its own
+       line so neither has to wrap. */
+    .card-head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 14px 16px;
+    }
+    .card-sub { font-size: 11.5px; }
+    .card-body { padding: 16px; }
+
+    /* Profile row: keep avatar + info side by side but smaller/tighter. */
+    .pp-row { gap: 16px; padding-bottom: 16px; margin-bottom: 16px; }
+    .pp-avatar { width: 64px; height: 64px; font-size: 20px; }
+    .pp-name { font-size: 14.5px; }
+
+    /* File picker + action buttons go full width. */
+    .file-row { width: 100%; }
+    .file-input { min-width: 0; flex: 1 1 100%; }
+    .pp-actions { width: 100%; }
+    .pp-actions .btn,
+    .pp-actions .btn-remove { flex: 1; min-height: 44px; justify-content: center; }
+
+    /* 16px inputs so iOS doesn't auto-zoom on focus. */
+    .field input.input { height: 46px; font-size: 16px; }
+    .pwd-wrap input { padding-right: 46px; }
+
+    /* Card foot stacks: note above a full-width primary button. */
+    .card-foot {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+    .card-foot .foot-note { order: -1; }
+    .card-foot .btn { width: 100%; min-height: 46px; justify-content: center; }
+  }
 </style>
 HTML;
 
