@@ -840,6 +840,9 @@ require_once __DIR__ . '/layout.php';
                 <td><span class="due-mono"><?= h($t['due_date'] ? format_date($t['due_date']) : '—') ?></span></td>
                 <td>
                   <div class="row-actions">
+                    <?php if ($can_manage): ?>
+                      <button type="button" class="btn-tiny open" data-task-edit="<?= (int)$t['id'] ?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Edit</button>
+                    <?php endif; ?>
                     <a class="btn-tiny open" href="task_view.php?id=<?= (int)$t['id'] ?>">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></a>
                     <?php if ($can_manage): ?>
                       <form method="post" style="display:inline" onsubmit="return confirm('This will permanently delete this task. Are you sure?');">
