@@ -472,6 +472,12 @@ require_once __DIR__ . '/layout.php';
     </div>
   </div>
   <div class="topbar-actions">
+    <?php if ($can_manage): ?>
+      <button type="button" class="btn btn-ghost" data-task-edit="<?= (int)$task['id'] ?>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Edit
+      </button>
+    <?php endif; ?>
     <?php if ($can_manage && !$locked): ?>
       <form method="post" style="display:inline;">
         <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">

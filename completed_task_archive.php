@@ -460,7 +460,10 @@ require_once __DIR__ . '/layout.php';
               </div>
             </td>
             <td style="text-align:right;">
-              <a class="open-btn" href="task_view.php?id=<?= (int)$r['id'] ?>">Open <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></a>
+              <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <button type="button" class="open-btn" data-task-edit="<?= (int)$r['id'] ?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Edit</button>
+                <a class="open-btn" href="task_view.php?id=<?= (int)$r['id'] ?>">Open <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></a>
+              </div>
             </td>
           </tr>
         <?php endforeach; ?>
