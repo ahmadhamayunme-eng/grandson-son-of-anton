@@ -2158,10 +2158,11 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
     bottom: 0;
   }
   /* Make sure the message list reserves space for the composer so the
-     last message isn't trapped underneath. The composer is ~64px tall
-     (toolbar 28 + input 24 + bottom row 12 = ~64) + 16px padding =
-     reserve 96px which is roomy and stable. */
-  .cx-main .thread-scroll { padding-bottom: 96px; }
+     last message isn't trapped underneath. The composer height varies
+     (input grows, reply-quote appears), so chat.js measures .composer-wrap
+     and writes it to --composer-h; we reserve that plus a 12px margin.
+     The 112px fallback covers first paint before the observer fires. */
+  .cx-main .thread-scroll { padding-bottom: calc(var(--composer-h, 112px) + 12px); }
   /* Composer chrome simplifies on mobile — hide formatting toolbar and
      the inline emoji/mention buttons that live in `.composer-bottom`.
      Long-press / +- attach are still reachable; bold/italic etc. are
