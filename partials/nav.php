@@ -31,6 +31,7 @@ require_once __DIR__ . '/nav_helpers.php';
 $navChatUnread    = nav_chat_unread_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
 $navAntonxPending = nav_antonx_pending_total((int)($u['id'] ?? 0), (int)($u['workspace_id'] ?? 0));
 $navReviewsCount  = nav_reviews_pending_total((int)($u['workspace_id'] ?? 0), (string)$role);
+$navSubmitCount   = nav_submit_pending_total((int)($u['workspace_id'] ?? 0), (string)$role);
 $navAlertTotal    = $navChatUnread + $navAntonxPending;
 
 $icons = [
@@ -91,7 +92,7 @@ $icons = [
     <?= nav_item_html('dashboard.php', 'dashboard', 'Dashboard', $icons['dashboard'], $activeKey) ?>
     <?= nav_item_html('search.php', 'search', 'Search', $icons['search'], $activeKey) ?>
     <?= nav_item_html('chat/', 'chat', 'Chat', $icons['chat'], $activeKey, $navChatUnread) ?>
-    <?= nav_item_html('my_tasks.php', 'my-tasks', 'My Tasks', $icons['my-tasks'], $activeKey) ?>
+    <?= nav_item_html('my_tasks.php', 'my-tasks', 'My Tasks', $icons['my-tasks'], $activeKey, $navAntonxPending) ?>
     <?= nav_item_html('clients.php', 'clients', 'Clients', $icons['clients'], $activeKey) ?>
     <?= nav_item_html('projects.php', 'projects', 'Projects', $icons['projects'], $activeKey) ?>
     <?= nav_item_html('docs.php', 'docs', 'Docs', $icons['docs'], $activeKey) ?>
@@ -100,8 +101,8 @@ $icons = [
 
     <?php if ($role === 'Manager' || $role === 'Super Admin'): ?>
       <div class="nav-section">Manager</div>
-      <?= nav_item_html('manager_review.php', 'review', 'Review Completed Tasks', $icons['review'], $activeKey) ?>
-      <?= nav_item_html('manager_submit.php', 'submit', 'Submit to Client', $icons['submit'], $activeKey) ?>
+      <?= nav_item_html('manager_review.php', 'review', 'Review Completed Tasks', $icons['review'], $activeKey, $navReviewsCount) ?>
+      <?= nav_item_html('manager_submit.php', 'submit', 'Submit to Client', $icons['submit'], $activeKey, $navSubmitCount) ?>
       <?= nav_item_html('completed_task_archive.php', 'archive', 'Completed Task Archive', $icons['archive'], $activeKey) ?>
     <?php endif; ?>
 

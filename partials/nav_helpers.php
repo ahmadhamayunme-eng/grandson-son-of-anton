@@ -51,20 +51,24 @@ if (!function_exists('nav_chat_unread_total')) {
 
 if (!function_exists('nav_antonx_pending_total')) {
   /**
-   * Open tasks assigned to this user across their workspace.
+   * Open tasks assigned to this user — matches the My Tasks listing
+   * (tasks assigned to the user whose status is not one of the
+   * completed/approved/submitted "hidden" states).
    */
   function nav_antonx_pending_total(int $userId, int $workspaceId): int {
     if ($userId <= 0 || $workspaceId <= 0) return 0;
     try {
       $pdo = db();
+      $hidden = ['Completed','Completed (Needs Manager Review)','Approved','Approved (Ready to Submit)','Submitted to Client'];
+      $marks  = implode(',', array_fill(0, count($hidden), '?'));
       $stmt = $pdo->prepare(
-        "SELECT COUNT(*) FROM tasks t
+        "SELECT COUNT(DISTINCT t.id) FROM tasks t
          JOIN task_assignees ta ON ta.task_id = t.id
          WHERE ta.user_id = ?
            AND t.workspace_id = ?
-           AND LOWER(t.status) NOT IN ('done','completed','closed','approved','submitted')"
+           AND t.status NOT IN ($marks)"
       );
-      $stmt->execute([$userId, $workspaceId]);
+      $stmt->execute(array_merge([$userId, $workspaceId], $hidden));
       return (int)$stmt->fetchColumn();
     } catch (Throwable $e) { return 0; }
   }
@@ -72,8 +76,9 @@ if (!function_exists('nav_antonx_pending_total')) {
 
 if (!function_exists('nav_reviews_pending_total')) {
   /**
-   * Tasks awaiting manager review (only relevant when the user is a manager).
-   * Counts tasks with submitted_at set but no manager_feedback yet.
+   * Tasks awaiting manager review — matches the Manager Review queue
+   * (status Completed / Completed (Needs Manager Review)). Manager roles
+   * only; everyone else gets 0 so the badge stays hidden.
    */
   function nav_reviews_pending_total(int $workspaceId, string $roleName): int {
     if ($workspaceId <= 0) return 0;
@@ -82,8 +87,28 @@ if (!function_exists('nav_reviews_pending_total')) {
       $stmt = db()->prepare(
         "SELECT COUNT(*) FROM tasks
          WHERE workspace_id = ?
-           AND submitted_at IS NOT NULL
-           AND (manager_feedback IS NULL OR manager_feedback = '')"
+           AND status IN ('Completed','Completed (Needs Manager Review)')"
+      );
+      $stmt->execute([$workspaceId]);
+      return (int)$stmt->fetchColumn();
+    } catch (Throwable $e) { return 0; }
+  }
+}
+
+if (!function_exists('nav_submit_pending_total')) {
+  /**
+   * Approved tasks ready to submit to the client — matches the Submit to
+   * Client queue (status Approved / Approved (Ready to Submit)). Manager
+   * roles only.
+   */
+  function nav_submit_pending_total(int $workspaceId, string $roleName): int {
+    if ($workspaceId <= 0) return 0;
+    if (!in_array($roleName, ['Manager','Super Admin','CEO'], true)) return 0;
+    try {
+      $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM tasks
+         WHERE workspace_id = ?
+           AND status IN ('Approved','Approved (Ready to Submit)')"
       );
       $stmt->execute([$workspaceId]);
       return (int)$stmt->fetchColumn();
