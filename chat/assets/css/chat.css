@@ -2265,22 +2265,31 @@ html.light .cx-modal::backdrop { background: oklch(0.18 0 0 / 0.25); }
   .cmdk-frame { padding: 0; }
   .cmdk-input { padding: 12px 14px; }
 
-  /* Floating popups (mention popup, emoji picker, message kebab) re-
-     anchor to the bottom of the screen so they don't get cropped by
-     the keyboard or sit above the composer awkwardly. */
+  /* Floating popups (mention popup, emoji picker, message kebab, user
+     menu) re-anchor to the bottom of the screen as a sheet. They must
+     clear the AntonX bottom-nav (height --bottom-nav-h) or their lower
+     rows — e.g. "Update your status" / "Preferences" in the user menu —
+     hide behind it. When the keyboard is open the bottom-nav slides
+     off-screen, so we drop the nav reservation and sit above the
+     keyboard instead. */
   .cx-mention-popup,
   .cx-emoji-popup,
   .cx-popmenu {
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(var(--sai-bottom) + var(--keyboard-inset, 0px) + 8px) !important;
+    bottom: calc(var(--bottom-nav-h) + var(--sai-bottom) + var(--keyboard-inset, 0px) + 8px) !important;
     top: auto !important;
     width: auto !important;
     max-width: 100% !important;
     border-radius: 14px 14px 0 0 !important;
     max-height: 50dvh;
     overflow-y: auto;
+  }
+  body.kb-open .cx-mention-popup,
+  body.kb-open .cx-emoji-popup,
+  body.kb-open .cx-popmenu {
+    bottom: calc(var(--keyboard-inset, 0px) + 8px) !important;
   }
   .cx-emoji-popup emoji-picker {
     width: 100% !important;
