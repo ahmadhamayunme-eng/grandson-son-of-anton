@@ -390,6 +390,73 @@ $pageHeadExtra = <<<HTML
   .login-add-row { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 12.5px; font-weight: 500; color: var(--text); border-radius: 8px; border: 1px dashed var(--border-strong); background: transparent; cursor: pointer; transition: all 0.15s; }
   .login-add-row:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   .login-add-row svg { width: 13px; height: 13px; }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the projects table (checkbox / Project / Client /
+     Status / Assignees / Last Activity / Actions) overflowing — only
+     the checkbox + Project + Client were visible, the rest scrolled off.
+     Convert each row to a card and stack the toolbar. */
+  @media (max-width: 768px) {
+    .toolbar {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .toolbar .search-box { grid-column: 1 / -1; }
+    .toolbar .search-box input { font-size: 16px; min-height: 46px; }
+    .filter-select { min-width: 0; width: 100%; font-size: 14px; min-height: 46px; }
+
+    .bulk-bar { padding-top: 10px; min-height: 0; }
+    .bulk-msg { font-size: 12px; }
+
+    /* ===== TABLE → CARDS ===== */
+    table.projects thead { display: none; }
+    table.projects, table.projects tbody, table.projects tr { display: block; }
+    table.projects tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "proj    proj"
+        "client  status"
+        "assg    activity"
+        "actions actions";
+      gap: 10px 12px;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    table.projects tbody tr:last-child { border-bottom: none; }
+    table.projects tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    /* Hide the bulk-select checkbox column on mobile (bulk delete needs
+       a wider screen). */
+    table.projects tbody td:has(> .row-check) { display: none; }
+
+    /* Manager rows have 7 tds (checkbox first); non-manager rows have 6.
+       Map both with :has() so the layout works either way. */
+    table.projects tbody tr:has(.row-check) td:nth-child(2) { grid-area: proj; }
+    table.projects tbody tr:has(.row-check) td:nth-child(3) { grid-area: client; }
+    table.projects tbody tr:has(.row-check) td:nth-child(4) { grid-area: status; text-align: right; }
+    table.projects tbody tr:has(.row-check) td:nth-child(5) { grid-area: assg; }
+    table.projects tbody tr:has(.row-check) td:nth-child(6) { grid-area: activity; text-align: right; }
+    table.projects tbody tr:has(.row-check) td:nth-child(7) { grid-area: actions; }
+
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(1) { grid-area: proj; }
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(2) { grid-area: client; }
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(3) { grid-area: status; text-align: right; }
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(4) { grid-area: assg; }
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(5) { grid-area: activity; text-align: right; }
+    table.projects tbody tr:not(:has(.row-check)) td:nth-child(6) { grid-area: actions; }
+
+    .client-mini-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row-actions { opacity: 1 !important; justify-content: flex-start; gap: 8px; }
+    .row-actions .icon-btn-sq { width: 40px; height: 40px; }
+  }
 </style>
 HTML;
 
