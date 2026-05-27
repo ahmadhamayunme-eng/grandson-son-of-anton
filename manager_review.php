@@ -363,6 +363,79 @@ $pageHeadExtra = <<<HTML
     .body-wrap { grid-template-columns: 1fr; }
     .rail { position: static; }
   }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the review card stuck on its desktop 2-column grid
+     (1fr title | auto actions): the status pill + assignee + Open /
+     Approve / Disapprove buttons hogged the right column, crushing the
+     title's 1fr down to ~80px so "Check Lee Yousaf PDF and Submit."
+     wrapped one word per line. Stack the card, give the title full width,
+     and lay the actions out as a tidy button grid. Also stack the
+     toolbar so the search box isn't squeezed to an icon. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 12px;
+    }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+
+    /* Toolbar: search row 1 full-width, two filters share row 2. */
+    .toolbar {
+      grid-template-columns: 1fr 1fr;
+      padding: 14px 16px 12px;
+      gap: 8px;
+    }
+    .search-box { grid-column: 1 / -1; }
+    .search-box input { font-size: 16px; padding: 12px 14px 12px 40px; min-height: 46px; }
+    .filter-select { min-width: 0; width: 100%; font-size: 14px; min-height: 46px; }
+
+    .tabs-row { padding: 0 16px; flex-wrap: wrap; }
+    .tabs-meta { font-size: 11.5px; }
+
+    .body-wrap { padding: 14px 16px 24px; gap: 14px; }
+
+    /* The actual fix: single-column card. */
+    .review-card {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 16px 16px 16px 18px;
+    }
+    .r-title { font-size: 15.5px; margin-bottom: 10px; }
+    .r-meta { gap: 8px 14px; }
+
+    /* Actions → 2-col button grid: status pill + assignee on row 1,
+       Open + Approve on row 2, Disapprove full-width on row 3. */
+    .r-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+      justify-content: stretch;
+    }
+    .r-actions .status-pill-completed { justify-self: start; }
+    .r-actions .av-pill { justify-self: start; max-width: 100%; min-width: 0; }
+    .r-actions .btn-open {
+      grid-column: 1;
+      justify-content: center; min-height: 42px; padding: 9px 12px; font-size: 13px;
+    }
+    .r-actions form {
+      grid-column: 2;
+      display: flex;
+    }
+    .r-actions form .btn-approve {
+      width: 100%; justify-content: center; min-height: 42px; padding: 9px 12px; font-size: 13px;
+    }
+    .r-actions .btn-disapprove {
+      grid-column: 1 / -1;
+      justify-content: center; min-height: 42px; padding: 9px 12px; font-size: 13px;
+    }
+
+    .disapprove-panel textarea { min-width: 0; }
+    .disapprove-panel .btn { width: 100%; }
+  }
 </style>
 HTML;
 
