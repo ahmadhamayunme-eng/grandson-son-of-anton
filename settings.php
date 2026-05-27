@@ -227,6 +227,43 @@ $pageHeadExtra = <<<HTML
     font-size: 11.5px; color: var(--text-dim); font-style: italic;
     padding-top: 14px; border-top: 1px solid var(--border);
   }
+
+  /* ===== MOBILE (≤768px) =====
+     The page had no mobile rules, so .search-wrap and .body-stack kept
+     their 32px desktop side padding (the title uses the global 16px
+     header column, so cards sat inset from the title). The s-card-top
+     also left a tall empty band between the icon and the title. Align
+     everything to the 16px column and tighten the cards. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 10px;
+    }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+
+    .search-wrap { padding: 16px 16px 0; }
+    .search-box { max-width: none; }
+    .search-box input { font-size: 16px; min-height: 46px; padding: 12px 14px 12px 40px; }
+    .search-box .kbd { display: none; }
+
+    .body-stack { padding: 18px 16px 28px; gap: 24px; }
+
+    /* Section head: let the descriptive sub wrap under the label. */
+    .section-head { flex-wrap: wrap; gap: 2px 10px; align-items: center; }
+    .section-sub { flex-basis: 100%; }
+
+    /* One card per row; tighter padding and a smaller gap so the icon
+       isn't marooned above the title. */
+    .card-grid { grid-template-columns: 1fr; gap: 12px; }
+    .s-card { padding: 16px; gap: 12px; }
+    .s-card:hover { transform: none; }
+    .s-card-icon { width: 36px; height: 36px; }
+    .s-card-foot { gap: 10px; }
+    .s-card-link { font-size: 13px; }
+  }
 </style>
 HTML;
 
