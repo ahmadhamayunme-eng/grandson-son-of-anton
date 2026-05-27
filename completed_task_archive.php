@@ -268,6 +268,86 @@ $pageHeadExtra = <<<HTML
 
   .empty-state { padding: 48px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
   .empty-state svg { width: 32px; height: 32px; color: var(--text-dim); margin-bottom: 12px; }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the 7-column archive table (Task / Client /
+     Project / Assignees / Status / Submitted / Open) overflowing — the
+     Project column was clipped at the right edge and the rest scrolled
+     off. Convert to vertical cards and tidy the header/toolbar/tabs. */
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 16px 0;
+      gap: 12px;
+    }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+
+    /* Toolbar: search row 1 full-width, two filters share row 2. */
+    .toolbar {
+      grid-template-columns: 1fr 1fr;
+      padding: 14px 16px 12px;
+      gap: 8px;
+    }
+    .search-box { grid-column: 1 / -1; }
+    .search-box input { font-size: 16px; padding: 12px 14px 12px 40px; min-height: 46px; }
+    .filter-select { min-width: 0; width: 100%; font-size: 14px; min-height: 46px; }
+
+    /* Tabs scroll horizontally inside their own row. */
+    .tabs-row { padding: 0 16px; flex-wrap: wrap; }
+    .tabs-row .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%; }
+    .tabs-row .tabs::-webkit-scrollbar { display: none; }
+    .tabs-row .tab { flex-shrink: 0; padding: 12px 12px; }
+    .tabs-meta { font-size: 11px; }
+
+    .table-wrap { padding: 12px 16px 24px; }
+
+    /* ===== TABLE → VERTICAL CARDS =====
+       Desktop column order is Task / Client / Project / Assignees /
+       Status / Submitted / Open. Hide thead and lay each row out as a
+       stack so nothing scrolls sideways. */
+    table.archive thead { display: none; }
+    table.archive, table.archive tbody, table.archive tr { display: block; }
+    table.archive tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "task    task"
+        "client  submitted"
+        "proj    status"
+        "assg    assg"
+        "actions actions";
+      gap: 8px 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    table.archive tbody tr:last-child { border-bottom: none; }
+    table.archive tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    table.archive tbody td:nth-child(1) { grid-area: task; }
+    table.archive tbody td:nth-child(2) { grid-area: client; }
+    table.archive tbody td:nth-child(3) { grid-area: proj; }
+    table.archive tbody td:nth-child(4) { grid-area: assg; }
+    table.archive tbody td:nth-child(5) { grid-area: status; text-align: right; }
+    table.archive tbody td:nth-child(6) { grid-area: submitted; text-align: right; }
+    table.archive tbody td:nth-child(7) { grid-area: actions; text-align: right !important; }
+
+    .task-title { font-size: 14.5px; }
+    .task-title a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .client-mini-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project-link { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 100%; }
+    .ts-cell { font-size: 11.5px; align-items: flex-end; }
+    .open-btn { min-height: 38px; padding: 8px 14px; font-size: 12.5px; justify-content: center; width: 100%; }
+
+    .archive-foot { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 16px; }
+  }
 </style>
 HTML;
 
