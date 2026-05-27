@@ -177,6 +177,69 @@ $pageHeadExtra = <<<HTML
   .order-hint svg { width: 13px; height: 13px; color: var(--text-muted); }
   .order-hint b { color: var(--text-muted); font-weight: 500; }
   .empty-row td { padding: 28px 14px; text-align: center; color: var(--text-dim); font-style: italic; }
+
+  /* ===== MOBILE (≤768px) =====
+     Same defect as the Project Types page: the Current Statuses header
+     clipped "Save Order", the Add Status form squeezed its input, and
+     the 7-column list table overflowed. Stack the chrome and convert
+     each status row to a card. */
+  @media (max-width: 768px) {
+    .page-header { flex-direction: column; align-items: stretch; padding: 16px 16px 0; gap: 12px; }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+    .page-stat-card { flex-direction: row; align-items: baseline; gap: 8px; width: 100%; min-width: 0; }
+
+    .settings-tabs { padding: 16px 16px 0; }
+    .body-stack { padding: 16px 16px 28px; gap: 16px; }
+
+    .panel-head { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
+    .panel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .panel-actions .btn { width: 100%; min-height: 42px; justify-content: center; font-size: 13px; padding: 9px 12px; }
+
+    .add-form {
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        "icon input"
+        "btn  btn";
+      padding: 14px 16px;
+    }
+    .add-form .icon-picker-btn { grid-area: icon; }
+    .add-form .add-input-wrap { grid-area: input; }
+    .add-form .btn-primary { grid-area: btn; width: 100%; justify-content: center; }
+    .add-input-wrap .input { font-size: 16px; }
+    .preview-strip { padding: 10px 16px 16px; }
+
+    /* ===== LIST TABLE → CARDS ===== */
+    .list-table thead { display: none; }
+    .list-table, .list-table tbody, .list-table tr { display: block; }
+    .list-table tbody tr {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "check   name   drag"
+        "kind    usage  sort"
+        "actions actions actions";
+      gap: 10px 12px;
+      padding: 14px 16px;
+      align-items: center;
+    }
+    .list-table tbody td { padding: 0; border: none; min-width: 0; max-width: 100%; }
+    .list-table tbody td:nth-child(1) { grid-area: drag; text-align: right; }
+    .list-table tbody td:nth-child(2) { grid-area: check; text-align: left !important; }
+    .list-table tbody td:nth-child(3) { grid-area: name; }
+    .list-table tbody td:nth-child(4) { grid-area: kind; }
+    .list-table tbody td:nth-child(5) { grid-area: usage; }
+    .list-table tbody td:nth-child(6) { grid-area: sort; text-align: right !important; }
+    .list-table tbody td:nth-child(7) { grid-area: actions; }
+    .status-row .name-input { font-size: 16px; }
+
+    .row-actions { justify-content: stretch; gap: 8px; }
+    .row-actions form { flex: 1; display: flex; }
+    .row-actions .btn-tiny.save { flex: 1; min-height: 40px; justify-content: center; font-size: 12.5px; }
+    .row-actions .btn-tiny.delete { flex: 1; width: 100%; min-height: 40px; justify-content: center; font-size: 12.5px; }
+
+    .order-hint { padding: 12px 16px; }
+  }
 </style>
 HTML;
 
