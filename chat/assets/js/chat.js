@@ -3177,7 +3177,7 @@
       // 16px above; on mobile the composer is fixed, so anchor to viewport
       // using fixed positioning with bottom = composer height (~80) + 8.
       jumpBtn.style.position = 'fixed';
-      jumpBtn.style.bottom = 'calc(96px + var(--keyboard-inset, 0px) + var(--sai-bottom))';
+      jumpBtn.style.bottom = 'calc(var(--composer-h, 96px) + var(--keyboard-inset, 0px) + var(--sai-bottom) + 8px)';
       mainEl.appendChild(jumpBtn);
     }
 
@@ -3227,6 +3227,28 @@
       hideJump();
     });
   }
+
+  // -------------------- Composer height → scroll padding --------------------
+  // The composer is position:fixed on mobile, floating above the message
+  // list. Reserve exactly its height (+12px) at the bottom of the scroll
+  // container so the last message never hides behind it, and keep it in
+  // sync as the input grows or a reply-quote appears/clears.
+  (function () {
+    var wrap = document.querySelector('.composer-wrap');
+    var main = document.querySelector('.cx-main');
+    if (!wrap || !main) return;
+    function syncComposerH() {
+      main.style.setProperty('--composer-h', wrap.offsetHeight + 'px');
+    }
+    syncComposerH();
+    if (window.ResizeObserver) {
+      new ResizeObserver(syncComposerH).observe(wrap);
+    } else {
+      window.addEventListener('resize', syncComposerH);
+    }
+    // Input edits can resize the wrap a frame before the observer fires.
+    wrap.addEventListener('input', function () { requestAnimationFrame(syncComposerH); });
+  })();
 
   // -------------------- Keyboard-aware composer focus --------------------
   // When the user taps the composer on iOS, the keyboard opens and we
