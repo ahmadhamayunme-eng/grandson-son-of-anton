@@ -164,6 +164,12 @@
         var lbl = document.createElement('span');
         lbl.textContent = a.label;
         btn.appendChild(lbl);
+        if (a.badge) {
+          var bdg = document.createElement('span');
+          bdg.className = 'sheet-action-badge';
+          bdg.textContent = a.badge;
+          btn.appendChild(bdg);
+        }
         btn.addEventListener('click', function(){
           closeSheet(function(){ if (a.onClick) a.onClick(); });
         });
@@ -351,16 +357,20 @@
         var key = a.getAttribute('data-key') || '';
         if (BOTTOM_PRIMARY.indexOf(key) !== -1) return; // already in tab bar
         var icon = (a.querySelector('svg') || {}).outerHTML || '';
+        var badgeEl = a.querySelector('.nav-item-badge');
+        var badge = badgeEl ? badgeEl.textContent.trim() : '';
         var label = (a.lastChild && a.lastChild.nodeType === 3)
                       ? a.lastChild.textContent.trim()
                       : a.textContent.trim();
-        // Strip any trailing badge text.
+        // Strip any trailing badge text from the label (the count rides
+        // in its own pill via `badge`).
         label = label.replace(/\s*\d+\+?\s*$/, '').trim();
         if (!label) return;
         var href = a.getAttribute('href') || '#';
         entries.push({
           label: label,
           icon: icon,
+          badge: badge,
           tone: key === 'logout' ? 'danger' : '',
           onClick: function(){ window.location.href = href; }
         });
