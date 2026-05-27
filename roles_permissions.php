@@ -205,6 +205,46 @@ $pageHeadExtra = <<<HTML
   .icon-close { width: 30px; height: 30px; border-radius: 6px; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
   .icon-close:hover { background: var(--surface-2); color: var(--text); }
   @media (max-width: 1100px) { .body-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: 1fr; } }
+
+  /* ===== MOBILE (≤768px) =====
+     Screenshot showed the 3-column permissions table (name+desc / key /
+     toggle) squeezing the name column to ~30% so "Manage Projects" and
+     its description wrapped one or two words per line. Convert each row
+     to a card: name + toggle on row 1, the perm-key pill on row 2. */
+  @media (max-width: 768px) {
+    .page-header { flex-direction: column; align-items: stretch; padding: 16px 16px 0; gap: 10px; }
+    .page-title { font-size: clamp(20px, 5.6vw, 26px); line-height: 1.2; }
+    .page-sub { font-size: 12px; }
+    .body-grid { padding: 16px 16px 28px; gap: 16px; }
+
+    .perms-table thead { display: none; }
+    .perms-table, .perms-table tbody, .perms-table tr { display: block; }
+    .perms-table tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "name toggle"
+        "key  key";
+      gap: 10px 12px;
+      padding: 14px 16px;
+      align-items: center;
+    }
+    .perms-table tbody td {
+      display: block;
+      padding: 0;
+      border: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .perms-table tbody td:nth-child(1) { grid-area: name; }
+    .perms-table tbody td:nth-child(2) { grid-area: key; }
+    .perms-table tbody td:nth-child(3) { grid-area: toggle; text-align: right !important; justify-self: end; }
+    .perm-desc { font-size: 12px; line-height: 1.45; margin-top: 3px; }
+
+    .perms-foot { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; }
+    .perms-foot .save-hint { order: -1; }
+    .perms-foot .btn { width: 100%; min-height: 46px; justify-content: center; }
+  }
 </style>
 HTML;
 
