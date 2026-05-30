@@ -93,6 +93,7 @@ $icons = [
     <?= nav_item_html('search.php', 'search', 'Search', $icons['search'], $activeKey) ?>
     <?= nav_item_html('chat/', 'chat', 'Chat', $icons['chat'], $activeKey, $navChatUnread) ?>
     <?= nav_item_html('my_tasks.php', 'my-tasks', 'My Tasks', $icons['my-tasks'], $activeKey, $navAntonxPending) ?>
+    <?= nav_item_html('calendar.php', 'calendar', 'Calendar', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', $activeKey) ?>
     <?= nav_item_html('clients.php', 'clients', 'Clients', $icons['clients'], $activeKey) ?>
     <?= nav_item_html('projects.php', 'projects', 'Projects', $icons['projects'], $activeKey) ?>
     <?= nav_item_html('docs.php', 'docs', 'Docs', $icons['docs'], $activeKey) ?>
