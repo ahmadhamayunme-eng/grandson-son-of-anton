@@ -520,5 +520,31 @@
       if (field && field.willValidate && field.checkValidity()) clearInvalid(field);
     }, true);
   })();
+
+  // ===================================================================
+  // PWA: service worker + install prompt (item #11)
+  // ===================================================================
+  (function(){
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('sw.js').catch(function(err){
+          // Registration is best-effort; the app works fine without it.
+          if (window.console) console.warn('SW registration failed', err);
+        });
+      });
+    }
+    // Defer the native install prompt so we can offer it from the bell/More menu.
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      window.__antonInstallPrompt = e;
+      document.body.classList.add('can-install');
+    });
+    window.antonPromptInstall = function(){
+      var p = window.__antonInstallPrompt;
+      if (!p) { if (window.AntonToast) AntonToast('Already installed or not available', '', 2200); return; }
+      p.prompt();
+      p.userChoice.finally(function(){ window.__antonInstallPrompt = null; document.body.classList.remove('can-install'); });
+    };
+  })();
 </script>
 </body></html>

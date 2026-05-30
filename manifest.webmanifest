@@ -1,0 +1,25 @@
+{
+  "name": "Anton X — Powered by SpeedX",
+  "short_name": "anton x",
+  "description": "Business management: projects, tasks, clients, finance and team chat.",
+  "start_url": "./dashboard.php",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "partials/antonx-favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "partials/antonx-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -37,6 +37,8 @@ $_navBellTotal = $_navBellUid > 0 ? (
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="anton x">
   <meta name="mobile-web-app-capable" content="yes">
+  <!-- PWA manifest + installability (item #11). -->
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="partials/antonx-favicon.png">
   <!-- FOUC-safe theme init: runs BEFORE any CSS link so the right palette is
        applied on the first paint. Reads `anton-theme` from localStorage; if
@@ -183,7 +185,106 @@ $_navBellTotal = $_navBellUid > 0 ? (
     }
     .anton-bell svg { width: 18px; height: 18px; }
   }
+
+  /* Notification center dropdown (item #10). */
+  .anton-notif-panel {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
+    right: calc(env(safe-area-inset-right, 0px) + 16px);
+    width: 340px;
+    max-width: calc(100vw - 24px);
+    max-height: 70vh;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.45);
+    z-index: 9999;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .anton-notif-panel[hidden] { display: none; }
+  .anton-notif-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: 14px; color: var(--text);
+  }
+  .anton-notif-mark { background: none; border: 0; color: var(--accent); font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+  .anton-notif-mark:hover { background: var(--surface-2); }
+  .anton-notif-list { overflow-y: auto; }
+  .anton-notif-item { display: block; padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text); text-decoration: none; font-size: 13px; line-height: 1.4; }
+  .anton-notif-item:hover { background: var(--surface-2); }
+  .anton-notif-item.unread { background: var(--accent-soft, rgba(250,204,21,0.07)); }
+  .anton-notif-item .who { font-weight: 600; }
+  .anton-notif-item .when { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .anton-notif-empty { padding: 22px 14px; color: var(--text-muted); font-size: 13px; text-align: center; }
+  .anton-notif-foot { display: block; text-align: center; padding: 10px; color: var(--text-muted); text-decoration: none; font-size: 12.5px; border-top: 1px solid var(--border); }
+  .anton-notif-foot:hover { color: var(--accent); }
 </style>
+<div id="antonNotifPanel" class="anton-notif-panel" role="dialog" aria-label="Notifications" hidden data-csrf="<?= h(csrf_token()) ?>">
+  <div class="anton-notif-head">
+    <span>Notifications</span>
+    <button type="button" id="antonNotifMarkRead" class="anton-notif-mark">Mark all read</button>
+  </div>
+  <div class="anton-notif-list" id="antonNotifList"><div class="anton-notif-empty">Loading…</div></div>
+  <a class="anton-notif-foot" href="activity.php">View all activity →</a>
+</div>
+<script>
+  (function(){
+    var bell  = document.getElementById('antonBell');
+    var panel = document.getElementById('antonNotifPanel');
+    if (!bell || !panel) return;
+    var list  = document.getElementById('antonNotifList');
+    var loaded = false;
+
+    function esc(s){ var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+
+    function render(data){
+      var items = (data && data.items) || [];
+      if (!items.length){ list.innerHTML = '<div class="anton-notif-empty">You’re all caught up.</div>'; return; }
+      list.innerHTML = items.map(function(it){
+        var label = esc(it.actor) + ' · ' + esc(it.action) + (it.message ? ' — ' + esc(it.message) : '');
+        return '<a class="anton-notif-item' + (it.unread ? ' unread' : '') + '" href="' + esc(it.href) + '">' +
+               '<span class="who">' + label + '</span>' +
+               '<span class="when">' + esc(it.created_at) + '</span></a>';
+      }).join('');
+    }
+
+    function load(){
+      fetch('notifications_feed.php', { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ loaded = true; render(d); })
+        .catch(function(){ list.innerHTML = '<div class="anton-notif-empty">Could not load notifications.</div>'; });
+    }
+
+    function open(){ panel.hidden = false; if (!loaded) load(); }
+    function close(){ panel.hidden = true; }
+
+    bell.addEventListener('click', function(e){
+      e.preventDefault();           // open the panel instead of navigating to chat
+      panel.hidden ? open() : close();
+    });
+    document.addEventListener('click', function(e){
+      if (panel.hidden) return;
+      if (!panel.contains(e.target) && !bell.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+
+    document.getElementById('antonNotifMarkRead').addEventListener('click', function(){
+      var body = new FormData();
+      body.append('action', 'mark_read');
+      body.append('csrf', panel.getAttribute('data-csrf') || '');
+      fetch('notifications_feed.php', { method: 'POST', body: body })
+        .then(function(r){ return r.json(); })
+        .then(function(){
+          var badge = bell.querySelector('.anton-bell-badge');
+          if (badge) badge.remove();
+          bell.classList.remove('pulse');
+          list.querySelectorAll('.anton-notif-item.unread').forEach(function(el){ el.classList.remove('unread'); });
+        }).catch(function(){});
+    });
+  })();
+</script>
 <?php endif; ?>
 <!-- Hamburger button — hidden on desktop via CSS, shown at ≤768px.
      Toggles `body.nav-open` which slides the sidebar drawer in/out. -->

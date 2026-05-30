@@ -231,21 +231,40 @@ try {
   $totalPages = max(1, (int)ceil($totalRows / $perPage));
   if ($page > $totalPages) { $page = $totalPages; $offset = ($page - 1) * $perPage; }
 
+  // Item #14: the per-row correlated subqueries (assignee count/names + two
+  // MAX(updated_at) lookups) were a classic N+1 / DEPENDENT SUBQUERY pattern.
+  // They're replaced with pre-aggregated derived tables joined once on
+  // project_id, backed by idx_tasks_project / idx_ta_user (migration 0001).
   $listSql = <<<SQL
 SELECT
   p.id, p.name, p.client_id, p.created_at, p.updated_at,
   c.name AS client_name, ps.name AS status_name, pt.name AS type_name,
-  (SELECT COUNT(DISTINCT ta.user_id) FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id = t.id WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id) AS assignee_count,
-  (SELECT GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id = t.id LEFT JOIN users u ON u.id = ta.user_id WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id) AS assignee_names,
+  COALESCE(ta_agg.assignee_count, 0) AS assignee_count,
+  ta_agg.assignee_names AS assignee_names,
   GREATEST(
     COALESCE(p.updated_at, '1000-01-01 00:00:00'),
-    COALESCE((SELECT MAX(t.updated_at) FROM tasks t WHERE t.workspace_id = p.workspace_id AND t.project_id = p.id), '1000-01-01 00:00:00'),
-    COALESCE((SELECT MAX(d.updated_at) FROM docs d WHERE d.workspace_id = p.workspace_id AND d.project_id = p.id), '1000-01-01 00:00:00')
+    COALESCE(tmax.max_task_updated, '1000-01-01 00:00:00'),
+    COALESCE(dmax.max_doc_updated, '1000-01-01 00:00:00')
   ) AS last_activity
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 JOIN project_statuses ps ON ps.id = p.status_id
 LEFT JOIN project_types pt ON pt.id = p.type_id
+LEFT JOIN (
+  SELECT t.project_id,
+         COUNT(DISTINCT ta.user_id) AS assignee_count,
+         GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS assignee_names
+  FROM tasks t
+  LEFT JOIN task_assignees ta ON ta.task_id = t.id
+  LEFT JOIN users u ON u.id = ta.user_id
+  GROUP BY t.project_id
+) ta_agg ON ta_agg.project_id = p.id
+LEFT JOIN (
+  SELECT project_id, MAX(updated_at) AS max_task_updated FROM tasks GROUP BY project_id
+) tmax ON tmax.project_id = p.id
+LEFT JOIN (
+  SELECT project_id, MAX(updated_at) AS max_doc_updated FROM docs GROUP BY project_id
+) dmax ON dmax.project_id = p.id
 {$where}
 ORDER BY {$sortSql}
 LIMIT :limit OFFSET :offset
@@ -509,6 +528,8 @@ require_once __DIR__ . '/layout.php';
     <span></span>
   <?php endif; ?>
 </form>
+
+<?php $svPage = 'projects'; include __DIR__ . '/partials/saved_views_bar.php'; ?>
 
 <?php if ($canManage): ?>
 <form method="post" id="bulkDeleteProjects" class="bulk-bar" data-bulk-form>
