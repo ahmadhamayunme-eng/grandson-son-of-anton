@@ -122,7 +122,34 @@
         var bar = p.querySelector('.pending-file-bar'); if (bar) bar.remove();
       }
     };
-    xhr.onerror   = function () { markError('Network error'); };
+    // A connection-level failure (xhr.status === 0): the server reset/refused
+    // the request before any HTTP response. Probe the endpoint with a tiny
+    // no-file POST to tell apart "endpoint unreachable" from "the file body
+    // itself was rejected" (host upload-size limit or a WAF/firewall), and
+    // report the specific cause instead of a generic "Network error".
+    function diagnoseAndReport() {
+      markError('Network error — diagnosing…');
+      if (typeof fetch !== 'function') { markError('Network error (connection reset)'); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 8000) : null;
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfFor(form), 'Accept': 'application/json' },
+        credentials: 'include',
+        body: new FormData(),               // empty: a few bytes, no file
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function () {
+        if (timer) clearTimeout(timer);
+        // Endpoint answered the tiny probe, so it's reachable — the FILE upload
+        // was reset. Almost always a host upload-size cap or a WAF blocking the
+        // upload body.
+        markError('Server reset the upload — the file may exceed the host limit or be blocked by a firewall');
+      }).catch(function () {
+        if (timer) clearTimeout(timer);
+        markError('Can’t reach the upload service — it may be blocked by the server/firewall');
+      });
+    }
+    xhr.onerror   = function () { diagnoseAndReport(); };
     xhr.onabort   = function () { markError('Upload cancelled'); };
     xhr.ontimeout = function () { markError('Upload timed out'); };
 
