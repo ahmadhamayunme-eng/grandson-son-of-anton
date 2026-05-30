@@ -9,9 +9,10 @@ $pdo = db();
 $ws = auth_workspace_id();
 $q = trim($_GET['q'] ?? '');
 $scope = $_GET['scope'] ?? 'all';
-if (!in_array($scope, ['all','tasks','projects','clients','docs'], true)) $scope = 'all';
+if (!in_array($scope, ['all','tasks','projects','clients','docs','people','messages'], true)) $scope = 'all';
 
-$clients = $projects = $tasks = $docs = [];
+$uid = (int)(auth_user()['id'] ?? 0);
+$clients = $projects = $tasks = $docs = $people = $messages = [];
 if ($q !== '') {
   $like = '%' . $q . '%';
   $st = $pdo->prepare('SELECT id,name,updated_at FROM clients WHERE workspace_id=? AND name LIKE ? ORDER BY id DESC LIMIT 20');
@@ -38,11 +39,41 @@ if ($q !== '') {
       WHERE d.workspace_id=? AND (d.title LIKE ? OR p.name LIKE ?) ORDER BY d.id DESC LIMIT 20');
     $st->execute([$ws, $like, $like]);
     $docs = $st->fetchAll();
-  } catch (Throwable $e) { $docs = []; }
+  } catch (Throwable $e) { app_log('search.docs', $e); $docs = []; }
+
+  // People (item #12) — active workspace users, excluding system accounts.
+  try {
+    $st = $pdo->prepare("SELECT id, name, email FROM users
+      WHERE workspace_id=? AND IFNULL(is_system,0)=0 AND is_active=1 AND (name LIKE ? OR email LIKE ?)
+      ORDER BY name ASC LIMIT 20");
+    $st->execute([$ws, $like, $like]);
+    $people = $st->fetchAll();
+  } catch (Throwable $e) { app_log('search.people', $e); $people = []; }
+
+  // Chat messages (item #12) — same visibility gate as chat/api/search_all.php
+  // so users only see messages from channels/DMs they belong to. Degrades to
+  // empty if the chat tables aren't present.
+  try {
+    $st = $pdo->prepare("SELECT m.id, m.conversation_id, m.content, m.created_at,
+        u.name AS author_name, c.slug AS channel_slug
+      FROM chat_messages m
+      JOIN users u ON u.id = m.user_id
+      LEFT JOIN chat_channels c ON c.id = m.channel_id
+      WHERE m.workspace_id=? AND m.deleted_at IS NULL AND m.content LIKE ?
+        AND (m.channel_id IS NULL OR m.channel_id IN (
+          SELECT id FROM chat_channels WHERE workspace_id=? AND (is_private=0 OR id IN (
+            SELECT channel_id FROM chat_channel_members WHERE user_id=?))))
+        AND (m.conversation_id IS NULL OR m.conversation_id IN (
+          SELECT conversation_id FROM chat_direct_conversation_members WHERE user_id=?))
+      ORDER BY m.id DESC LIMIT 20");
+    $st->execute([$ws, $like, $ws, $uid, $uid]);
+    $messages = $st->fetchAll();
+  } catch (Throwable $e) { app_log('search.messages', $e); $messages = []; }
 }
 
 $cntT = count($tasks); $cntP = count($projects); $cntC = count($clients); $cntD = count($docs);
-$cntAll = $cntT + $cntP + $cntC + $cntD;
+$cntPe = count($people); $cntM = count($messages);
+$cntAll = $cntT + $cntP + $cntC + $cntD + $cntPe + $cntM;
 
 // Totals for the unfilled state (used in the "Jump to" tiles)
 function search_count(PDO $pdo, string $sql, array $params = []): int {
@@ -280,6 +311,14 @@ require_once __DIR__ . '/layout.php';
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
         Docs <span class="count"><?= $q === '' ? '—' : (int)$cntD ?></span>
       </button>
+      <button type="button" class="tab <?= $scope === 'people' ? 'active' : '' ?>" data-scope="people">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+        People <span class="count"><?= $q === '' ? '—' : (int)$cntPe ?></span>
+      </button>
+      <button type="button" class="tab <?= $scope === 'messages' ? 'active' : '' ?>" data-scope="messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
+        Messages <span class="count"><?= $q === '' ? '—' : (int)$cntM ?></span>
+      </button>
     </div>
     <div class="scope-meta">Indexing <b><?= number_format($totRecords) ?></b> records · last sync <b>now</b></div>
   </div>
@@ -436,6 +475,55 @@ require_once __DIR__ . '/layout.php';
                 <div class="meta"><?= h($d['project_name']) ?></div>
               </div>
               <div class="trailing"><?= h(date('M j', strtotime((string)$d['updated_at']))) ?></div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if (($scope === 'all' || $scope === 'people') && $people): ?>
+        <div class="results-section">
+          <div class="results-head">
+            <div class="label">People <span class="count-pill"><?= $cntPe ?></span></div>
+            <a class="see-all" href="users_management.php">See all →</a>
+          </div>
+          <?php foreach (array_slice($people, 0, 6) as $pe):
+            $grad = search_avatar_gradient((string)$pe['name']);
+          ?>
+            <a class="result-row" href="users_management.php">
+              <div class="ico" style="background:<?= h($grad) ?>;color:#fff;border-color:transparent;"><?= h(user_initials((string)$pe['name'])) ?></div>
+              <div class="body">
+                <div class="title"><?= search_highlight((string)$pe['name'], $q) ?></div>
+                <div class="meta"><?= h($pe['email']) ?></div>
+              </div>
+              <div class="trailing">Person</div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if (($scope === 'all' || $scope === 'messages') && $messages): ?>
+        <div class="results-section">
+          <div class="results-head">
+            <div class="label">Messages <span class="count-pill"><?= $cntM ?></span></div>
+            <a class="see-all" href="chat/">Open chat →</a>
+          </div>
+          <?php foreach (array_slice($messages, 0, 6) as $msg):
+            $snippet = trim(strip_tags((string)$msg['content']));
+            if (mb_strlen($snippet, 'UTF-8') > 120) $snippet = mb_substr($snippet, 0, 120, 'UTF-8') . '…';
+            $where = $msg['channel_slug'] ? '#' . (string)$msg['channel_slug'] : '@DM';
+            $href  = $msg['channel_slug']
+              ? 'chat/?c=' . urlencode((string)$msg['channel_slug']) . '#msg-' . (int)$msg['id']
+              : 'chat/?d=' . (int)$msg['conversation_id'] . '#msg-' . (int)$msg['id'];
+          ?>
+            <a class="result-row" href="<?= h($href) ?>">
+              <div class="ico" style="background:rgba(34,197,94,0.08);color:#86efac;border-color:rgba(34,197,94,0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
+              </div>
+              <div class="body">
+                <div class="title"><?= search_highlight($snippet, $q) ?></div>
+                <div class="meta"><?= h((string)$msg['author_name']) ?><span class="dot-sep"></span><?= h($where) ?></div>
+              </div>
+              <div class="trailing"><?= h(date('M j', strtotime((string)$msg['created_at']))) ?></div>
             </a>
           <?php endforeach; ?>
         </div>
