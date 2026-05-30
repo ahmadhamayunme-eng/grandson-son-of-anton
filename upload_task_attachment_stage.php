@@ -6,11 +6,16 @@
 // Flow:
 //   1. The popup uploads each chosen file here the moment it is selected.
 //   2. We store the bytes under uploads/task_attachments/<random>.<ext> and
-//      insert a task_attachments row with task_id = NULL (staged), owned by the
-//      uploader. We return { file: { id, name, mime, size, is_image } }.
+//      insert a task_attachment_staging row (no task_id, no foreign keys),
+//      owned by the uploader. We return { file: { id, name, mime, size, is_image } }.
 //   3. The popup keeps each returned id in a hidden <input name="attachment_ids[]">.
 //   4. When the task is created, the create handler claims the staged rows
-//      (claim_staged_task_attachments) by setting task_id to the new task.
+//      (claim_staged_task_attachments) — copying them into task_attachments
+//      with the new task id and deleting them from staging.
+//
+// Staging avoids relaxing task_attachments.task_id to NULL, which would need
+// ALTER TABLE — a privilege many shared hosts deny. Here we only ever
+// CREATE TABLE + INSERT, which those hosts allow.
 //
 // Security / defence-in-depth (any file type is accepted, like chat):
 //   * Stored with a random name + sanitised extension — never the user's name.
@@ -69,8 +74,9 @@ $size     = (int)($f['size'] ?? 0);
 if ($size <= 0)        stage_err('Empty file cannot be uploaded.', 400);
 if ($size > $maxBytes) stage_err('File exceeds the 500 MB limit.', 400);
 
-// Make sure a staged (task_id = NULL) row can be inserted.
-if (!ensure_task_attachments_staging($pdo = db())) {
+// Make sure the staging table exists (created with plain CREATE TABLE).
+$pdo = db();
+if (!ensure_task_attachment_staging_table($pdo)) {
   stage_err('Attachments are unavailable. Ask an admin to run database migrations (php migrate.php).', 500);
 }
 
@@ -106,9 +112,9 @@ if (!@move_uploaded_file($f['tmp_name'], $dest)) {
 
 try {
   $pdo->prepare(
-    "INSERT INTO task_attachments
-       (workspace_id, task_id, uploaded_by, original_name, stored_name, mime_type, size_bytes, created_at)
-     VALUES (?, NULL, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO task_attachment_staging
+       (workspace_id, uploaded_by, original_name, stored_name, mime_type, size_bytes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)"
   )->execute([$ws, $uid, $origName, $stored, $mime, $size, now()]);
   $fileId = (int)$pdo->lastInsertId();
 } catch (Exception $e) {

@@ -194,9 +194,7 @@ ALTER TABLE comments ADD CONSTRAINT IF NOT EXISTS fk_comments_parent FOREIGN KEY
 CREATE TABLE IF NOT EXISTS task_attachments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   workspace_id INT NOT NULL,
-  -- NULL while a file is staged during task creation (attach-on-create);
-  -- set to the task id once the task is saved. See migration 0008.
-  task_id INT NULL,
+  task_id INT NOT NULL,
   uploaded_by INT NOT NULL,
   original_name VARCHAR(255) NOT NULL,
   stored_name VARCHAR(255) NOT NULL,
@@ -208,6 +206,22 @@ CREATE TABLE IF NOT EXISTS task_attachments (
   CONSTRAINT fk_ta_ws FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   CONSTRAINT fk_ta_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
   CONSTRAINT fk_ta_user FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Attach-on-create staging: files uploaded from the "New task" popups before
+-- the task exists. No FKs so a staged row can outlive nothing — rows are
+-- copied into task_attachments (with the real task_id) on task creation and
+-- then deleted. See lib/task_attachments.php::claim_staged_task_attachments().
+CREATE TABLE IF NOT EXISTS task_attachment_staging (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  workspace_id INT NOT NULL,
+  uploaded_by INT NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  stored_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(120) NULL,
+  size_bytes BIGINT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_tas_owner (workspace_id, uploaded_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Phase 1: Tags

@@ -52,8 +52,18 @@ function migrations_run(?PDO $pdo = null, ?string $dir = null): array {
     }
 
     foreach (preg_split('/;\s*\n/', $sql) as $stmt) {
-      $stmt = trim($stmt);
-      if ($stmt === '' || str_starts_with($stmt, '--')) continue;
+      // Drop full-line SQL comments and blank lines first. Without this a real
+      // statement preceded by a comment block (the usual file header) was seen
+      // as a comment-only chunk — because it merely "starts with --" — and
+      // silently skipped, so the actual CREATE/ALTER never ran.
+      $kept = [];
+      foreach (preg_split('/\r?\n/', $stmt) as $line) {
+        $t = trim($line);
+        if ($t === '' || str_starts_with($t, '--')) continue;
+        $kept[] = $line;
+      }
+      $stmt = trim(implode("\n", $kept));
+      if ($stmt === '') continue;
       try {
         $pdo->exec($stmt);
       } catch (Throwable $e) {
