@@ -89,6 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_client'])) {
     if ($size > 0 && $size <= 2*1024*1024 && isset($allowed[$mime])) {
       $dir = __DIR__ . '/uploads/client_logos';
       if (!is_dir($dir)) @mkdir($dir, 0775, true);
+      require_once __DIR__ . '/lib/task_attachments.php';
+      upload_dir_protect_static($dir);
       foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
         $f = $dir . '/' . $id . '.' . $ext;
         if (is_file($f)) @unlink($f);

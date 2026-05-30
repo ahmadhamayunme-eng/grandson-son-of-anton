@@ -34,7 +34,8 @@ function finance_ensure_schema(PDO $pdo): void {
     try {
       $pdo->exec($sql);
     } catch (Throwable $e) {
-      // Ignore no-op migration issues on older engines.
+      // Ignore no-op migration issues on older engines (e.g. no IF NOT EXISTS).
+      app_log('finance_ensure_schema', $e, ['sql' => substr($sql, 0, 80)]);
     }
   }
 

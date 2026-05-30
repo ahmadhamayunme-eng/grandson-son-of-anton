@@ -84,6 +84,9 @@ $_navBellTotal = $_navBellUid > 0 ? (
   <?=$pageHeadExtra?>
 </head>
 <body>
+<!-- Skip link (item #8): first focusable element so keyboard users can jump
+     straight to the page content past the nav/utility chrome. -->
+<a class="skip-link" href="#main">Skip to main content</a>
 <!-- Theme toggle (fixed top-right, visible on every designed page). Icon swap and
      localStorage persistence are handled in partials/footer.php. -->
 <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle dark / light mode">

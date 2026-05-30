@@ -1,6 +1,19 @@
 Options -Indexes
 RewriteEngine On
 
+# Security headers (item #3). PHP also sets these as a fallback for hosts
+# without mod_headers (see app_send_security_headers in lib/helpers.php).
+<IfModule mod_headers.c>
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  # CSP keeps 'unsafe-inline' for now because header.php ships inline theme
+  # scripts/styles; tighten to nonces in a follow-up. CDNs in use: jsDelivr
+  # (Bootstrap + charts) and Google Fonts.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+</IfModule>
+
 # Block direct access
 RewriteRule ^lib/ - [F,L]
 RewriteRule ^storage/ - [F,L]

@@ -61,6 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if (isset($allowed[$mime])) {
         $dir = __DIR__ . '/uploads/client_logos';
         if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+        require_once __DIR__ . '/lib/task_attachments.php';
+        upload_dir_protect_static($dir);
         foreach (['png','jpg','jpeg','webp','gif','svg'] as $ext) {
           $oldLogo = $dir . '/' . $newClientId . '.' . $ext;
           if (is_file($oldLogo)) { @unlink($oldLogo); }

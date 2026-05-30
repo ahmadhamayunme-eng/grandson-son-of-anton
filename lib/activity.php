@@ -12,6 +12,7 @@ function activity_log(string $entityType, ?int $entityId, string $action, ?strin
         (int)$u['workspace_id'], (int)$u['id'], $entityType, $entityId, $action, $message
       ]);
   } catch (Throwable $e) {
-    // ignore if table doesn't exist yet
+    // Table may not exist yet — degrade gracefully but record the failure.
+    app_log('activity_log', $e, ['entity' => $entityType, 'action' => $action]);
   }
 }

@@ -2,6 +2,9 @@ config.php
 uploads/
 cache/
 tmp/
+storage/
 .DS_Store
 .vscode/
 .idea/
+/vendor/
+.phpunit.result.cache

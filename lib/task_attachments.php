@@ -143,3 +143,74 @@ function human_bytes($bytes) {
   if ($bytes >= 1024) return round($bytes / 1024, 2) . ' KB';
   return $bytes . ' B';
 }
+
+/**
+ * Upload hardening (item #4). Writes a deny-all .htaccess into an upload
+ * directory so nothing in it is ever executed or browsed directly (files are
+ * served through gated PHP endpoints like download.php / chat/api/file.php).
+ * Mirrors chat/uploads/.htaccess. Created at runtime because uploads/ is
+ * gitignored. Idempotent.
+ */
+function upload_dir_protect(string $dir): void {
+  $ht = $dir . '/.htaccess';
+  if (is_file($ht)) return;
+  @file_put_contents($ht,
+    "Options -Indexes\n" .
+    "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n" .
+    "<IfModule !mod_authz_core.c>\n  Order deny,allow\n  Deny from all\n</IfModule>\n"
+  );
+}
+
+/**
+ * Hardening for upload dirs whose files ARE served directly by URL (e.g.
+ * profile pictures, client logos): disable script execution + directory
+ * listing while still allowing the images themselves to be fetched. Idempotent.
+ */
+function upload_dir_protect_static(string $dir): void {
+  $ht = $dir . '/.htaccess';
+  if (is_file($ht)) return;
+  @file_put_contents($ht,
+    "Options -Indexes -ExecCGI\n" .
+    "AddHandler cgi-script .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pht .pl .py .cgi\n" .
+    "RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pht\n" .
+    "<IfModule mod_php.c>\n  php_flag engine off\n</IfModule>\n" .
+    "<FilesMatch \"\\.(php[0-9]?|phtml|phar|pht|cgi|pl|py|sh|asp|aspx|jsp|exe|js|svg|html?)$\">\n" .
+    "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
+    "  <IfModule !mod_authz_core.c>\n    Order deny,allow\n    Deny from all\n  </IfModule>\n" .
+    "</FilesMatch>\n"
+  );
+}
+
+/**
+ * Returns true if an extension is unsafe to store (executable / server-script /
+ * active-content types). Belt-and-braces alongside random renaming and the
+ * deny-all .htaccess — defense in depth.
+ */
+function upload_is_dangerous_ext(string $ext): bool {
+  $ext = strtolower(ltrim($ext, '.'));
+  static $blocked = [
+    'php','php2','php3','php4','php5','php7','php8','phtml','pht','phar','phps',
+    'cgi','pl','py','rb','sh','bash','asp','aspx','jsp','jspx','cfm',
+    'exe','com','bat','cmd','msi','scr','dll',
+    'htaccess','htpasswd','ini','conf',
+    'svg','svgz','xhtml','shtml','xht',
+    'js','mjs','jse','vbs','wsf','hta',
+  ];
+  return in_array($ext, $blocked, true);
+}
+
+/**
+ * Returns true if a sniffed MIME type is unsafe (active content). Used to
+ * reject files whose bytes look like script/markup regardless of extension.
+ */
+function upload_is_dangerous_mime(?string $mime): bool {
+  if (!$mime) return false;
+  $mime = strtolower($mime);
+  static $blocked = [
+    'text/html','application/xhtml+xml','image/svg+xml',
+    'application/x-httpd-php','application/x-php','text/x-php',
+    'application/javascript','text/javascript','application/x-sh',
+    'application/x-executable','application/x-dosexec','application/x-msdownload',
+  ];
+  return in_array($mime, $blocked, true);
+}

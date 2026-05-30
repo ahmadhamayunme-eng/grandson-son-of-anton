@@ -54,15 +54,63 @@ function auth_require_perm(string $permKey): void {
   if (!auth_can($permKey)) { http_response_code(403); echo "Forbidden"; exit; }
 }
 
+// --- Login rate limiting / lockout (item #2) ---
+const LOGIN_MAX_FAILURES = 5;       // failures allowed within the window
+const LOGIN_WINDOW_MINUTES = 15;    // sliding window length
+
+function auth_client_ip(): string {
+  return (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+}
+
+/** Count recent failures for an email+ip pair. Disabled (returns 0) if the
+ *  login_attempts table isn't present yet — never blocks legitimate login. */
+function auth_recent_failures(string $email, string $ip): int {
+  try {
+    $stmt = db()->prepare(
+      "SELECT COUNT(*) FROM login_attempts
+       WHERE email = ? AND ip = ? AND success = 0
+         AND attempted_at > (NOW() - INTERVAL ? MINUTE)"
+    );
+    $stmt->execute([$email, $ip, LOGIN_WINDOW_MINUTES]);
+    return (int)$stmt->fetchColumn();
+  } catch (Throwable $e) {
+    app_log('auth_recent_failures', $e);
+    return 0;
+  }
+}
+
+function auth_is_locked(string $email, ?string $ip = null): bool {
+  $ip = $ip ?? auth_client_ip();
+  return auth_recent_failures($email, $ip) >= LOGIN_MAX_FAILURES;
+}
+
+function auth_record_attempt(string $email, string $ip, bool $success): void {
+  try {
+    db()->prepare("INSERT INTO login_attempts (email, ip, success, attempted_at) VALUES (?,?,?,NOW())")
+       ->execute([$email, $ip, $success ? 1 : 0]);
+  } catch (Throwable $e) {
+    app_log('auth_record_attempt', $e);
+  }
+}
+
 function auth_login(string $email, string $password, bool $superOnly=false): bool {
   $pdo = db();
+  $ip = auth_client_ip();
+
+  // Lockout check first — refuse before touching credentials.
+  if (auth_is_locked($email, $ip)) {
+    auth_record_attempt($email, $ip, false);
+    return false;
+  }
+
   $stmt = $pdo->prepare("SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.email=? AND u.is_active=1 LIMIT 1");
   $stmt->execute([$email]);
   $u = $stmt->fetch();
-  if (!$u) return false;
-  if ($superOnly && $u['role_name'] !== 'Super Admin') return false;
-  if (!password_verify($password, $u['password_hash'])) return false;
+  if (!$u)                                              { auth_record_attempt($email, $ip, false); return false; }
+  if ($superOnly && $u['role_name'] !== 'Super Admin')  { auth_record_attempt($email, $ip, false); return false; }
+  if (!password_verify($password, $u['password_hash'])) { auth_record_attempt($email, $ip, false); return false; }
 
+  auth_record_attempt($email, $ip, true);
   session_regenerate_id(true);
   $_SESSION['user'] = [
     'id' => (int)$u['id'],

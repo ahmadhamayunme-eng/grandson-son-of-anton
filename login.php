@@ -14,7 +14,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $email = trim($_POST['email'] ?? '');
   $pass = $_POST['password'] ?? '';
   if (auth_login($email, $pass, false)) redirect('dashboard.php');
-  $error = 'Invalid email or password. Try again.';
+  $error = auth_is_locked($email)
+    ? 'Too many attempts. Please wait a few minutes and try again.'
+    : 'Invalid email or password. Try again.';
 }
 ?><!doctype html>
 <html lang="en">

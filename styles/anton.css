@@ -1375,3 +1375,84 @@ html.light .toast.success { color: #166534; }
 }
 .fab:hover { background: var(--accent-hover); }
 .fab:active { transform: scale(0.93); }
+
+/* ===================================================================
+   Accessibility + feedback utilities (items #5, #7, #8)
+   =================================================================== */
+
+/* Skip-to-main link: visually hidden until focused, then pinned top-left. */
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 12px;
+  z-index: 10000;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #1a1400;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.main:focus { outline: none; }
+
+/* Global keyboard focus ring — only shows for keyboard users, not on click. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Inline validation error (item #7). Empty by default; populated by JS. */
+.field-error {
+  display: block;
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+  min-height: 0;
+}
+.field-error:empty { display: none; }
+[aria-invalid="true"] {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.15) !important;
+}
+
+/* Button loading state (item #5): swap label for a spinner, block input. */
+@keyframes anton-spin { to { transform: rotate(360deg); } }
+.btn.is-loading,
+button.is-loading,
+.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  color: var(--accent);
+  animation: anton-spin 0.6s linear infinite;
+}
+/* On primary/yellow buttons the spinner should read against dark text. */
+.btn-primary.is-loading::after,
+.btn-yellow.is-loading::after { color: #1a1400; }
+
+/* Reduced-motion: kill the spin + transitions for users who opt out. */
+@media (prefers-reduced-motion: reduce) {
+  .is-loading::after { animation-duration: 1.5s; }
+  .skip-link { transition: none; }
+}

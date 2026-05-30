@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/helpers.php';
 require_once __DIR__ . '/lib/db.php';
+require_once __DIR__ . '/lib/task_attachments.php';
 auth_require_login();
 
 $u = auth_user();
@@ -43,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
     if (!isset($allowed[$mime])) { flash_set('error', 'Only JPG, PNG, WEBP, or GIF images are allowed.'); redirect('profile_account_settings_overview.php'); }
     if (!is_dir($avatarDir) && !@mkdir($avatarDir, 0775, true) && !is_dir($avatarDir)) { flash_set('error', 'Could not create profile picture directory.'); redirect('profile_account_settings_overview.php'); }
+    if (function_exists('upload_dir_protect_static')) upload_dir_protect_static($avatarDir);
     foreach (['jpg', 'jpeg', 'png', 'webp', 'gif'] as $ext) {
       $existing = $avatarDir . '/' . $userId . '.' . $ext;
       if (is_file($existing)) @unlink($existing);

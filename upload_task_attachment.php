@@ -84,14 +84,24 @@ if ($size > APP_ATTACHMENT_MAX_BYTES) {
   redirect('task_view.php?id='.$task_id);
 }
 
+$ext = pathinfo($orig, PATHINFO_EXTENSION);
+$safeExt = preg_replace('/[^a-zA-Z0-9]/','', (string)$ext);
+
+// Reject executable / active-content uploads (item #4). Random renaming + the
+// deny-all .htaccess below already prevent execution, but rejecting outright
+// keeps dangerous bytes out of the tree entirely.
+if (upload_is_dangerous_ext($safeExt) || upload_is_dangerous_mime($mime)) {
+  flash_set('error','That file type is not allowed for security reasons.');
+  redirect('task_view.php?id='.$task_id);
+}
+
 $uploadDir = __DIR__ . '/uploads/task_attachments';
 if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
   flash_set('error','Could not create upload directory');
   redirect('task_view.php?id='.$task_id);
 }
+upload_dir_protect($uploadDir);
 
-$ext = pathinfo($orig, PATHINFO_EXTENSION);
-$safeExt = preg_replace('/[^a-zA-Z0-9]/','', (string)$ext);
 $stored = bin2hex(random_bytes(16)).($safeExt ? '.'.$safeExt : '');
 $dest = $uploadDir . '/' . $stored;
 
@@ -107,6 +117,7 @@ try {
   flash_set('success','File uploaded');
 } catch (Exception $e) {
   @unlink($dest);
+  app_log('upload_task_attachment', $e, ['task_id' => $task_id]);
   flash_set('error','Upload saved file but DB insert failed. Please ensure task_attachments table is accessible to app DB user.');
 }
 redirect('task_view.php?id='.$task_id);

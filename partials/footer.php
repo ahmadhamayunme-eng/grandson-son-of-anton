@@ -274,6 +274,8 @@
       if (!toastHost) {
         toastHost = document.createElement('div');
         toastHost.className = 'toast-host';
+        toastHost.setAttribute('aria-live', 'assertive');
+        toastHost.setAttribute('role', 'status');
         document.body.appendChild(toastHost);
       }
       var t = document.createElement('div');
@@ -384,6 +386,139 @@
         cancelLabel: 'Close'
       });
     });
+  })();
+
+  // ===================================================================
+  // Button loading states (item #5)
+  // ===================================================================
+  // Exposes window.antonButtonLoading(btn, on) and auto-applies a spinner +
+  // disabled state to the button that submitted a form, so users get
+  // immediate feedback and can't double-submit. Opt out per-form with
+  // data-no-loading. AJAX flows call antonButtonLoading() directly.
+  (function(){
+    function setLoading(btn, on){
+      if (!btn) return;
+      if (on){
+        if (btn.dataset.loading === '1') return;
+        btn.dataset.loading = '1';
+        btn.setAttribute('aria-busy', 'true');
+        btn.classList.add('is-loading');
+        // Defer disabling so the button's name/value still posts.
+        setTimeout(function(){ btn.disabled = true; }, 0);
+      } else {
+        delete btn.dataset.loading;
+        btn.removeAttribute('aria-busy');
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+      }
+    }
+    window.antonButtonLoading = setLoading;
+
+    document.addEventListener('submit', function(e){
+      var form = e.target;
+      if (!form || form.hasAttribute('data-no-loading')) return;
+      if (e.defaultPrevented) return; // validation/confirm cancelled it
+      var btn = e.submitter || form.querySelector('[type="submit"]');
+      if (btn) setLoading(btn, true);
+    }, false);
+  })();
+
+  // ===================================================================
+  // Confirm dialogs (item #6)
+  // ===================================================================
+  // Transparently upgrades the legacy inline `onsubmit/onclick="return
+  // confirm(...)"` patterns to the themed, async window.AntonConfirm sheet —
+  // no per-page markup changes required. Runs on load and is idempotent.
+  (function(){
+    function extractMsg(attr){
+      var m = /confirm\((['"`])([\s\S]*?)\1\)/.exec(attr || '');
+      return m ? m[2] : 'Are you sure?';
+    }
+    function submitForm(f){
+      if (!f) return;
+      f.__antonConfirmed = true;
+      if (f.requestSubmit) f.requestSubmit(); else f.submit();
+    }
+    function wire(root){
+      (root || document).querySelectorAll('form[onsubmit*="confirm("]').forEach(function(form){
+        if (form.__antonConfirmWired) return;
+        form.__antonConfirmWired = true;
+        var msg = extractMsg(form.getAttribute('onsubmit'));
+        form.removeAttribute('onsubmit');
+        form.addEventListener('submit', function(e){
+          if (form.__antonConfirmed) return; // confirmed pass-through
+          e.preventDefault();
+          window.AntonConfirm(msg, { confirmLabel: 'Delete', destructive: true })
+            .then(function(ok){ if (ok) submitForm(form); });
+        });
+      });
+      (root || document).querySelectorAll('[onclick*="confirm("]').forEach(function(el){
+        if (el.__antonConfirmWired) return;
+        el.__antonConfirmWired = true;
+        var msg = extractMsg(el.getAttribute('onclick'));
+        el.removeAttribute('onclick');
+        el.addEventListener('click', function(e){
+          e.preventDefault();
+          window.AntonConfirm(msg, { confirmLabel: 'Delete', destructive: true })
+            .then(function(ok){
+              if (!ok) return;
+              var formId = el.getAttribute('form');
+              var f = formId ? document.getElementById(formId) : el.closest('form');
+              if (f) submitForm(f);
+              else if (el.tagName === 'A' && el.getAttribute('href')) window.location.href = el.href;
+            });
+        });
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ wire(document); });
+    else wire(document);
+    window.antonWireConfirms = wire; // for dynamically injected markup
+  })();
+
+  // ===================================================================
+  // Form validation accessibility (item #7)
+  // ===================================================================
+  // Enhances native HTML5 validation: marks invalid fields with
+  // aria-invalid, renders an inline role="alert" message screen readers
+  // announce, and clears it once the field becomes valid. Works on every
+  // form automatically; does not replace native constraint validation.
+  (function(){
+    function errorEl(field){
+      var id = field.id || ('f_' + Math.random().toString(36).slice(2));
+      field.id = id;
+      var errId = id + '__err';
+      var el = document.getElementById(errId);
+      if (!el){
+        el = document.createElement('span');
+        el.id = errId;
+        el.className = 'field-error';
+        el.setAttribute('role', 'alert');
+        field.insertAdjacentElement('afterend', el);
+        var describedby = (field.getAttribute('aria-describedby') || '').trim();
+        field.setAttribute('aria-describedby', (describedby + ' ' + errId).trim());
+      }
+      return el;
+    }
+    function markInvalid(field){
+      field.setAttribute('aria-invalid', 'true');
+      errorEl(field).textContent = field.validationMessage || 'This field is required.';
+    }
+    function clearInvalid(field){
+      if (field.getAttribute('aria-invalid') !== 'true') return;
+      field.removeAttribute('aria-invalid');
+      var el = field.id ? document.getElementById(field.id + '__err') : null;
+      if (el) el.textContent = '';
+    }
+    // 'invalid' doesn't bubble, so listen in the capture phase.
+    document.addEventListener('invalid', function(e){
+      var field = e.target;
+      if (!field || !field.willValidate) return;
+      markInvalid(field);
+    }, true);
+    document.addEventListener('input', function(e){
+      var field = e.target;
+      if (field && field.willValidate && field.checkValidity()) clearInvalid(field);
+    }, true);
   })();
 </script>
 </body></html>

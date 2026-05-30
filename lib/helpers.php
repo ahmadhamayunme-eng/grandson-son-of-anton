@@ -15,6 +15,29 @@ function redirect(string $to): never {
 }
 function now(): string { return date('Y-m-d H:i:s'); }
 
+/**
+ * Centralized error logging. Writes a single line to storage/logs/app.log
+ * (the storage/ tree is blocked from web access by the root .htaccess).
+ * Callers should still keep their graceful UI fallback — this only records
+ * the failure so it stops being invisible in production.
+ */
+function app_log(string $context, ?Throwable $e = null, array $extra = []): void {
+  try {
+    $dir = dirname(__DIR__) . '/storage/logs';
+    if (!is_dir($dir)) @mkdir($dir, 0775, true);
+    $parts = [date('c'), $context];
+    if ($e) {
+      $parts[] = get_class($e) . ': ' . $e->getMessage();
+      $parts[] = $e->getFile() . ':' . $e->getLine();
+    }
+    if ($extra) $parts[] = json_encode($extra, JSON_UNESCAPED_SLASHES);
+    $line = implode(' | ', $parts) . "\n";
+    @error_log($line, 3, $dir . '/app.log');
+  } catch (Throwable $ignore) {
+    // Logging must never throw.
+  }
+}
+
 function flash_set(string $key, string $msg): void { $_SESSION['flash'][$key] = $msg; }
 function flash_get(string $key): ?string {
   if (!isset($_SESSION['flash'][$key])) return null;
@@ -22,6 +45,23 @@ function flash_get(string $key): ?string {
   unset($_SESSION['flash'][$key]);
   return $m;
 }
+/**
+ * Send security headers from PHP as a fallback for hosts without mod_headers
+ * (item #3). Mirrors the directives in the root .htaccess. No-op if headers
+ * were already sent. Apache's mod_headers, when present, may set duplicates —
+ * harmless, the browser honours the first.
+ */
+function app_send_security_headers(): void {
+  if (headers_sent()) return;
+  header('X-Frame-Options: SAMEORIGIN');
+  header('X-Content-Type-Options: nosniff');
+  header('Referrer-Policy: strict-origin-when-cross-origin');
+  if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+  }
+  header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+}
+
 function require_post(): void {
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo "Method Not Allowed"; exit; }
 }
@@ -122,7 +162,8 @@ function user_status_chip(int $userId): string {
         ];
       }
     } catch (Throwable $e) {
-      // Table or columns don't exist yet — silently return empty.
+      // Table or columns don't exist yet — degrade to empty, but record it.
+      app_log('user_status_chip', $e);
       $cache = [];
     }
   }
