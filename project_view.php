@@ -164,6 +164,11 @@ try {
       foreach (($_POST['assignees'] ?? []) as $uid) {
         $pdo->prepare('INSERT INTO task_assignees (task_id,user_id) VALUES (?,?)')->execute([$task_id, (int)$uid]);
       }
+      // Attach-on-create: claim any files staged by the popup uploader.
+      if (!empty($_POST['attachment_ids'])) {
+        require_once __DIR__ . '/lib/task_attachments.php';
+        claim_staged_task_attachments($pdo, $ws, (int)$user['id'], $task_id, (array)$_POST['attachment_ids']);
+      }
       // Anton Jr. — sync the project's chat channel membership now that
       // a new task (and its assignees) exist. Safe to call repeatedly.
       if (file_exists(__DIR__ . '/chat/includes/project_sync.php')) {
@@ -1068,6 +1073,8 @@ require_once __DIR__ . '/layout.php';
             <?php endforeach; endif; ?>
           </div>
         </div>
+
+        <?php include __DIR__ . '/partials/task_attachments_field.php'; ?>
       </div>
 
       <div class="modal-foot">
