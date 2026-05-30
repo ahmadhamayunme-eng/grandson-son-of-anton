@@ -62,6 +62,23 @@ function app_send_security_headers(): void {
   header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
 }
 
+/**
+ * Emit a workspace-wide realtime event (item #18) onto the existing chat_events
+ * stream, with channel_id/conversation_id NULL so it broadcasts to the whole
+ * workspace. Consumed by chat/api/events.php (SSE). Best-effort: wrapped so a
+ * missing table or insert failure never blocks the mutation that called it.
+ */
+function app_emit_event(int $workspaceId, string $eventType, array $payload = [], ?int $actorUserId = null): void {
+  try {
+    db()->prepare(
+      'INSERT INTO chat_events (workspace_id, event_type, channel_id, conversation_id, message_id, actor_user_id, payload, created_at)
+       VALUES (?,?,NULL,NULL,NULL,?,?,NOW())'
+    )->execute([$workspaceId, $eventType, $actorUserId, $payload ? json_encode($payload) : null]);
+  } catch (Throwable $e) {
+    app_log('app_emit_event', $e, ['type' => $eventType]);
+  }
+}
+
 function require_post(): void {
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo "Method Not Allowed"; exit; }
 }

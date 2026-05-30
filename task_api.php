@@ -158,6 +158,11 @@ if ($action === 'update') {
     try { chat_project_sync((int)$task['project_id']); } catch (Throwable $e) {}
   }
 
+  // Realtime broadcast so open boards update live (item #18). Never blocks.
+  app_emit_event($ws, 'task.updated', [
+    'task_id' => $id, 'project_id' => (int)$task['project_id'], 'status' => $status, 'title' => $title,
+  ], $uid);
+
   tapi_out(['ok' => true, 'id' => $id]);
 }
 

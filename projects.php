@@ -857,4 +857,5 @@ require_once __DIR__ . '/layout.php';
 })();
 </script>
 
+<?php include __DIR__ . '/partials/realtime_board.php'; ?>
 <?php require_once __DIR__ . '/layout_end.php'; ?>

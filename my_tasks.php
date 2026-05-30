@@ -53,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_task_status'])
     $st->execute([$newStatus, $now, $taskId, $ws]);
   }
 
+  app_emit_event($ws, 'task.updated', ['task_id' => $taskId, 'status' => $newStatus], $uid);
+
   flash_set('success', 'Task status updated.');
   if ($canFinalStatus && in_array($newStatus, ['Completed','Completed (Needs Manager Review)'], true)) { redirect('manager_review.php'); }
   if ($canFinalStatus && in_array($newStatus, ['Approved','Approved (Ready to Submit)'], true)) { redirect('manager_submit.php'); }
@@ -517,4 +519,5 @@ require_once __DIR__ . '/layout.php';
   </div>
 </div>
 
+<?php include __DIR__ . '/partials/realtime_board.php'; ?>
 <?php require_once __DIR__ . '/layout_end.php'; ?>

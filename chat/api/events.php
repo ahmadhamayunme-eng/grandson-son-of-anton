@@ -118,6 +118,12 @@ function chat_sse_fetch(PDO $pdo, int $ws, int $uid, int $since): array {
          OR e.conversation_id IN (
            SELECT conversation_id FROM chat_direct_conversation_members WHERE user_id = ?
          )
+         OR (
+           -- Workspace-wide broadcasts (item #18): task/project board updates
+           -- carry no channel/conversation and are visible to all members.
+           e.channel_id IS NULL AND e.conversation_id IS NULL
+           AND e.event_type IN (\'task.updated\',\'task.created\',\'project.updated\',\'project.created\')
+         )
        )
      ORDER BY e.id ASC
      LIMIT 200'
