@@ -194,7 +194,9 @@ ALTER TABLE comments ADD CONSTRAINT IF NOT EXISTS fk_comments_parent FOREIGN KEY
 CREATE TABLE IF NOT EXISTS task_attachments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   workspace_id INT NOT NULL,
-  task_id INT NOT NULL,
+  -- NULL while a file is staged during task creation (attach-on-create);
+  -- set to the task id once the task is saved. See migration 0008.
+  task_id INT NULL,
   uploaded_by INT NOT NULL,
   original_name VARCHAR(255) NOT NULL,
   stored_name VARCHAR(255) NOT NULL,

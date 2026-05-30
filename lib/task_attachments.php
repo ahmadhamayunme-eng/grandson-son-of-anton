@@ -47,7 +47,7 @@ function ensure_task_attachments_table($pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       workspace_id INT NOT NULL,
-      task_id INT NOT NULL,
+      task_id INT NULL,
       uploaded_by INT NOT NULL,
       original_name VARCHAR(255) NOT NULL,
       stored_name VARCHAR(255) NOT NULL,
@@ -66,7 +66,7 @@ function ensure_task_attachments_table($pdo) {
       $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         workspace_id INT NOT NULL,
-        task_id INT NOT NULL,
+        task_id INT NULL,
         uploaded_by INT NOT NULL,
         original_name VARCHAR(255) NOT NULL,
         stored_name VARCHAR(255) NOT NULL,
@@ -96,7 +96,7 @@ function ensure_task_attachments_table($pdo) {
       $sql = null;
       switch ($col) {
         case 'workspace_id': $sql = "ALTER TABLE task_attachments ADD COLUMN workspace_id INT NOT NULL DEFAULT 0"; break;
-        case 'task_id': $sql = "ALTER TABLE task_attachments ADD COLUMN task_id INT NOT NULL DEFAULT 0"; break;
+        case 'task_id': $sql = "ALTER TABLE task_attachments ADD COLUMN task_id INT NULL"; break;
         case 'uploaded_by': $sql = "ALTER TABLE task_attachments ADD COLUMN uploaded_by INT NOT NULL DEFAULT 0"; break;
         case 'original_name': $sql = "ALTER TABLE task_attachments ADD COLUMN original_name VARCHAR(255) NOT NULL DEFAULT ''"; break;
         case 'stored_name': $sql = "ALTER TABLE task_attachments ADD COLUMN stored_name VARCHAR(255) NOT NULL DEFAULT ''"; break;
@@ -113,6 +113,65 @@ function ensure_task_attachments_table($pdo) {
   $cols = list_columns($pdo, 'task_attachments');
   if ($cols) return count(array_diff($required, $cols)) === 0;
   return can_use_task_attachments_by_query($pdo);
+}
+
+/**
+ * Attach-on-create support: make sure task_id is nullable so a file can be
+ * staged (task_id = NULL) before its task row exists. Best-effort and
+ * idempotent — on hosts that already ran migration 0008, or that deny ALTER,
+ * this simply no-ops. Called by the staging upload endpoint as a safety net
+ * for installs that haven't run `php migrate.php` yet.
+ */
+function ensure_task_attachments_staging($pdo): bool {
+  if (!ensure_task_attachments_table($pdo)) return false;
+  // If a staged (task_id IS NULL) insert already works we are done; probe
+  // cheaply without writing by inspecting the column when SHOW COLUMNS is
+  // available, otherwise just attempt the ALTER and tolerate failure.
+  try {
+    $rows = $pdo->query("SHOW COLUMNS FROM task_attachments LIKE 'task_id'")->fetchAll();
+    $isNullable = isset($rows[0]['Null']) && strtoupper((string)$rows[0]['Null']) === 'YES';
+    if ($isNullable) return true;
+  } catch (Exception $e) {
+    // SHOW COLUMNS restricted; fall through to the best-effort ALTER.
+  }
+  try {
+    $pdo->exec("ALTER TABLE task_attachments MODIFY COLUMN task_id INT NULL");
+    return true;
+  } catch (Exception $e) {
+    // ALTER denied. Staged inserts will fail loudly in the endpoint, which
+    // surfaces a clear "run migrations" message to the admin.
+    return false;
+  }
+}
+
+/**
+ * Claim previously-staged attachments for a freshly-created task. Only rows
+ * that are still unclaimed (task_id IS NULL), owned by the same uploader, and
+ * in the same workspace can be claimed — so one user can never attach another
+ * user's staged file, and a file can never be re-pointed at a second task.
+ *
+ * @param int[] $ids  Candidate task_attachments.id values from the form.
+ * @return int Number of rows actually claimed.
+ */
+function claim_staged_task_attachments($pdo, int $ws, int $uid, int $taskId, array $ids): int {
+  $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($v) => $v > 0)));
+  if (!$ids || $taskId <= 0) return 0;
+  try {
+    if (!ensure_task_attachments_table($pdo)) return 0;
+    $place = implode(',', array_fill(0, count($ids), '?'));
+    $sql = "UPDATE task_attachments
+              SET task_id = ?
+            WHERE task_id IS NULL
+              AND uploaded_by = ?
+              AND workspace_id = ?
+              AND id IN ($place)";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_merge([$taskId, $uid, $ws], $ids));
+    return $stmt->rowCount();
+  } catch (Exception $e) {
+    app_log('claim_staged_task_attachments', $e, ['task_id' => $taskId]);
+    return 0;
+  }
 }
 
 function ini_bytes($val) {

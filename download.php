@@ -16,8 +16,14 @@ $path = __DIR__ . '/uploads/task_attachments/' . $a['stored_name'];
 if (!is_file($path)) { http_response_code(404); echo 'File missing'; exit; }
 
 $mime = $a['mime_type'] ?: 'application/octet-stream';
+// Any file type can be stored (attach-on-create accepts anything, like chat),
+// so never let the browser sniff/execute the bytes. Images are shown inline;
+// everything else is forced to download.
+$isImage = strpos((string)$mime, 'image/') === 0;
+header('X-Content-Type-Options: nosniff');
 header('Content-Type: '.$mime);
 header('Content-Length: '.filesize($path));
-header('Content-Disposition: attachment; filename="'.preg_replace('/[^\w\-. ]/','_', $a['original_name']).'"');
+$disp = $isImage ? 'inline' : 'attachment';
+header('Content-Disposition: '.$disp.'; filename="'.preg_replace('/[^\w\-. ]/','_', $a['original_name']).'"');
 readfile($path);
 exit;

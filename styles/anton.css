@@ -1456,3 +1456,108 @@ button.is-loading,
   .is-loading::after { animation-duration: 1.5s; }
   .skip-link { transition: none; }
 }
+
+/* ===== Attach-on-create uploader (New-task popups) =====================
+   Used by partials/task_attachments_field.php + styles/task_attachments.js.
+   Visual language mirrors the Anton chat composer's pending-file pills so the
+   upload experience feels identical across the app. */
+.ta-uploader .ta-hint {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ta-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 16px;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ta-dropzone:hover,
+.ta-dropzone:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+  outline: none;
+}
+.ta-dropzone.ta-dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.ta-dropzone-icon { width: 22px; height: 22px; opacity: 0.85; }
+.ta-dropzone-text { font-size: 13px; }
+.ta-dropzone-text strong { color: var(--accent); font-weight: 600; }
+
+.ta-pending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* Pending-file pills — same structure/classes as the chat composer. */
+.ta-pending .pending-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 6px 5px 8px;
+  font-size: 12px;
+  max-width: 260px;
+}
+.ta-pending .pending-file-thumb {
+  width: 30px; height: 30px;
+  border-radius: 5px;
+  background: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.ta-pending .pending-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ta-pending .pending-file-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ta-pending .pending-file-name {
+  font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 170px;
+}
+.ta-pending .pending-file-meta { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ta-pending .pending-file-bar {
+  display: block;
+  height: 3px;
+  background: var(--bg);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.ta-pending .pending-file-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+.ta-pending .pending-file-remove {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+.ta-pending .pending-file-remove:hover { color: var(--danger); }
+.ta-pending .pending-file-uploading { opacity: 0.8; }
+.ta-pending .pending-file-error { border-color: var(--danger); }
+.ta-pending .pending-file-error .pending-file-meta { color: var(--danger); }

@@ -1,5 +1,8 @@
 <?php include __DIR__ . '/task_edit_modal.php'; ?>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<?php $_taJsV = @filemtime(__DIR__ . '/../styles/task_attachments.js') ?: '1'; ?>
+<!-- Attach-on-create uploader for the New-task popups (self-initialises on [data-ta-uploader]). -->
+<script src="styles/task_attachments.js?v=<?= h((string)$_taJsV) ?>" defer></script>
 <script>
   (function(){
     var key = window.ANTON_ACTIVE;
