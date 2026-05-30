@@ -1,7 +1,7 @@
 <?php
 /**
  * Resolve a config value, preferring an environment variable over the
- * (optional) config.php array. Keeping config.php out of version control
+ * (optional) config file array. Keeping credentials out of version control
  * while supporting env-based secrets on the host (item #1).
  */
 function cfg(string $envKey, $fallback = null) {
@@ -9,16 +9,38 @@ function cfg(string $envKey, $fallback = null) {
   return ($v !== false && $v !== '') ? $v : $fallback;
 }
 
+/**
+ * Load the credentials array from the first config file that exists.
+ *
+ * Deploys that do a clean checkout wipe anything not in the repo, so the
+ * persistent place for secrets is OUTSIDE the deploy folder. We therefore
+ * search (in order):
+ *   1. $ANTONX_CONFIG            — explicit absolute path, if you set the env var
+ *   2. <app>/config.php          — in-repo location (handy for local dev)
+ *   3. <parent of app>/antonx-config.php   — one level above the app  ← survives deploys
+ *   4. <grandparent>/antonx-config.php      — two levels above the app ← survives deploys
+ */
+function load_app_config(): array {
+  $candidates = array_filter([
+    getenv('ANTONX_CONFIG') ?: null,
+    __DIR__ . '/../config.php',
+    dirname(__DIR__, 2) . '/antonx-config.php',
+    dirname(__DIR__, 3) . '/antonx-config.php',
+  ]);
+  foreach ($candidates as $path) {
+    if ($path && is_file($path)) {
+      return array_replace_recursive(['db' => [], 'app' => []], (array)require $path);
+    }
+  }
+  return ['db' => [], 'app' => []];
+}
+
 function db() : PDO {
   static $pdo = null;
   if ($pdo) return $pdo;
 
-  // config.php is optional now: env vars take precedence when set.
-  $config = ['db' => [], 'app' => []];
-  $configFile = __DIR__ . '/../config.php';
-  if (is_file($configFile)) {
-    $config = array_replace_recursive($config, (array)require $configFile);
-  }
+  // Env vars win; otherwise fall back to whichever config file is found.
+  $config = load_app_config();
   $fallback = $config['db'] ?? [];
 
   $db = [

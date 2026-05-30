@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/../lib/helpers.php';
+require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/nav_helpers.php';
-$config = file_exists(__DIR__ . '/../config.php') ? (require __DIR__ . '/../config.php') : ['app'=>['name'=>'AntonX']];
+$config = function_exists('load_app_config') ? load_app_config() : ['app' => ['name' => 'AntonX']];
 $pageTitle = $pageTitle ?? ($config['app']['name'] ?? 'AntonX');
 $pageHeadExtra = $pageHeadExtra ?? '';
 // Cache-buster for anton.css: changes every time the file is edited, so the
