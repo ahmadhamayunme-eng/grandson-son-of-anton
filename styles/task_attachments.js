@@ -11,7 +11,21 @@
   if (window.__taUploaderInit) return;
   window.__taUploaderInit = true;
 
-  var ENDPOINT = 'upload_task_attachment_stage.php';
+  // Resolve the endpoint as an ABSOLUTE same-origin URL, derived from where
+  // this script itself was loaded (…/styles/task_attachments.js). A relative
+  // URL would resolve against the current page path — which breaks on
+  // pretty-URL pages and can produce a cross-origin URL that the
+  // `connect-src 'self'` CSP blocks, surfacing as an immediate "Network error"
+  // with no HTTP response. Mirrors how chat.js posts to an absolute path.
+  function endpointUrl() {
+    var s = document.querySelector('script[src*="task_attachments.js"]');
+    if (s && s.src) {
+      var base = s.src.replace(/styles\/task_attachments\.js.*$/, '');
+      if (base !== s.src) return base + 'upload_task_attachment_stage.php';
+    }
+    return new URL('upload_task_attachment_stage.php', document.baseURI).href;
+  }
+  var ENDPOINT = endpointUrl();
   var MAX_BYTES = 500 * 1024 * 1024; // 500 MB — matches the server cap.
 
   function escapeHtml(s) {
