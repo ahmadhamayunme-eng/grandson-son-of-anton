@@ -2,9 +2,15 @@
 
 function table_exists_quick($pdo, $table) {
   try {
-    $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
-    $stmt->execute([$table]);
-    return (bool)$stmt->fetchColumn();
+    // Use query() with a quoted literal rather than a bound parameter: with
+    // native prepares (PDO::ATTR_EMULATE_PREPARES => false, see lib/db.php)
+    // several MySQL/MariaDB builds reject a parameter in SHOW TABLES with
+    // "command not supported in the prepared statement protocol", which would
+    // throw here and make an existing table look missing. Table names are
+    // always code constants, so interpolating a quoted literal is safe.
+    $safe = str_replace('`', '', (string)$table);
+    $stmt = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($safe));
+    return $stmt && (bool)$stmt->fetchColumn();
   } catch (Exception $e) {
     return false;
   }
@@ -128,7 +134,8 @@ function ensure_task_attachments_table($pdo) {
  * Idempotent; returns false only if the staging table can't be created.
  */
 function ensure_task_attachment_staging_table($pdo): bool {
-  if (table_exists_quick($pdo, 'task_attachment_staging')) return true;
+  // Create unconditionally — CREATE TABLE IF NOT EXISTS is idempotent and does
+  // not depend on table detection (which can be flaky under native prepares).
   try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS task_attachment_staging (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -141,10 +148,19 @@ function ensure_task_attachment_staging_table($pdo): bool {
       created_at DATETIME NOT NULL,
       INDEX idx_tas_owner (workspace_id, uploaded_by)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-  } catch (Exception $e) {
-    app_log('ensure_task_attachment_staging_table', $e);
+  } catch (Throwable $e) {
+    app_log('ensure_task_attachment_staging_table.create', $e);
   }
-  return table_exists_quick($pdo, 'task_attachment_staging');
+  // Authoritative check: actually query the table. This works even where
+  // SHOW TABLES detection is unreliable, and is true whenever the table is
+  // usable (created just now or by migration 0009).
+  try {
+    $pdo->query("SELECT id FROM task_attachment_staging LIMIT 1");
+    return true;
+  } catch (Throwable $e) {
+    app_log('ensure_task_attachment_staging_table.probe', $e);
+    return false;
+  }
 }
 
 /**
@@ -159,7 +175,7 @@ function ensure_task_attachment_staging_table($pdo): bool {
 function claim_staged_task_attachments($pdo, int $ws, int $uid, int $taskId, array $ids): int {
   $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($v) => $v > 0)));
   if (!$ids || $taskId <= 0) return 0;
-  if (!table_exists_quick($pdo, 'task_attachment_staging')) return 0;
+  if (!ensure_task_attachment_staging_table($pdo)) return 0;
   if (!ensure_task_attachments_table($pdo)) return 0;
 
   $place = implode(',', array_fill(0, count($ids), '?'));
