@@ -37,6 +37,21 @@ function stage_json(array $d, int $code = 200): never {
   echo json_encode($d);
   exit;
 }
+
+// Safety net: turn any uncaught fatal/parse error into a JSON 500 the client
+// can read, instead of a blank/half body that the browser reports as a generic
+// "Network error". Also disable HTML error output for this JSON endpoint.
+@ini_set('display_errors', '0');
+register_shutdown_function(function () {
+  $e = error_get_last();
+  if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+    if (!headers_sent()) {
+      http_response_code(500);
+      header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['ok' => false, 'message' => 'Server error while uploading. Please tell an admin.']);
+  }
+});
 function stage_err(string $msg, int $code = 400): never {
   stage_json(['ok' => false, 'message' => $msg], $code);
 }
